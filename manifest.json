@@ -1,0 +1,21 @@
+{
+  "manifest_version": 2,
+  "name": "Mail Auth Info Viewer",
+  "version": "1.0",
+  "description": "メールプレビュー画面に認証情報（SPF、DKIM、DMARC など）を表示します。",
+  "applications": {
+    "gecko": {
+      "id": "mail-auth-info-viewer@precure.tv",
+      "strict_min_version": "78.0"
+    }
+  },
+  "permissions": [
+    "messagesRead",
+    "messagesModify"
+  ],
+  "background": {
+    "scripts": [
+      "background.js"
+    ]
+  }
+}
