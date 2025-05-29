@@ -28,20 +28,39 @@ browser.runtime.sendMessage({ command: "getMessageDetails" }).then(resp => {
   const arRaw = headers["authentication-results"]?.join(" ") || "";
   const arParts = arRaw.split(/;|\r?\n/).map(s => s.trim()).filter(Boolean);
 
+  // ■ ARC-Authentication-Results をパースし、最初の (i=1) を選択
+  const arcRawArray = headers["arc-authentication-results"] || [];
+  const arcEntries = arcRawArray.map(raw => {
+    const parts = raw.split(/;|\r?\n/).map(s => s.trim()).filter(Boolean);
+    let idx = Number.MAX_SAFE_INTEGER, spfRaw, dkimRaw, dmarcRaw;
+    parts.forEach(p => {
+      const pl = p.toLowerCase();
+      if (pl.startsWith("i=")) idx = parseInt(p.substring(2)) || idx;
+      else if (pl.startsWith("spf=")) spfRaw = p;
+      else if (pl.startsWith("dkim=")) dkimRaw = p;
+      else if (pl.startsWith("dmarc=")) dmarcRaw = p;
+    });
+    return { idx, spfRaw, dkimRaw, dmarcRaw };
+  });
+  const arcEntry = (arcEntries.sort((a, b) => a.idx - b.idx)[0]) || {};
+
   // SPF／DKIM／DMARC のみを抽出して詳細理由付きでフォーマット
   function fmtARPart(part) {
     const lower = part.toLowerCase();
 
     // SPF
     if (lower.startsWith("spf=")) {
-      const m = part.match(/spf=(\w+)/i);
-      const status = m?.[1]?.toLowerCase() || "";
+      // ARC で pass なら優先
+      const arcPass = arcEntry.spfRaw?.toLowerCase()?.startsWith("spf=pass");
+      const status = arcPass
+        ? "pass"
+        : (part.match(/spf=(\w+)/i)?.[1]?.toLowerCase() || "");
       const mf = part.match(/smtp\.mailfrom=([^ ]+)/i)?.[1] || "";
       const mail = mf.includes("@") ? mf.split("@")[1] : mf;
       const ipMatch = part.match(/(\d{1,3}(?:\.\d{1,3}){3})/);
       const ip = ipMatch ? ipMatch[1] : "";
       if (status === "pass") {
-        return `<div style="color:green;">✅ SPF: 有効 — ドメイン ${mail} が IP ${ip} を許可</div>`;
+        return `<div style="color:green;">✅ SPF: 有効 — ドメイン ${mail} が IP ${ip} を許可${arcPass ? " (ARC pass)" : ""}</div>`;
       }
       if (status === "fail") {
         return `<div style="color:red;">❌ SPF: 無効 — ドメイン ${mail} が IP ${ip} を許可せず</div>`;
@@ -57,12 +76,14 @@ browser.runtime.sendMessage({ command: "getMessageDetails" }).then(resp => {
 
     // DKIM
     if (lower.startsWith("dkim=")) {
-      const m = part.match(/dkim=(\w+)/i);
-      const status = m?.[1]?.toLowerCase() || "";
+      const arcPass = arcEntry.dkimRaw?.toLowerCase()?.startsWith("dkim=pass");
+      const status = arcPass
+        ? "pass"
+        : (part.match(/dkim=(\w+)/i)?.[1]?.toLowerCase() || "");
       if (status === "pass") {
         const d = (part.match(/header\.d=([^ ]+)/i)?.[1] || "").trim();
         const s = (part.match(/header\.s=([^ ]+)/i)?.[1] || "").trim();
-        return `<div style="color:green;">✅ DKIM: 有効 — ドメイン ${d}、セレクタ ${s}</div>`;
+        return `<div style="color:green;">✅ DKIM: 有効 — ドメイン ${d}、セレクタ ${s}${arcPass ? " (ARC pass)" : ""}</div>`;
       }
       if (status === "fail") {
         return `<div style="color:red;">❌ DKIM: 無効 — 署名検証失敗</div>`;
@@ -75,11 +96,13 @@ browser.runtime.sendMessage({ command: "getMessageDetails" }).then(resp => {
 
     // DMARC
     if (lower.startsWith("dmarc=")) {
-      const m = part.match(/dmarc=(\w+)/i);
-      const status = m?.[1]?.toLowerCase() || "";
+      const arcPass = arcEntry.dmarcRaw?.toLowerCase()?.startsWith("dmarc=pass");
+      const status = arcPass
+        ? "pass"
+        : (part.match(/dmarc=(\w+)/i)?.[1]?.toLowerCase() || "");
       const domain = (part.match(/header\.from=([^ ]+)/i)?.[1] || "").trim();
       if (status === "pass") {
-        return `<div style="color:green;">✅ DMARC: 有効 — ドメイン ${domain} で認証成功</div>`;
+        return `<div style="color:green;">✅ DMARC: 有効 — ドメイン ${domain} で認証成功${arcPass ? " (ARC pass)" : ""}</div>`;
       }
       if (status === "none") {
         return `<div style="color:orange;">⚠ DMARC: none — ドメイン ${domain} でポリシー未設定</div>`;
