@@ -1,198 +1,259 @@
 // messagedisplay.js
 
-browser.runtime.sendMessage({ command: "getMessageDetails" }).then(resp => {
-  if (resp.error) return;
-  const headers = resp.fullMessage.headers;
+(async () => {
+  try {
+    // バックグラウンドからメッセージ詳細を取得
+    const resp = await browser.runtime.sendMessage({ command: "getMessageDetails" });
+    if (resp.error || !resp.fullMessage) return;
 
-  // ■ Envelope 情報取得（SMTPエンベロープ優先、なければヘッダ由来）
-  const envelopeFrom =
-    resp.fullMessage.envelope?.from ||
-    headers["return-path"]?.[0]?.replace(/^<|>$/g, "") ||
-    resp.fullMessage.author ||
-    "";
-  const envelopeTo =
-    (headers["delivered-to"] || []).map(s => s.trim()).join(", ") ||
-    resp.fullMessage.envelope?.to?.join(", ") ||
-    (resp.fullMessage.recipients || []).join(", ");
+    const fullMsg = resp.fullMessage;
+    const headers = fullMsg.headers || {};
 
-  // 送達経路を1行で要約
-  const recs = headers["received"] || [];
-  const hosts = [];
-  recs.forEach(line => {
-    const m = line.match(/\bfrom\s+([^\s;]+)/i) || line.match(/\bby\s+([^\s;]+)/i);
-    if (m?.[1] && !hosts.includes(m[1])) hosts.push(m[1]);
-  });
-  const route = hosts.join(" → ");
+    // ---------------------------------------------------------
+    // 1. データ解析ロジック
+    // ---------------------------------------------------------
 
-  // Authentication-Results 全体を分割
-  const arRaw = headers["authentication-results"]?.join(" ") || "";
-  const arParts = arRaw.split(/;|\r?\n/).map(s => s.trim()).filter(Boolean);
+    // ■ エンベロープ情報の整理
+    const envelopeFrom =
+      fullMsg.envelope?.from ||
+      headers["return-path"]?.[0]?.replace(/^<|>$/g, "") ||
+      fullMsg.author ||
+      "Unknown";
+      
+    const envelopeTo =
+      (headers["delivered-to"] || []).join(", ") ||
+      fullMsg.envelope?.to?.join(", ") ||
+      (fullMsg.recipients || []).join(", ") ||
+      "Unknown";
 
-  // ■ ARC-Authentication-Results をパースし、最初の (i=1) を選択
-  const arcRawArray = headers["arc-authentication-results"] || [];
-  const arcEntries = arcRawArray.map(raw => {
-    const parts = raw.split(/;|\r?\n/).map(s => s.trim()).filter(Boolean);
-    let idx = Number.MAX_SAFE_INTEGER, spfRaw, dkimRaw, dmarcRaw;
-    parts.forEach(p => {
-      const pl = p.toLowerCase();
-      if (pl.startsWith("i=")) idx = parseInt(p.substring(2)) || idx;
-      else if (pl.startsWith("spf=")) spfRaw = p;
-      else if (pl.startsWith("dkim=")) dkimRaw = p;
-      else if (pl.startsWith("dmarc=")) dmarcRaw = p;
+    // ■ 送達経路 (Received) の解析
+    // 重要: Receivedヘッダは「新しい順」なので、reverse()して「送信元→受信先」にする
+    const rawReceived = headers["received"] || [];
+    const routeHops = rawReceived.slice().reverse().map(line => {
+      // "from [ホスト名] by [ホスト名]" の形式を簡易解析
+      const fromMatch = line.match(/\bfrom\s+([^\s;]+)/i);
+      const byMatch = line.match(/\bby\s+([^\s;]+)/i);
+      return {
+        from: fromMatch ? fromMatch[1] : null,
+        by: byMatch ? byMatch[1] : null,
+        raw: line
+      };
+    }).filter(hop => hop.from || hop.by);
+
+    // ■ 認証結果 (Authentication-Results) の解析
+    // 最も信頼できるのは、通常一番上（index 0）にあるヘッダ（自サーバが付与したもの）
+    const arRaw = headers["authentication-results"]?.[0] || "";
+    
+    // 簡易パーサ: "spf=pass", "dkim=pass" などを抽出
+    const parseAuthStatus = (text, type) => {
+      // 例: "spf=pass (google.com: domain of...)"
+      const regex = new RegExp(`${type}\\s*=\\s*([a-zA-Z0-9]+)`, "i");
+      const match = text.match(regex);
+      return match ? match[1].toLowerCase() : "none";
+    };
+
+    // 詳細情報抽出
+    const extractDetail = (text, type) => {
+      if (type === 'spf') {
+         const mailFrom = text.match(/smtp\.mailfrom=([^;\s]+)/i)?.[1];
+         return mailFrom ? `domain: ${mailFrom}` : "";
+      }
+      if (type === 'dkim') {
+        const headerD = text.match(/header\.d=([^;\s]+)/i)?.[1];
+        return headerD ? `domain: ${headerD}` : "";
+      }
+      if (type === 'dmarc') {
+        const headerFrom = text.match(/header\.from=([^;\s]+)/i)?.[1];
+        return headerFrom ? `domain: ${headerFrom}` : "";
+      }
+      return "";
+    };
+
+    const authResults = {
+      spf: { status: parseAuthStatus(arRaw, "spf"), detail: extractDetail(arRaw, "spf") },
+      dkim: { status: parseAuthStatus(arRaw, "dkim"), detail: extractDetail(arRaw, "dkim") },
+      dmarc: { status: parseAuthStatus(arRaw, "dmarc"), detail: extractDetail(arRaw, "dmarc") }
+    };
+
+    // 総合判定 (全部 pass なら OK)
+    const isSpfOk = authResults.spf.status === "pass";
+    const isDkimOk = authResults.dkim.status === "pass";
+    const isDmarcOk = authResults.dmarc.status === "pass" || authResults.dmarc.status === "none"; // DMARCなしは許容する場合が多い
+    
+    // 簡易的な安全評価
+    const isSecure = isSpfOk && isDkimOk; 
+
+    // ---------------------------------------------------------
+    // 2. UI構築 (HTML/CSS)
+    // ---------------------------------------------------------
+
+    // スタイル定義 (Flexbox/Grid使用)
+    const style = document.createElement('style');
+    style.textContent = `
+      .maiv-container {
+        font-family: "Segoe UI", Meiryo, sans-serif;
+        background-color: #f9f9fa;
+        border-bottom: 1px solid #ccc;
+        padding: 12px;
+        margin-bottom: 15px;
+        color: #333;
+        font-size: 13px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+      }
+      .maiv-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+      .maiv-badge {
+        font-weight: bold;
+        padding: 4px 8px;
+        border-radius: 4px;
+        margin-right: 10px;
+        color: white;
+      }
+      .maiv-badge.secure { background-color: #2e7d32; } /* Green */
+      .maiv-badge.warning { background-color: #ed6c02; } /* Orange */
+      .maiv-badge.danger { background-color: #d32f2f; } /* Red */
+      
+      .maiv-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 10px;
+      }
+      .maiv-card {
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        padding: 8px;
+      }
+      .maiv-card-title {
+        font-weight: bold;
+        color: #555;
+        margin-bottom: 4px;
+        font-size: 11px;
+        text-transform: uppercase;
+      }
+      .maiv-status-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .maiv-status-icon { font-size: 14px; }
+      
+      .maiv-route-list {
+        margin-top: 10px;
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        padding: 8px;
+        font-family: monospace;
+        font-size: 11px;
+        overflow-x: auto;
+      }
+      .maiv-route-step {
+        display: flex;
+        align-items: center;
+      }
+      .maiv-route-arrow {
+        color: #999;
+        margin: 0 5px;
+      }
+      
+      /* ステータス別の色 */
+      .status-pass { color: #2e7d32; font-weight: bold; }
+      .status-fail { color: #d32f2f; font-weight: bold; }
+      .status-none { color: #757575; }
+    `;
+    document.head.appendChild(style);
+
+    // コンテナ作成
+    const container = document.createElement("div");
+    container.className = "maiv-container";
+
+    // ■ ヘッダーエリア（総合判定）
+    let badgeClass = "warning";
+    let badgeText = "UNVERIFIED";
+    if (isSecure) {
+      badgeClass = "secure";
+      badgeText = "AUTHENTICATED";
+    } else if (authResults.spf.status === "fail" || authResults.dkim.status === "fail") {
+      badgeClass = "danger";
+      badgeText = "AUTH FAILED";
+    }
+
+    const headerHTML = `
+      <div class="maiv-header">
+        <span class="maiv-badge ${badgeClass}">${badgeText}</span>
+        <span style="flex-grow:1;"></span>
+        <small style="color:#666;">Auth Info Viewer</small>
+      </div>
+    `;
+
+    // ■ 認証カード作成ヘルパー
+    const createAuthCard = (title, data) => {
+      let icon = "❓";
+      let sClass = "status-none";
+      if (data.status === "pass") { icon = "✅"; sClass = "status-pass"; }
+      else if (data.status === "fail") { icon = "❌"; sClass = "status-fail"; }
+      else if (data.status === "softfail") { icon = "⚠️"; sClass = "status-none"; }
+
+      return `
+        <div class="maiv-card">
+          <div class="maiv-card-title">${title}</div>
+          <div class="maiv-status-row">
+            <span class="maiv-status-icon">${icon}</span>
+            <span class="${sClass}">${data.status.toUpperCase()}</span>
+          </div>
+          <div style="font-size:11px; color:#666; margin-top:2px;">${data.detail}</div>
+        </div>
+      `;
+    };
+
+    // ■ エンベロープ情報カード
+    const envelopeHTML = `
+      <div class="maiv-card">
+        <div class="maiv-card-title">ENVELOPE</div>
+        <div style="font-size:11px;">
+          <div><b style="color:#555">From:</b> ${envelopeFrom}</div>
+          <div style="margin-top:2px;"><b style="color:#555">To:</b> ${envelopeTo}</div>
+        </div>
+      </div>
+    `;
+
+    // ■ 経路情報の構築
+    // 最後のホップ(受信)を強調、それ以外は矢印でつなぐ
+    let routeHTML = `<div class="maiv-route-list"><div class="maiv-card-title">DELIVERY ROUTE (Oldest &rarr; Newest)</div>`;
+    routeHops.forEach((hop, idx) => {
+      const isLast = idx === routeHops.length - 1;
+      const label = hop.from ? `${hop.from}` : `(by ${hop.by})`;
+      routeHTML += `
+        <div class="maiv-route-step" style="${isLast ? 'font-weight:bold; color:#000;' : 'color:#666;'}">
+           ${idx + 1}. ${label}
+           ${hop.by && hop.from ? `<span style='color:#999; font-size:0.9em; margin-left:4px;'>(by ${hop.by})</span>` : ''}
+        </div>
+      `;
     });
-    return { idx, spfRaw, dkimRaw, dmarcRaw };
-  });
-  const arcEntry = (arcEntries.sort((a, b) => a.idx - b.idx)[0]) || {};
+    routeHTML += `</div>`;
 
-  // SPF／DKIM／DMARC のみを抽出して詳細理由付きでフォーマット
-  function fmtARPart(part) {
-    const lower = part.toLowerCase();
+    // HTML組み立て
+    container.innerHTML = `
+      ${headerHTML}
+      <div class="maiv-grid">
+        ${createAuthCard("SPF", authResults.spf)}
+        ${createAuthCard("DKIM", authResults.dkim)}
+        ${createAuthCard("DMARC", authResults.dmarc)}
+        ${envelopeHTML}
+      </div>
+      ${routeHTML}
+    `;
 
-    // SPF
-    if (lower.startsWith("spf=")) {
-      // ARC で pass なら優先
-      const arcPass = arcEntry.spfRaw?.toLowerCase()?.startsWith("spf=pass");
-      const status = arcPass
-        ? "pass"
-        : (part.match(/spf=(\w+)/i)?.[1]?.toLowerCase() || "");
-      const mf = part.match(/smtp\.mailfrom=([^ ]+)/i)?.[1] || "";
-      const mail = mf.includes("@") ? mf.split("@")[1] : mf;
-      const ipMatch = part.match(/(\d{1,3}(?:\.\d{1,3}){3})/);
-      const ip = ipMatch ? ipMatch[1] : "";
-      if (status === "pass") {
-        return `<div style="color:green;">✅ SPF: 有効 — ドメイン ${mail} が IP ${ip} を許可${arcPass ? " (ARC pass)" : ""}</div>`;
-      }
-      if (status === "fail") {
-        return `<div style="color:red;">❌ SPF: 無効 — ドメイン ${mail} が IP ${ip} を許可せず</div>`;
-      }
-      if (status === "softfail") {
-        return `<div style="color:orange;">⚠ SPF: softfail — ドメイン ${mail} が IP ${ip} を許可せず</div>`;
-      }
-      if (status === "none") {
-        return `<div style="color:orange;">⚠ SPF: none — ドメイン ${mail} に SPF レコードなし</div>`;
-      }
-      return `<div>${part}</div>`;
-    }
+    // 挿入
+    const existing = document.querySelector(".maiv-container");
+    if (existing) existing.remove();
+    document.body.insertAdjacentElement("afterbegin", container);
 
-    // DKIM
-    if (lower.startsWith("dkim=")) {
-      const arcPass = arcEntry.dkimRaw?.toLowerCase()?.startsWith("dkim=pass");
-      const status = arcPass
-        ? "pass"
-        : (part.match(/dkim=(\w+)/i)?.[1]?.toLowerCase() || "");
-      if (status === "pass") {
-        const d = (part.match(/header\.d=([^ ]+)/i)?.[1] || "").trim();
-        const s = (part.match(/header\.s=([^ ]+)/i)?.[1] || "").trim();
-        return `<div style="color:green;">✅ DKIM: 有効 — ドメイン ${d}、セレクタ ${s}${arcPass ? " (ARC pass)" : ""}</div>`;
-      }
-      if (status === "fail") {
-        return `<div style="color:red;">❌ DKIM: 無効 — 署名検証失敗</div>`;
-      }
-      if (status === "none") {
-        return `<div style="color:orange;">⚠ DKIM: none — 署名なし</div>`;
-      }
-      return `<div>${part}</div>`;
-    }
-
-    // DMARC
-    if (lower.startsWith("dmarc=")) {
-      const arcPass = arcEntry.dmarcRaw?.toLowerCase()?.startsWith("dmarc=pass");
-      const status = arcPass
-        ? "pass"
-        : (part.match(/dmarc=(\w+)/i)?.[1]?.toLowerCase() || "");
-      const domain = (part.match(/header\.from=([^ ]+)/i)?.[1] || "").trim();
-      if (status === "pass") {
-        return `<div style="color:green;">✅ DMARC: 有効 — ドメイン ${domain} で認証成功${arcPass ? " (ARC pass)" : ""}</div>`;
-      }
-      if (status === "none") {
-        return `<div style="color:orange;">⚠ DMARC: none — ドメイン ${domain} でポリシー未設定</div>`;
-      }
-      if (status === "fail") {
-        return `<div style="color:red;">❌ DMARC: 無効 — ドメイン ${domain} で認証失敗</div>`;
-      }
-      return `<div>${part}</div>`;
-    }
-
-    return null;
+  } catch (e) {
+    console.error("MailAuthInfoViewer Error:", e);
   }
-
-  // DL要素を作成
-  const dl = document.createElement("dl");
-  dl.style.display = "grid";
-  dl.style.gridTemplateColumns = "auto 1fr";
-  dl.style.gridColumnGap = "0.5em";
-  dl.style.margin = "0";
-  dl.style.fontSize = "small";
-  dl.style.lineHeight = "1.2em";
-
-  // エンベロープFrom
-  if (envelopeFrom) {
-    const dt = document.createElement("dt");
-    dt.textContent = "エンベロープFrom";
-    dt.style.fontWeight = "bold";
-    const dd = document.createElement("dd");
-    dd.style.margin = "0 0 5px 0";
-    dd.textContent = envelopeFrom;
-    dl.append(dt, dd);
-  }
-
-  // エンベロープTo
-  if (envelopeTo) {
-    const dt = document.createElement("dt");
-    dt.textContent = "エンベロープTo";
-    dt.style.fontWeight = "bold";
-    const dd = document.createElement("dd");
-    dd.style.margin = "0 0 5px 0";
-    dd.textContent = envelopeTo;
-    dl.append(dt, dd);
-  }
-
-  // 送達経路
-  if (route) {
-    const dt = document.createElement("dt");
-    dt.textContent = "送達経路";
-    dt.style.fontWeight = "bold";
-    const dd = document.createElement("dd");
-    dd.style.margin = "0 0 5px 0";
-    dd.textContent = route;
-    dl.append(dt, dd);
-  }
-
-  // 認証結果
-  if (arParts.length) {
-    const dt = document.createElement("dt");
-    dt.textContent = "認証結果";
-    dt.style.fontWeight = "bold";
-    const dd = document.createElement("dd");
-    dd.style.margin = "0 0 5px 0";
-
-    // サーバ情報
-    const serverDiv = document.createElement("div");
-    serverDiv.textContent = arParts[0];
-    dd.appendChild(serverDiv);
-
-    // SPF, DKIM, DMARC のみ
-    arParts.slice(1).forEach(part => {
-      const html = fmtARPart(part);
-      if (html) {
-        const div = document.createElement("div");
-        div.style.marginLeft = "1em";
-        div.innerHTML = html;
-        dd.appendChild(div);
-      }
-    });
-
-    dl.append(dt, dd);
-  }
-
-  // グレーのボックスを作成して挿入
-  const box = document.createElement("div");
-  box.style.backgroundColor = "#e0e0e0";
-  box.style.border = "1px solid #999";
-  box.style.padding = "5px";
-  box.style.marginBottom = "10px";
-  box.style.fontSize = "small";
-
-  box.appendChild(dl);
-  document.body.insertAdjacentElement("afterbegin", box);
-}).catch(() => {});
+})();
