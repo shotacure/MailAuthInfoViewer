@@ -29,19 +29,30 @@
     // ■ 送達経路 (Received) の解析
     // 重要: Receivedヘッダは「新しい順」なので、reverse()して「送信元→受信先」にする
     const rawReceived = headers["received"] || [];
+    
+    // 日時パース用のヘルパー関数
+    const parseReceivedDate = (str) => {
+      // セミコロンの後の日時部分を取得 (; Mon, 25 Dec...)
+      const match = str.match(/;\s*([^;]+)$/);
+      return match ? new Date(match[1]) : null;
+    };
+
+    // reverse() して「送信元(0) → 受信先(last)」の順にする
     const routeHops = rawReceived.slice().reverse().map(line => {
       // "from [ホスト名] by [ホスト名]" の形式を簡易解析
       const fromMatch = line.match(/\bfrom\s+([^\s;]+)/i);
       const byMatch = line.match(/\bby\s+([^\s;]+)/i);
+      const date = parseReceivedDate(line);
+
       return {
         from: fromMatch ? fromMatch[1] : null,
         by: byMatch ? byMatch[1] : null,
+        date: date,
         raw: line
       };
     }).filter(hop => hop.from || hop.by);
 
-    // ■ 認証結果 (Authentication-Results) の解析
-    // 最も信頼できるのは、通常一番上（index 0）にあるヘッダ（自サーバが付与したもの）
+    // ■ 認証結果 (Authentication-Results)
     const arRaw = headers["authentication-results"]?.[0] || "";
     
     // 簡易パーサ: "spf=pass", "dkim=pass" などを抽出
@@ -100,65 +111,21 @@
         font-size: 13px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.05);
       }
-      .maiv-header {
-        display: flex;
-        align-items: center;
-        margin-bottom: 10px;
-      }
-      .maiv-badge {
-        font-weight: bold;
-        padding: 4px 8px;
-        border-radius: 4px;
-        margin-right: 10px;
-        color: white;
-      }
-      .maiv-badge.secure { background-color: #2e7d32; } /* Green */
-      .maiv-badge.warning { background-color: #ed6c02; } /* Orange */
-      .maiv-badge.danger { background-color: #d32f2f; } /* Red */
+      .maiv-header { display: flex; align-items: center; margin-bottom: 10px; }
+      .maiv-badge { font-weight: bold; padding: 4px 8px; border-radius: 4px; margin-right: 10px; color: white; }
+      .maiv-badge.secure { background-color: #2e7d32; }
+      .maiv-badge.warning { background-color: #ed6c02; }
+      .maiv-badge.danger { background-color: #d32f2f; }
       
-      .maiv-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 10px;
-      }
-      .maiv-card {
-        background: white;
-        border: 1px solid #e0e0e0;
-        border-radius: 4px;
-        padding: 8px;
-      }
-      .maiv-card-title {
-        font-weight: bold;
-        color: #555;
-        margin-bottom: 4px;
-        font-size: 11px;
-        text-transform: uppercase;
-      }
-      .maiv-status-row {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-      }
+      .maiv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+      .maiv-card { background: white; border: 1px solid #e0e0e0; border-radius: 4px; padding: 8px; }
+      .maiv-card-title { font-weight: bold; color: #555; margin-bottom: 4px; font-size: 11px; text-transform: uppercase; }
+      .maiv-status-row { display: flex; align-items: center; gap: 6px; }
       .maiv-status-icon { font-size: 14px; }
       
-      .maiv-route-list {
-        margin-top: 10px;
-        background: white;
-        border: 1px solid #e0e0e0;
-        border-radius: 4px;
-        padding: 8px;
-        font-family: monospace;
-        font-size: 11px;
-        overflow-x: auto;
-      }
-      .maiv-route-step {
-        display: flex;
-        align-items: center;
-      }
-      .maiv-route-arrow {
-        color: #999;
-        margin: 0 5px;
-      }
+      .maiv-route-list { margin-top: 10px; background: white; border: 1px solid #e0e0e0; border-radius: 4px; padding: 8px; font-family: monospace; font-size: 11px; overflow-x: auto; }
+      .maiv-route-table { width: 100%; border-collapse: collapse; }
+      .maiv-route-table td { padding: 4px; border-bottom: 1px solid #eee; vertical-align: middle; }
       
       /* ステータス別の色 */
       .status-pass { color: #2e7d32; font-weight: bold; }
@@ -186,7 +153,7 @@
       <div class="maiv-header">
         <span class="maiv-badge ${badgeClass}">${badgeText}</span>
         <span style="flex-grow:1;"></span>
-        <small style="color:#666;">Auth Info Viewer</small>
+        <a href="https://github.com/shotacure/MailAuthInfoViewer" target="_blank"><small style="color:#666;">Auth Info Viewer</small></a>
       </div>
     `;
 
@@ -222,19 +189,69 @@
     `;
 
     // ■ 経路情報の構築
-    // 最後のホップ(受信)を強調、それ以外は矢印でつなぐ
-    let routeHTML = `<div class="maiv-route-list"><div class="maiv-card-title">DELIVERY ROUTE (Oldest &rarr; Newest)</div>`;
+    let routeRows = "";
+    let prevDate = null;
+
     routeHops.forEach((hop, idx) => {
-      const isLast = idx === routeHops.length - 1;
-      const label = hop.from ? `${hop.from}` : `(by ${hop.by})`;
-      routeHTML += `
-        <div class="maiv-route-step" style="${isLast ? 'font-weight:bold; color:#000;' : 'color:#666;'}">
-           ${idx + 1}. ${label}
-           ${hop.by && hop.from ? `<span style='color:#999; font-size:0.9em; margin-left:4px;'>(by ${hop.by})</span>` : ''}
-        </div>
+      const isFirst = idx === 0;
+      
+      // 遅延時間の計算
+      let delayText = "--";
+      let delayColor = "#ccc";
+      
+      if (hop.date && prevDate) {
+        const diffMs = hop.date - prevDate;
+        const diffSec = Math.floor(diffMs / 1000);
+        
+        if (diffSec < 60) {
+            delayText = `+${diffSec}s`;
+            delayColor = "#666";
+        } else {
+            const min = Math.floor(diffSec / 60);
+            const sec = diffSec % 60;
+            delayText = `+${min}m${sec}s`;
+            delayColor = diffSec > 300 ? "#d32f2f" : "#e65100"; // 5分以上で赤、それ以外はオレンジ
+        }
+      } else if (isFirst) {
+        // スタート地点
+        delayText = "ORIGIN"; 
+        delayColor = "#000"; // 黒で強調
+      }
+      prevDate = hop.date; // 次のループ用に保存
+
+      // ホスト名表示部
+      const hostLabel = hop.from || 'unknown';
+      const byLabel = hop.by ? `(by ${hop.by})` : '';
+      
+      // 行全体に背景色をつける
+      const rowBg = isFirst ? 'background-color:#f0f8ff;' : '';
+      
+      // 最初だけ黒く太く、それ以外はグレー
+      const rowStyle = isFirst ? 'font-weight:bold; color:#000; background-color:#f0f8ff;' : 'color:#555;';
+
+      // 時刻表示
+      const timeStr = hop.date ? hop.date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'}) : "--:--:--";
+
+      routeRows += `
+        <tr style="${isFirst ? 'border-left: 3px solid #2196f3;' : ''} ${rowBg}">
+          <td style="width:60px; text-align:right; color:${delayColor}; font-weight:bold; font-size:0.9em;">${delayText}</td>
+          <td style="${rowStyle}">
+             <div>${hostLabel} ${isFirst ? '🚀' : ''}</div>
+             <div style="color:#999; font-size:0.9em; font-weight:normal;">${byLabel}</div>
+          </td>
+          <td style="text-align:right; color:#999; white-space:nowrap;">${timeStr}</td>
+        </tr>
       `;
     });
-    routeHTML += `</div>`;
+
+    const routeHTML = `
+      <div class="maiv-route-list">
+        <div class="maiv-card-title">DELIVERY ROUTE (Sender &rarr; Recipient)</div>
+        <table class="maiv-route-table">
+          ${routeRows}
+        </table>
+      </div>
+    `;
 
     // HTML組み立て
     container.innerHTML = `
