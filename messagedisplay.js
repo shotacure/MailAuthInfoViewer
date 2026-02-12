@@ -39,51 +39,61 @@
 
     // reverse() して「送信元(0) → 受信先(last)」の順にする
     const routeHops = rawReceived.slice().reverse().map(line => {
-      // "from [ホスト名] by [ホスト名]" の形式を簡易解析
-      const fromMatch = line.match(/\bfrom\s+([^\s;]+)/i);
+      // 変更: from の詳細(IP等)をすべて取得するため正規表現を拡張
+      // "from ..." から始まり、" by " または ";" または行末までの範囲を取得
+      const fromMatch = line.match(/\bfrom\s+(.+?)(?=\s+by\s+|;|$)/i);
       const byMatch = line.match(/\bby\s+([^\s;]+)/i);
       const date = parseReceivedDate(line);
 
       return {
-        from: fromMatch ? fromMatch[1] : null,
+        // マッチした場合は空白を除去して格納
+        from: fromMatch ? fromMatch[1].trim() : null,
         by: byMatch ? byMatch[1] : null,
         date: date,
         raw: line
       };
     }).filter(hop => hop.from || hop.by);
 
-    // ■ 認証結果 (Authentication-Results)
-    const arRaw = headers["authentication-results"]?.[0] || "";
+    // ■ 認証結果 (Authentication-Results / ARC) の解析
+    // 変更: Authentication-Results と ARC-Authentication-Results を全て取得して結合
+    const authHeaders = [
+      ...(headers["authentication-results"] || []),
+      ...(headers["arc-authentication-results"] || [])
+    ];
     
-    // 簡易パーサ: "spf=pass", "dkim=pass" などを抽出
-    const parseAuthStatus = (text, type) => {
-      // 例: "spf=pass (google.com: domain of...)"
+    // 変更: ヘッダ配列全体からステータスを検索するヘルパー
+    const parseAuthStatus = (type) => {
       const regex = new RegExp(`${type}\\s*=\\s*([a-zA-Z0-9]+)`, "i");
-      const match = text.match(regex);
-      return match ? match[1].toLowerCase() : "none";
+      for (const h of authHeaders) {
+        const match = h.match(regex);
+        if (match) return match[1].toLowerCase();
+      }
+      return "none";
     };
 
-    // 詳細情報抽出
-    const extractDetail = (text, type) => {
-      if (type === 'spf') {
-         const mailFrom = text.match(/smtp\.mailfrom=([^;\s]+)/i)?.[1];
-         return mailFrom ? `domain: ${mailFrom}` : "";
-      }
-      if (type === 'dkim') {
-        const headerD = text.match(/header\.d=([^;\s]+)/i)?.[1];
-        return headerD ? `domain: ${headerD}` : "";
-      }
-      if (type === 'dmarc') {
-        const headerFrom = text.match(/header\.from=([^;\s]+)/i)?.[1];
-        return headerFrom ? `domain: ${headerFrom}` : "";
+    // 変更: ヘッダ配列全体から詳細情報を抽出するヘルパー
+    const extractDetail = (type) => {
+      for (const h of authHeaders) {
+        if (type === 'spf') {
+           const match = h.match(/smtp\.mailfrom=([^;\s]+)/i);
+           if (match) return `domain: ${match[1]}`;
+        }
+        if (type === 'dkim') {
+          const match = h.match(/header\.d=([^;\s]+)/i);
+          if (match) return `domain: ${match[1]}`;
+        }
+        if (type === 'dmarc') {
+          const match = h.match(/header\.from=([^;\s]+)/i);
+          if (match) return `domain: ${match[1]}`;
+        }
       }
       return "";
     };
 
     const authResults = {
-      spf: { status: parseAuthStatus(arRaw, "spf"), detail: extractDetail(arRaw, "spf") },
-      dkim: { status: parseAuthStatus(arRaw, "dkim"), detail: extractDetail(arRaw, "dkim") },
-      dmarc: { status: parseAuthStatus(arRaw, "dmarc"), detail: extractDetail(arRaw, "dmarc") }
+      spf: { status: parseAuthStatus("spf"), detail: extractDetail("spf") },
+      dkim: { status: parseAuthStatus("dkim"), detail: extractDetail("dkim") },
+      dmarc: { status: parseAuthStatus("dmarc"), detail: extractDetail("dmarc") }
     };
 
     // 総合判定 (全部 pass なら OK)
@@ -229,8 +239,12 @@
       // 最初だけ黒く太く、それ以外はグレー
       const rowStyle = isFirst ? 'font-weight:bold; color:#000; background-color:#f0f8ff;' : 'color:#555;';
 
-      // 時刻表示
-      const timeStr = hop.date ? hop.date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'}) : "--:--:--";
+      // 時刻表示 (yyyy-MM-dd HH:mm:ss)
+      let timeStr = "--:--:--";
+      if (hop.date) {
+        const pad = (n) => n.toString().padStart(2, '0');
+        timeStr = `${hop.date.getFullYear()}-${pad(hop.date.getMonth() + 1)}-${pad(hop.date.getDate())} ${pad(hop.date.getHours())}:${pad(hop.date.getMinutes())}:${pad(hop.date.getSeconds())}`;
+      }
 
       routeRows += `
         <tr style="${isFirst ? 'border-left: 3px solid #2196f3;' : ''} ${rowBg}">
