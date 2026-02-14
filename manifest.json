@@ -1,12 +1,12 @@
 {
   "manifest_version": 2,
   "name": "Mail Auth Info Viewer",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Visualizes email authentication results (SPF, DKIM, DMARC) and the delivery route with time delays on the message display.",
-  "applications": {
+  "browser_specific_settings": {
     "gecko": {
       "id": "mail-auth-info-viewer@precure.tv",
-      "strict_min_version": "78.0"
+      "strict_min_version": "115.0"
     }
   },
   "icons": {

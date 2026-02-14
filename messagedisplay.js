@@ -275,7 +275,7 @@
     `;
 
     // 最終的なUIコンポーネント群をコンテナに組み込み
-    container.innerHTML = `
+    const markup = `
       ${headerHTML}
       <div class="maiv-grid">
         ${createAuthCard("SPF", authResults.spf)}
@@ -285,6 +285,10 @@
       </div>
       ${routeHTML}
     `;
+
+    // DOMParserでパースして挿入
+    const doc = new DOMParser().parseFromString(markup, "text/html");
+    container.replaceChildren(...doc.body.childNodes);
 
     // 既存の要素(以前の表示内容)が存在する場合は削除し、新たにコンテナをDOMへ挿入
     const existing = document.querySelector(".maiv-container");
