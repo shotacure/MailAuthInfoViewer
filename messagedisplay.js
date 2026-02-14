@@ -77,20 +77,81 @@
 
     // 結合したヘッダ群から特定の認証タイプに関連する詳細情報(ドメイン等)を抽出するヘルパー
     const extractDetail = (type) => {
-      for (const h of authHeaders) {
-        if (type === 'spf') {
-           const match = h.match(/smtp\.mailfrom=([^;\s]+)/i);
-           if (match) return `domain: ${match[1]}`;
+      if (type === 'spf') {
+        let domain = "";
+        let ip = "";
+        
+        for (const h of authHeaders) {
+          // 1. ドメインの抽出 (smtp.mailfrom= または コメント内の domain of から取得)
+          const mailfromMatch = h.match(/smtp\.mailfrom=([^;\s()]+)/i);
+          if (mailfromMatch) {
+            // < > が付いている場合の除去
+            const fromStr = mailfromMatch[1].replace(/^<|>$/g, '');
+            // メールアドレス形式の場合は @ 以降のドメイン部分のみ抽出
+            domain = fromStr.includes('@') ? fromStr.split('@')[1] : fromStr;
+          } else {
+             // フォールバック: (domain of xxx@example.com ...) などのコメントから取得
+             const domainOfMatch = h.match(/domain of ([^;\s()]+)/i);
+             if (domainOfMatch) {
+               const fromStr = domainOfMatch[1];
+               domain = fromStr.includes('@') ? fromStr.split('@')[1] : fromStr;
+             }
+          }
+
+          // 2. IPアドレスの抽出 (Google形式: designates [IP] as... または 標準的な client-ip= から取得)
+          const ipMatch = h.match(/designates\s+([a-fA-F0-9.:]+)\s+as\s+permitted\s+sender/i) || 
+                          h.match(/client-ip=([a-fA-F0-9.:]+)/i);
+          if (ipMatch) {
+            ip = ipMatch[1];
+          }
+
+          // どちらか一方でも見つかれば結果を返す (<br>タグで改行してHTML出力)
+          if (domain || ip) {
+            const parts = [];
+            if (domain) parts.push(`domain: ${domain}`);
+            if (ip) parts.push(`IP address: ${ip}`);
+            return parts.join("<br>");
+          }
         }
-        if (type === 'dkim') {
-          const match = h.match(/header\.d=([^;\s]+)/i);
-          if (match) return `domain: ${match[1]}`;
-        }
-        if (type === 'dmarc') {
-          const match = h.match(/header\.from=([^;\s]+)/i);
-          if (match) return `domain: ${match[1]}`;
-        }
+        return "";
       }
+
+      if (type === 'dkim') {
+        const domains = new Set(); // 重複排除用にSetを使用
+        
+        for (const h of authHeaders) {
+          // header.d= と header.i= の両方をすべて抽出
+          const regex = /header\.(?:d|i)=([^;\s()]+)/ig;
+          let match;
+          
+          while ((match = regex.exec(h)) !== null) {
+            let dkimDomain = match[1];
+            
+            // header.i=@example.com や user@example.com の場合は @ 以降を取得
+            if (dkimDomain.includes('@')) {
+              dkimDomain = dkimDomain.split('@')[1];
+            }
+            if (dkimDomain) {
+               domains.add(dkimDomain);
+            }
+          }
+        }
+        
+        // 複数ある場合は " / " で結合して出力
+        if (domains.size > 0) {
+          return `domain: ${Array.from(domains).join(" / ")}`;
+        }
+        return "";
+      }
+
+      if (type === 'dmarc') {
+        for (const h of authHeaders) {
+          const match = h.match(/header\.from=([^;\s()]+)/i);
+          if (match) return `domain: ${match[1]}`;
+        }
+        return "";
+      }
+
       return "";
     };
 
