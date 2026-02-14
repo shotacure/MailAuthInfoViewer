@@ -45,7 +45,7 @@ After installing the add-on, simply open any email in Thunderbird. A new informa
 
 ## 📥 Installation / インストール
 
-[**Download from ATN (Thunderbird Add-ons)**](https://addons.thunderbird.net/ja/thunderbird/addon/YOUR-ADDON-SLUG-HERE/)
+[**Download from ATN (Thunderbird Add-ons)**](https://addons.thunderbird.net/ja/thunderbird/addon/mail-auth-info-viewer/)
 
 You can also download the latest release directly from GitHub:  
 GitHubのReleasesからも最新版をダウンロードできます:  
