@@ -1,1 +1,17 @@
-/*.xpi
+# build output
+/.release
+
+# local resources
+/.resources
+
+# OS
+.DS_Store
+Thumbs.db
+
+# VSCode
+.vscode/*
+!.vscode/tasks.json
+
+# temporary
+*.tmp
+*.log
