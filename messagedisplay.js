@@ -224,13 +224,21 @@
         font-family: "Segoe UI", Meiryo, sans-serif;
         background-color: #f9f9fa;
         border-bottom: 1px solid #ccc;
-        padding: 12px;
+        padding: 10px 12px;
         margin-bottom: 15px;
         color: #333;
         font-size: 13px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.05);
       }
-      .maiv-header { display: flex; align-items: center; margin-bottom: 12px; }
+      
+      /* アコーディオン(開閉)用のヘッダースタイル */
+      .maiv-header { 
+        display: flex; align-items: center; 
+        cursor: pointer; user-select: none;
+        padding: 4px 0; transition: opacity 0.2s;
+      }
+      .maiv-header:hover { opacity: 0.8; }
+      
       .maiv-badge { font-weight: bold; padding: 6px 10px; border-radius: 4px; margin-right: 8px; color: white; font-size: 14px; letter-spacing: 0.5px;}
       .maiv-badge.secure { background-color: #2e7d32; }
       .maiv-badge.warning { background-color: #ed6c02; }
@@ -239,6 +247,29 @@
       /* バッジの右側に表示する大きなドメインテキスト用のスタイル */
       .maiv-header-domain { font-size: 17px; font-weight: bold; color: #222; }
       .maiv-header-mismatch { font-size: 13px; color: #e65100; font-weight: bold; margin-left: 6px; }
+
+      /* 開閉トグルアイコン */
+      .maiv-toggle-icon { margin-left: 15px; margin-right: 15px; color: #999; font-size: 12px; transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1); }
+      .maiv-toggle-icon.expanded { transform: rotate(180deg); }
+      .maiv-link { color: #666; text-decoration: none; }
+      .maiv-link:hover { text-decoration: underline; color: #2196f3; }
+
+      /* 開閉アニメーション(スライドダウン)用のラッパー */
+      .maiv-body-wrapper {
+        display: grid;
+        grid-template-rows: 0fr;
+        transition: grid-template-rows 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      .maiv-body-wrapper.expanded {
+        grid-template-rows: 1fr;
+      }
+      .maiv-body-inner {
+        overflow: hidden;
+      }
+      /* コンテンツの実態。開いたときの余白を設定 */
+      .maiv-body-content {
+        padding-top: 12px;
+      }
 
       /* minmaxを150pxに下げて、横一列に並びやすく調整 */
       .maiv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 10px; }
@@ -306,12 +337,16 @@
       headerDomainText = `${escapeHTML(headerFromDomain)} <span class="maiv-header-mismatch">(DOMAIN MISMATCH)</span>`;
     }
 
+    // 「安全(secure)」でない場合は、自動で展開(展開用のアニメーションをトリガー)するフラグ
+    const shouldAutoExpand = (badgeClass !== "secure");
+
     const headerHTML = `
-      <div class="maiv-header">
+      <div class="maiv-header" id="maiv-header-toggle" title="Click to toggle details">
         <span class="maiv-badge ${badgeClass}">${badgeText}</span>
         <span class="maiv-header-domain">${headerDomainText}</span>
         <span style="flex-grow:1;"></span>
-        <a href="https://github.com/shotacure/MailAuthInfoViewer" target="_blank"><small style="color:#666;">Auth Info Viewer</small></a>
+        <span class="maiv-toggle-icon" id="maiv-toggle-icon">▼</span>
+        <a href="https://github.com/shotacure/MailAuthInfoViewer" class="maiv-link" target="_blank"><small>Mail Auth Info Viewer</small></a>
       </div>
     `;
 
@@ -457,16 +492,22 @@
     `;
 
     // 最終的なUIコンポーネント群をコンテナに組み込み
-    // 1つの maiv-grid 内に ADDRESS(span 2), SPF, DKIM, DMARC の順で並べる
+    // アニメーション用に、詳細部分をマウント時は一旦閉じた状態（クラスなし）のラッパーで囲む
     const markup = `
       ${headerHTML}
-      <div class="maiv-grid">
-        ${addressHTML}
-        ${createAuthCard("SPF", authResults.spf)}
-        ${createAuthCard("DKIM", authResults.dkim)}
-        ${createAuthCard("DMARC", authResults.dmarc)}
+      <div class="maiv-body-wrapper" id="maiv-body-wrapper">
+        <div class="maiv-body-inner">
+          <div class="maiv-body-content">
+            <div class="maiv-grid">
+              ${addressHTML}
+              ${createAuthCard("SPF", authResults.spf)}
+              ${createAuthCard("DKIM", authResults.dkim)}
+              ${createAuthCard("DMARC", authResults.dmarc)}
+            </div>
+            ${routeHTML}
+          </div>
+        </div>
       </div>
-      ${routeHTML}
     `;
 
     // DOMParserでパースして挿入
@@ -477,6 +518,27 @@
     const existing = document.querySelector(".maiv-container");
     if (existing) existing.remove();
     document.body.insertAdjacentElement("afterbegin", container);
+
+    // --- インタラクション (アコーディオンの開閉) の設定 ---
+    const headerToggle = container.querySelector('#maiv-header-toggle');
+    const bodyWrapper = container.querySelector('#maiv-body-wrapper');
+    const toggleIcon = container.querySelector('#maiv-toggle-icon');
+
+    // クリックによる手動開閉
+    headerToggle.addEventListener('click', (e) => {
+      // リンク部分(Mail Auth Info Viewer)をクリックした時は開閉しないようにする
+      if (e.target.closest('.maiv-link')) return;
+      bodyWrapper.classList.toggle('expanded');
+      toggleIcon.classList.toggle('expanded');
+    });
+
+    // 「安全」以外の場合は、描画完了の直後にクラスを付与して「スルッと開く」アニメーションを発火させる
+    if (shouldAutoExpand) {
+      setTimeout(() => {
+        bodyWrapper.classList.add('expanded');
+        toggleIcon.classList.add('expanded');
+      }, 50); // DOMレンダリング直後にトリガーするためのわずかな遅延
+    }
 
   } catch (e) {
     console.error("MailAuthInfoViewer Error:", e);

@@ -12,10 +12,10 @@ Mail Auth Info Viewer は、巧妙なフィッシング詐欺や「表示名（�
 ## 📸 Screenshots / スクリーンショット
 
 ### Fully Authenticated & Aligned (認証成功・ドメイン一致)
-![Verified Mail](images/ss_verified.png)
-
-### Phishing & Spoofing Detection (フィッシング・表示名偽装の検知)
-![Phishing Detection](images/ss_phishing.png)
+For fully authenticated and safe emails, the dashboard automatically collapses to save screen space while keeping the top status badge visible.  
+安全な認証済みメールの場合、画面スペースを節約するためにダッシュボードは自動的に折りたたまれます（上部のステータスバッジのみ表示）。
+![Verified Mail (Collapsed)](images/ss_verified.png)
+![Verified Mail (Collapsed)](images/ss_verified_open.png)
 
 ### Unverified & Delayed Routing (未認証・遅延発生の警告)
 ![Unverified Mail](images/ss_unverified.png)
@@ -24,10 +24,12 @@ Mail Auth Info Viewer は、巧妙なフィッシング詐欺や「表示名（�
 
 ## 🌟 Key Features / 主な機能
 
+* **Smart Auto-Collapse:** The dashboard stays neatly collapsed for safe, authenticated emails to maximize your reading space. It automatically expands with a smooth animation only when an unverified sender or a domain mismatch is detected.
+    * **スマート自動折りたたみ:** 安全な認証済みメールではダッシュボードが自動で折りたたまれ、メール本文の閲覧スペースを広く保ちます。未認証やドメイン不一致を検知した「要確認」のメールの場合のみ、自動的にスライド展開して警告します。
 * **Sender Identity & Alignment:** Instantly spot discrepancies between the Display Name, Header From, and Envelope From addresses side-by-side.
     * **送信者の身元とアライメント検証:** 「表示名」「ヘッダFrom」「エンベロープFrom」を並べて表示し、アドレスの不自然な乖離や偽装を瞬時に見抜きます。
 * **Domain Verification Badge:** Prominently displays the actual authenticated domain (e.g., `✅ AUTH PASS example.com`) to prevent false trust in fake display names.
-    * **ドメイン認証バッジ:** 単なる「認証済」ではなく、実際に認証されたドメイン名（例: `✅ AUTH PASS example.com`）を明記し、誤った安心感を与えません。
+    * **ドメイン認証バッジ:** 単なる「認証済」ではなく、実際に認証されたドメイン名を明記し、誤った安心感を与えません。
 * **Authentication Status:** Quickly check the pass/fail status of SPF, DKIM, and DMARC authentication.
     * **認証ステータス:** SPF、DKIM、DMARC認証の成功/失敗ステータスを素早く確認できます。
 * **Delivery Route Visualization:** View the email's path from the sender (ORIGIN) to your inbox, including calculated time delays between each hop. Long delays are highlighted in red/orange.
@@ -42,7 +44,9 @@ After installing the add-on, simply open any email in Thunderbird. A new informa
 アドオンをインストールした後、Thunderbirdでメールを開くだけです。メッセージ表示画面の上部に新しい情報パネルが表示されます。
 
 * **Overall Status:** A large badge indicates the verified domain or issues (e.g., `✅ AUTH PASS`, `❌ AUTH FAILED`, `⚠️ AUTH PASS (DOMAIN MISMATCH)`, `UNVERIFIED`).
-    * **総合ステータス:** 大きなバッジが認証されたドメインや問題を警告します（例: `✅ AUTH PASS`, `❌ AUTH FAILED`, `⚠️ AUTH PASS (DOMAIN MISMATCH)`, `UNVERIFIED`）。
+    * **総合ステータス:** 大きなバッジが認証されたドメインや問題を警告します。
+* **Manual Toggle:** You can click the header bar at any time to expand or collapse the detailed view.
+    * **手動開閉:** ヘッダーバーをクリックすることで、いつでも詳細ビューの展開・折りたたみを切り替えられます。
 * **Address & Alignment:** Highlights the sender's addresses. If the domain doesn't match the authenticated envelope, it alerts you to potential spoofing or mailing list routing.
     * **アドレスとアライメント:** 送信者のアドレスを強調表示します。ドメインがエンベロープと一致しない場合、なりすましやメーリングリスト経由の可能性を警告します。
 * **Delivery Route:** The table at the bottom shows the path. The first row ("ORIGIN 🚀") is the sender. The time difference between each hop is shown on the left.
