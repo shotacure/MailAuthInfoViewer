@@ -322,7 +322,7 @@
       // 予断を排除するため、ただのAUTHENTICATEDではなく「どのドメインが認証されたか」を明記する
       badgeClass = "secure";
       badgeText = `✅ AUTH PASS`;
-      // バッジの横に大きな文字でドメインを表示
+      // バッジの横に大きな文字でドメインを表示(認証された場合はヘッダFROMのドメインを表示)
       headerDomainText = escapeHTML(headerFromDomain);
     } else if (authResults.spf.status === "fail" || authResults.dkim.status === "fail" || authResults.dmarc.status === "fail") {
       badgeClass = "danger";
@@ -333,8 +333,8 @@
       // 認証は通っているがドメインが不一致の場合（配信サービスやメルマガ等）は、赤色(danger)ではなくオレンジ(warning)にする
       badgeClass = "warning";
       badgeText = `⚠️ AUTH PASS`;
-      // ドメイン名の横にオレンジ色でMISMATCHの警告を追加
-      headerDomainText = `${escapeHTML(headerFromDomain)} <span class="maiv-header-mismatch">(DOMAIN MISMATCH)</span>`;
+      // ドメイン名の横にオレンジ色でMISMATCHの警告を追加(異なる場合はエンベロープFROMのドメインを表示)
+      headerDomainText = `${escapeHTML(envelopeFromDomain)} <span class="maiv-header-mismatch">(DOMAIN MISMATCH)</span>`;
     }
 
     // 「安全(secure)」でない場合は、自動で展開(展開用のアニメーションをトリガー)するフラグ
