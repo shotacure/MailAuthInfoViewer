@@ -8,6 +8,8 @@ browser.messageDisplayScripts.register({
 // 注入されたコンテンツスクリプトからの「メッセージ詳細取得」リクエストを待ち受け
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.command === "getMessageDetails") {
+    let currentMsg; // デコード済みの基本情報を保持する変数
+
     // 現在表示されているメールの基本情報（メッセージIDなど）を取得
     browser.messageDisplay.getDisplayedMessage()
       .then(msg => {
@@ -15,11 +17,13 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
           sendResponse({ error: "No displayed message." });
           return;
         }
+        currentMsg = msg; // 取得した基本情報(文字化け解決用のデコード済データ含む)を保存
         // メッセージIDをもとに、ヘッダー等を含む完全なメールデータを取得
         return browser.messages.getFull(msg.id);
       })
       .then(full => {
-        if (full) sendResponse({ fullMessage: full });
+        // 文字化け対策として、Thunderbirdがパース・デコード済みの currentMsg も一緒に返す
+        if (full) sendResponse({ fullMessage: full, messageHeader: currentMsg });
       })
       .catch(e => sendResponse({ error: e.toString() }));
       

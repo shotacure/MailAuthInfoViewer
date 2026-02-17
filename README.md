@@ -1,18 +1,21 @@
 # Mail Auth Info Viewer
 
-**A Thunderbird add-on to visualize email authentication and delivery routes.**
-**メールの認証情報と送達経路を可視化するThunderbirdアドオンです。**
+**A Thunderbird add-on to visualize email authentication, sender identity, and delivery routes.**
+**メールの認証情報、送信者の身元、および送達経路を可視化するThunderbirdアドオンです。**
 
-Mail Auth Info Viewer is a simple yet powerful tool for Thunderbird that helps you verify the authenticity of emails and troubleshoot delivery issues. It displays a clear summary of authentication results (SPF, DKIM, DMARC) and visualizes the email's journey with time delays directly on the message view.
+Mail Auth Info Viewer is a powerful Thunderbird add-on designed to combat sophisticated phishing and "display name" spoofing. It analyzes message headers locally and presents a clear, color-coded dashboard showing sender alignment, authentication results (SPF, DKIM, DMARC), and delivery routes with time delays directly on the message view.
 
-Mail Auth Info Viewer は、Thunderbird用のシンプルかつ強力なツールです。メールの真正性を検証し、配送トラブルを解決するのに役立ちます。認証結果（SPF, DKIM, DMARC）の明確な概要を表示し、メールの送達経路と遅延時間をメッセージ表示画面に直接可視化します。
+Mail Auth Info Viewer は、巧妙なフィッシング詐欺や「表示名（名乗り）」の偽装に対抗するために設計された強力なThunderbirdアドオンです。ローカルでメールヘッダを解析し、送信者のアライメント、認証結果（SPF, DKIM, DMARC）、および遅延時間を含む送達経路を、色分けされた分かりやすいダッシュボードでメッセージ画面上に直接表示します。
 
 ---
 
 ## 📸 Screenshots / スクリーンショット
 
-### Authenticated & Fast Delivery (認証成功・正常な経路)
+### Fully Authenticated & Aligned (認証成功・ドメイン一致)
 ![Verified Mail](images/ss_verified.png)
+
+### Phishing & Spoofing Detection (フィッシング・表示名偽装の検知)
+![Phishing Detection](images/ss_phishing.png)
 
 ### Unverified & Delayed Routing (未認証・遅延発生の警告)
 ![Unverified Mail](images/ss_unverified.png)
@@ -21,14 +24,16 @@ Mail Auth Info Viewer は、Thunderbird用のシンプルかつ強力なツー�
 
 ## 🌟 Key Features / 主な機能
 
+* **Sender Identity & Alignment:** Instantly spot discrepancies between the Display Name, Header From, and Envelope From addresses side-by-side.
+    * **送信者の身元とアライメント検証:** 「表示名」「ヘッダFrom」「エンベロープFrom」を並べて表示し、アドレスの不自然な乖離や偽装を瞬時に見抜きます。
+* **Domain Verification Badge:** Prominently displays the actual authenticated domain (e.g., `✅ AUTH PASS example.com`) to prevent false trust in fake display names.
+    * **ドメイン認証バッジ:** 単なる「認証済」ではなく、実際に認証されたドメイン名（例: `✅ AUTH PASS example.com`）を明記し、誤った安心感を与えません。
 * **Authentication Status:** Quickly check the pass/fail status of SPF, DKIM, and DMARC authentication.
     * **認証ステータス:** SPF、DKIM、DMARC認証の成功/失敗ステータスを素早く確認できます。
 * **Delivery Route Visualization:** View the email's path from the sender (ORIGIN) to your inbox, including calculated time delays between each hop. Long delays are highlighted in red/orange.
     * **送達経路の可視化:** 送信元（ORIGIN）から受信ボックスまでのメールの経路を、各ホップ間の遅延時間とともに表示します。大きな遅延は赤やオレンジで強調されます。
-* **Envelope Information:** Displays the actual "From" and "To" addresses from the email envelope.
-    * **エンベロープ情報:** メールのエンベロープ（封筒）に記載された実際の送信元と宛先アドレスを表示します。
-* **Clear Dashboard:** Presents all information in an easy-to-read dashboard with clear color-coded badges.
-    * **明確なダッシュボード:** すべての情報を、色分けされた明確なバッジ付きの読みやすいダッシュボードで提示します。
+* **Privacy First:** All processing is performed strictly locally within Thunderbird. No external network requests are made.
+    * **プライバシー重視:** すべての解析処理はThunderbird内でローカルに完結します。外部ネットワークへの通信は一切行いません。
 
 ## 🚀 How to Use / 使い方
 
@@ -36,10 +41,10 @@ After installing the add-on, simply open any email in Thunderbird. A new informa
 
 アドオンをインストールした後、Thunderbirdでメールを開くだけです。メッセージ表示画面の上部に新しい情報パネルが表示されます。
 
-* **Overall Status:** A large badge indicates the overall authentication status (e.g., `AUTHENTICATED`, `AUTH FAILED`, `UNVERIFIED`).
-    * **総合ステータス:** 大きなバッジが総合的な認証ステータス（例: `AUTHENTICATED`, `AUTH FAILED`, `UNVERIFIED`）を示します。
-* **Auth Cards:** Check the individual status of SPF, DKIM, and DMARC (✅ PASS, ❌ FAIL, ⚠️ SOFTFAIL/NONE).
-    * **認証カード:** SPF、DKIM、DMARCの個別のステータス（✅ PASS, ❌ FAIL, ⚠️ SOFTFAIL/NONE）を確認します。
+* **Overall Status:** A large badge indicates the verified domain or issues (e.g., `✅ AUTH PASS`, `❌ AUTH FAILED`, `⚠️ AUTH PASS (DOMAIN MISMATCH)`, `UNVERIFIED`).
+    * **総合ステータス:** 大きなバッジが認証されたドメインや問題を警告します（例: `✅ AUTH PASS`, `❌ AUTH FAILED`, `⚠️ AUTH PASS (DOMAIN MISMATCH)`, `UNVERIFIED`）。
+* **Address & Alignment:** Highlights the sender's addresses. If the domain doesn't match the authenticated envelope, it alerts you to potential spoofing or mailing list routing.
+    * **アドレスとアライメント:** 送信者のアドレスを強調表示します。ドメインがエンベロープと一致しない場合、なりすましやメーリングリスト経由の可能性を警告します。
 * **Delivery Route:** The table at the bottom shows the path. The first row ("ORIGIN 🚀") is the sender. The time difference between each hop is shown on the left.
     * **送達経路:** 下部のテーブルが経路を示します。最初の行（"ORIGIN 🚀"）が送信元です。各ホップ間の時間差が左側に表示されます。
 

@@ -27,8 +27,7 @@ Copy-Item -Force "manifest.json"     $stageDir
 Copy-Item -Force "background.js"     $stageDir
 Copy-Item -Force "messagedisplay.js" $stageDir
 Copy-Item -Force "LICENSE"           $stageDir
-Copy-Item -Force "images/icon-48.png"  (Join-Path $stageDir "images")
-Copy-Item -Force "images/icon-128.png" (Join-Path $stageDir "images")
+Copy-Item -Force "images/icon.svg"  (Join-Path $stageDir "images")
 
 # --- 圧縮 ---
 Compress-Archive -Path (Join-Path $stageDir "*") -DestinationPath $outFile -Force

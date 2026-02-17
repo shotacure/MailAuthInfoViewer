@@ -2,11 +2,23 @@
 
 (async () => {
   try {
+    // HTMLエスケープ用ヘルパー関数 (XSS対策: ATN審査必須要件)
+    const escapeHTML = (str) => {
+      if (!str) return "";
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    };
+
     // バックグラウンドスクリプトへメッセージ詳細情報の取得をリクエスト
     const resp = await browser.runtime.sendMessage({ command: "getMessageDetails" });
     if (resp.error || !resp.fullMessage) return;
 
     const fullMsg = resp.fullMessage;
+    const msgHeader = resp.messageHeader || {}; // 文字化け対策: Thunderbirdパース済みのヘッダー情報
     const headers = fullMsg.headers || {};
 
     // ---------------------------------------------------------
@@ -15,18 +27,48 @@
 
     // ■ エンベロープ情報の抽出
     // envelope.from、return-path、またはauthorを評価し、送信元アドレスを特定
-    const envelopeFrom =
+    const envelopeFromRaw =
       fullMsg.envelope?.from ||
       headers["return-path"]?.[0]?.replace(/^<|>$/g, "") ||
       fullMsg.author ||
       "Unknown";
+    // 後のドメイン比較とUI表示のため、余分な括弧や空白を完全に除去
+    const envelopeFrom = envelopeFromRaw.replace(/^<|>$/g, "").trim();
       
     // delivered-to、envelope.to、またはrecipientsを評価し、宛先アドレスを特定
-    const envelopeTo =
+    const envelopeToRaw =
       (headers["delivered-to"] || []).join(", ") ||
       fullMsg.envelope?.to?.join(", ") ||
       (fullMsg.recipients || []).join(", ") ||
       "Unknown";
+    const envelopeTo = envelopeToRaw.replace(/^<|>$/g, "").trim();
+
+    // ■ ヘッダFrom（表示名とアドレス）の抽出とドメインアライメントの検証
+    // ヘッダFrom(ユーザーに見えるアドレス)を取得し、エンベロープ(実際の送信元)と比較する
+    // ※ rawヘッダのままだと文字化け(MIMEエンコードや生UTF-8)が発生するため、Thunderbirdがデコード済みの author 情報を優先する
+    const headerFromRaw = msgHeader.author || headers["from"]?.[0] || "Unknown";
+    let headerFromName = "";
+    let headerFromAddress = "";
+    // "Display Name <user@domain.com>" の形式をパース
+    const fromMatch = headerFromRaw.match(/(.*?)<([^>]+)>/);
+    if (fromMatch) {
+      headerFromName = fromMatch[1].replace(/"/g, '').trim();
+      headerFromAddress = fromMatch[2].trim();
+    } else {
+      // < > で囲まれていない場合でも、念のため端の括弧を除去
+      headerFromAddress = headerFromRaw.replace(/^<|>$/g, "").trim();
+    }
+
+    // 比較用にドメイン部分を抽出して小文字化
+    const headerFromDomain = headerFromAddress.includes('@') ? headerFromAddress.split('@')[1].toLowerCase() : headerFromAddress.toLowerCase();
+    const envelopeFromDomain = envelopeFrom.includes('@') ? envelopeFrom.split('@')[1].toLowerCase() : envelopeFrom.toLowerCase();
+
+    // ドメインのアライメント（一致）判定: 詐欺メールの多くはここで不一致になる
+    // DMARCの「Relaxed」アライメントに準拠させるため、
+    // エンベロープがヘッダのサブドメインの場合、およびその逆の場合も「一致」とみなす
+    const isDomainAligned = (headerFromDomain === envelopeFromDomain) || 
+                            (envelopeFromDomain.endsWith("." + headerFromDomain)) ||
+                            (headerFromDomain.endsWith("." + envelopeFromDomain));
 
     // ■ 送達経路 (Receivedヘッダ) の解析
     // Receivedヘッダは「新しい順(受信側→送信元)」で記録されるため、
@@ -108,8 +150,8 @@
           // どちらか一方でも見つかれば結果を返す (<br>タグで改行してHTML出力)
           if (domain || ip) {
             const parts = [];
-            if (domain) parts.push(`domain: ${domain}`);
-            if (ip) parts.push(`IP address: ${ip}`);
+            if (domain) parts.push(`domain: ${escapeHTML(domain)}`);
+            if (ip) parts.push(`IP address: ${escapeHTML(ip)}`);
             return parts.join("<br>");
           }
         }
@@ -139,7 +181,7 @@
         
         // 複数ある場合は " / " で結合して出力
         if (domains.size > 0) {
-          return `domain: ${Array.from(domains).join(" / ")}`;
+          return `domain: ${escapeHTML(Array.from(domains).join(" / "))}`;
         }
         return "";
       }
@@ -147,7 +189,7 @@
       if (type === 'dmarc') {
         for (const h of authHeaders) {
           const match = h.match(/header\.from=([^;\s()]+)/i);
-          if (match) return `domain: ${match[1]}`;
+          if (match) return `domain: ${escapeHTML(match[1])}`;
         }
         return "";
       }
@@ -168,8 +210,8 @@
     // DMARCはポリシー未設定(none)の場合も許容する運用が一般的なため条件に含める
     const isDmarcOk = authResults.dmarc.status === "pass" || authResults.dmarc.status === "none";
     
-    // SPFとDKIMが共にpassである場合を「安全」とみなす
-    const isSecure = isSpfOk && isDkimOk; 
+    // SPFとDKIMが共にpassであり、かつドメインアライメントが一致している場合を「安全」とみなす
+    const isSecure = isSpfOk && isDkimOk && isDomainAligned; 
 
     // ---------------------------------------------------------
     // 2. UI構築 (HTML/CSS)
@@ -188,19 +230,24 @@
         font-size: 13px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.05);
       }
-      .maiv-header { display: flex; align-items: center; margin-bottom: 10px; }
-      .maiv-badge { font-weight: bold; padding: 4px 8px; border-radius: 4px; margin-right: 10px; color: white; }
+      .maiv-header { display: flex; align-items: center; margin-bottom: 12px; }
+      .maiv-badge { font-weight: bold; padding: 6px 10px; border-radius: 4px; margin-right: 8px; color: white; font-size: 14px; letter-spacing: 0.5px;}
       .maiv-badge.secure { background-color: #2e7d32; }
       .maiv-badge.warning { background-color: #ed6c02; }
       .maiv-badge.danger { background-color: #d32f2f; }
       
-      .maiv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+      /* バッジの右側に表示する大きなドメインテキスト用のスタイル */
+      .maiv-header-domain { font-size: 17px; font-weight: bold; color: #222; }
+      .maiv-header-mismatch { font-size: 13px; color: #e65100; font-weight: bold; margin-left: 6px; }
+
+      /* minmaxを150pxに下げて、横一列に並びやすく調整 */
+      .maiv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 10px; }
       .maiv-card { background: white; border: 1px solid #e0e0e0; border-radius: 4px; padding: 8px; }
-      .maiv-card-title { font-weight: bold; color: #555; margin-bottom: 4px; font-size: 11px; text-transform: uppercase; }
+      .maiv-card-title { font-weight: bold; color: #555; margin-bottom: 6px; font-size: 11px; text-transform: uppercase; border-bottom: 1px solid #eee; padding-bottom: 4px;}
       .maiv-status-row { display: flex; align-items: center; gap: 6px; }
       .maiv-status-icon { font-size: 14px; }
       
-      .maiv-route-list { margin-top: 10px; background: white; border: 1px solid #e0e0e0; border-radius: 4px; padding: 8px; font-family: monospace; font-size: 11px; overflow-x: auto; }
+      .maiv-route-list { background: white; border: 1px solid #e0e0e0; border-radius: 4px; padding: 8px; font-family: monospace; font-size: 11px; overflow-x: auto; }
       .maiv-route-table { width: 100%; border-collapse: collapse; }
       .maiv-route-table td { padding: 4px; border-bottom: 1px solid #eee; vertical-align: middle; }
       
@@ -208,6 +255,26 @@
       .status-pass { color: #2e7d32; font-weight: bold; }
       .status-fail { color: #d32f2f; font-weight: bold; }
       .status-none { color: #757575; }
+
+      /* ドメインアライメント判定用スタイル */
+      .align-ok { color: #2e7d32; font-weight: bold; font-size: 11px; margin-top: 6px;}
+      .align-ng { background-color: #ffebee; color: #c62828; font-weight: bold; padding: 6px; border-radius: 4px; font-size: 12px; margin-top: 6px; display: block;}
+      .align-warn { background-color: #fff3e0; color: #e65100; font-weight: bold; padding: 6px; border-radius: 4px; font-size: 12px; margin-top: 6px; display: block;}
+      
+      /* アドレス表示用スタイル */
+      .address-row { margin-bottom: 6px; display: flex; align-items: center; }
+      .address-label { color: #666; width: 110px; display: inline-block; font-size: 11px; text-transform: uppercase; flex-shrink: 0; }
+      /* Display Name, Header From, Envelope From を一貫して強調表示するクラス */
+      .address-highlight { 
+        font-size: 13px; 
+        font-weight: bold; 
+        color: #111; 
+        background-color: #f1f3f4; 
+        padding: 4px 8px; 
+        border-radius: 3px;
+        border: 1px solid #ccc;
+        word-break: break-all;
+      }
     `;
     document.head.appendChild(style);
 
@@ -215,20 +282,34 @@
     const container = document.createElement("div");
     container.className = "maiv-container";
 
-    // ■ ヘッダーエリア（総合判定バッジとリンクの生成）
+    // ■ ヘッダーエリア（総合判定バッジとドメイン名表示の生成）
     let badgeClass = "warning";
     let badgeText = "UNVERIFIED";
+    let headerDomainText = "";
+    
     if (isSecure) {
+      // 予断を排除するため、ただのAUTHENTICATEDではなく「どのドメインが認証されたか」を明記する
       badgeClass = "secure";
-      badgeText = "AUTHENTICATED";
-    } else if (authResults.spf.status === "fail" || authResults.dkim.status === "fail") {
+      badgeText = `✅ AUTH PASS`;
+      // バッジの横に大きな文字でドメインを表示
+      headerDomainText = escapeHTML(headerFromDomain);
+    } else if (authResults.spf.status === "fail" || authResults.dkim.status === "fail" || authResults.dmarc.status === "fail") {
       badgeClass = "danger";
-      badgeText = "AUTH FAILED";
+      badgeText = "❌ AUTH FAILED";
+      // 認証失敗時はドメインを強調表示しない
+      headerDomainText = "";
+    } else if ((isSpfOk || isDkimOk) && !isDomainAligned && envelopeFrom !== "Unknown") {
+      // 認証は通っているがドメインが不一致の場合（配信サービスやメルマガ等）は、赤色(danger)ではなくオレンジ(warning)にする
+      badgeClass = "warning";
+      badgeText = `⚠️ AUTH PASS`;
+      // ドメイン名の横にオレンジ色でMISMATCHの警告を追加
+      headerDomainText = `${escapeHTML(headerFromDomain)} <span class="maiv-header-mismatch">(DOMAIN MISMATCH)</span>`;
     }
 
     const headerHTML = `
       <div class="maiv-header">
         <span class="maiv-badge ${badgeClass}">${badgeText}</span>
+        <span class="maiv-header-domain">${headerDomainText}</span>
         <span style="flex-grow:1;"></span>
         <a href="https://github.com/shotacure/MailAuthInfoViewer" target="_blank"><small style="color:#666;">Auth Info Viewer</small></a>
       </div>
@@ -238,29 +319,69 @@
     const createAuthCard = (title, data) => {
       let icon = "❓";
       let sClass = "status-none";
+      let displayStatus = data.status.toUpperCase();
+      
       if (data.status === "pass") { icon = "✅"; sClass = "status-pass"; }
       else if (data.status === "fail") { icon = "❌"; sClass = "status-fail"; }
-      else if (data.status === "softfail") { icon = "⚠️"; sClass = "status-none"; }
+      else if (data.status === "softfail" || data.status === "none") { icon = "⚠️"; sClass = "status-none"; }
 
       return `
         <div class="maiv-card">
-          <div class="maiv-card-title">${title}</div>
+          <div class="maiv-card-title">${escapeHTML(title)}</div>
           <div class="maiv-status-row">
             <span class="maiv-status-icon">${icon}</span>
-            <span class="${sClass}">${data.status.toUpperCase()}</span>
+            <span class="${sClass}">${escapeHTML(displayStatus)}</span>
           </div>
-          <div style="font-size:11px; color:#666; margin-top:2px;">${data.detail}</div>
+          <div style="font-size:11px; color:#666; margin-top:4px;">${data.detail}</div>
         </div>
       `;
     };
 
-    // ■ エンベロープ情報表示用カードコンポーネント生成
-    const envelopeHTML = `
-      <div class="maiv-card">
-        <div class="maiv-card-title">ENVELOPE</div>
-        <div style="font-size:11px;">
-          <div><b style="color:#555">From:</b> ${envelopeFrom}</div>
-          <div style="margin-top:2px;"><b style="color:#555">To:</b> ${envelopeTo}</div>
+    // ■ アドレス＆アライメント表示用カードコンポーネント生成 (エンベロープとヘッダの比較)
+    
+    // 予断を与えないための厳密なアライメント警告ロジック（UIテキストは英語で統一）
+    let alignmentWarningHTML = "";
+    
+    if (!isDomainAligned && envelopeFrom !== "Unknown") {
+      if (isSpfOk || isDkimOk) {
+        // 認証は通っているが不一致（正当な配信サービスの可能性あり）-> オレンジ色の警告
+        alignmentWarningHTML = `<div class="align-warn">⚠️ Domain mismatch between Header From and Envelope</div>`;
+      } else {
+        // 認証も通っておらず不一致 -> 赤色の警告
+        alignmentWarningHTML = `<div class="align-ng">⚠️ Domain mismatch between Header From and Envelope</div>`;
+      }
+    } else if (isDomainAligned && isSecure) {
+      alignmentWarningHTML = `<div class="align-ok">✅ Domain aligned (Authenticated)</div>`;
+    } else if (isDomainAligned && !isSecure) {
+      // ドメインは一致しているが認証NGの場合は予断を与えない警告表示
+      alignmentWarningHTML = `<div class="align-warn">⚠️ Domain aligned, but sender is not authenticated</div>`;
+    }
+
+    // 表示名(名乗り)の偽装対策: ユーザーが違和感に気づけるように、アドレス項目すべてに一貫した強調スタイルを適用
+    const displayNameHTML = headerFromName ? `<span class="address-highlight">${escapeHTML(headerFromName)}</span>` : `<span style="color:#999; font-weight:normal;">(None)</span>`;
+    
+    // ADDRESSカードは2枠分(span 2)の幅を取り、中の表示は縦に並べる
+    const addressHTML = `
+      <div class="maiv-card" style="grid-column: span 2; border-left: 4px solid #2196f3;">
+        <div class="maiv-card-title">ADDRESS & ALIGNMENT (SENDER IDENTITY)</div>
+        <div style="font-size:11px; margin-top: 8px;">
+          
+          <div class="address-row">
+            <span class="address-label">Display Name:</span> 
+            ${displayNameHTML}
+          </div>
+
+          <div class="address-row">
+            <span class="address-label">Header From:</span> 
+            <span class="address-highlight">${escapeHTML(headerFromAddress)}</span>
+          </div>
+          
+          <div class="address-row">
+            <span class="address-label">Envelope From:</span> 
+            <span class="address-highlight">${escapeHTML(envelopeFrom)}</span>
+          </div>
+
+          ${alignmentWarningHTML}
         </div>
       </div>
     `;
@@ -318,8 +439,8 @@
         <tr style="${isFirst ? 'border-left: 3px solid #2196f3;' : ''} ${rowBg}">
           <td style="width:60px; text-align:right; color:${delayColor}; font-weight:bold; font-size:0.9em;">${delayText}</td>
           <td style="${rowStyle}">
-             <div>${hostLabel} ${isFirst ? '🚀' : ''}</div>
-             <div style="color:#999; font-size:0.9em; font-weight:normal;">${byLabel}</div>
+             <div>${escapeHTML(hostLabel)} ${isFirst ? '🚀' : ''}</div>
+             <div style="color:#999; font-size:0.9em; font-weight:normal;">${escapeHTML(byLabel)}</div>
           </td>
           <td style="text-align:right; color:#999; white-space:nowrap;">${timeStr}</td>
         </tr>
@@ -336,13 +457,14 @@
     `;
 
     // 最終的なUIコンポーネント群をコンテナに組み込み
+    // 1つの maiv-grid 内に ADDRESS(span 2), SPF, DKIM, DMARC の順で並べる
     const markup = `
       ${headerHTML}
       <div class="maiv-grid">
+        ${addressHTML}
         ${createAuthCard("SPF", authResults.spf)}
         ${createAuthCard("DKIM", authResults.dkim)}
         ${createAuthCard("DMARC", authResults.dmarc)}
-        ${envelopeHTML}
       </div>
       ${routeHTML}
     `;
