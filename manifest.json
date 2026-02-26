@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Mail Auth Info Viewer",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Visualizes email authentication results (SPF, DKIM, DMARC) and the delivery route with time delays on the message display.",
   "browser_specific_settings": {
     "gecko": {
@@ -20,6 +20,7 @@
     "messagesRead",
     "messagesModify"
   ],
+  "content_security_policy": "script-src 'self'; object-src 'self';",
   "background": {
     "scripts": [
       "background.js"

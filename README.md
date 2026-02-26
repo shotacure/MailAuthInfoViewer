@@ -30,12 +30,22 @@ For fully authenticated and safe emails, the dashboard automatically collapses t
     * **送信者の身元とアライメント検証:** 「表示名」「ヘッダFrom」「エンベロープFrom」を並べて表示し、アドレスの不自然な乖離や偽装を瞬時に見抜きます。
 * **Domain Verification Badge:** Prominently displays the actual authenticated domain (e.g., `✅ AUTH PASS example.com`) to prevent false trust in fake display names.
     * **ドメイン認証バッジ:** 単なる「認証済」ではなく、実際に認証されたドメイン名を明記し、誤った安心感を与えません。
-* **Authentication Status:** Quickly check the pass/fail status of SPF, DKIM, and DMARC authentication.
-    * **認証ステータス:** SPF、DKIM、DMARC認証の成功/失敗ステータスを素早く確認できます。
+* **Authentication Status:** Quickly check the pass/fail status of SPF, DKIM, and DMARC authentication. Hover over each card title for a brief explanation of what each protocol does.
+    * **認証ステータス:** SPF、DKIM、DMARC認証の成功/失敗ステータスを素早く確認できます。各カードタイトルにマウスを合わせると、各プロトコルの簡単な説明がツールチップで表示されます。
+* **DMARC Policy Display:** Shows the sender domain's DMARC policy (`reject`, `quarantine`, or `none`) as a color-coded tag, helping you understand the domain owner's enforcement level.
+    * **DMARCポリシー表示:** 送信ドメインのDMARCポリシー（`reject`、`quarantine`、`none`）を色分けタグで表示し、ドメイン所有者のポリシー強度を把握できます。
+* **Multiple DKIM Signature Support:** Correctly handles emails with multiple DKIM signatures (common in forwarded or mailing-list emails), aggregating all results to determine the overall DKIM status.
+    * **複数DKIM署名対応:** 転送メールやメーリングリストで一般的な、複数のDKIM署名を持つメールを正しく処理し、すべての結果を集約してDKIMステータスを判定します。
 * **Delivery Route Visualization:** View the email's path from the sender (ORIGIN) to your inbox, including calculated time delays between each hop. Long delays are highlighted in red/orange.
     * **送達経路の可視化:** 送信元（ORIGIN）から受信ボックスまでのメールの経路を、各ホップ間の遅延時間とともに表示します。大きな遅延は赤やオレンジで強調されます。
+* **Dark Mode Support:** Automatically adapts to Thunderbird's dark theme via `prefers-color-scheme`, ensuring comfortable readability in any environment.
+    * **ダークモード対応:** `prefers-color-scheme` メディアクエリによりThunderbirdのダークテーマに自動適応し、どの環境でも快適な視認性を確保します。
+* **Robust Header Parsing:** Parses `Authentication-Results` headers per-method (semicolon-delimited) and skips the `authserv-id` segment, reducing the risk of trusting injected or spoofed authentication headers.
+    * **堅牢なヘッダ解析:** `Authentication-Results` ヘッダをメソッド単位（セミコロン区切り）で解析し、`authserv-id` セグメントをスキップすることで、注入・偽装された認証ヘッダを誤って信頼するリスクを軽減します。
 * **Privacy First:** All processing is performed strictly locally within Thunderbird. No external network requests are made.
     * **プライバシー重視:** すべての解析処理はThunderbird内でローカルに完結します。外部ネットワークへの通信は一切行いません。
+
+---
 
 ## 🚀 How to Use / 使い方
 
@@ -52,6 +62,8 @@ After installing the add-on, simply open any email in Thunderbird. A new informa
 * **Delivery Route:** The table at the bottom shows the path. The first row ("ORIGIN 🚀") is the sender. The time difference between each hop is shown on the left.
     * **送達経路:** 下部のテーブルが経路を示します。最初の行（"ORIGIN 🚀"）が送信元です。各ホップ間の時間差が左側に表示されます。
 
+---
+
 ## 📥 Installation / インストール
 
 [**Download from ATN (Thunderbird Add-ons)**](https://addons.thunderbird.net/ja/thunderbird/addon/mail-auth-info-viewer/)
@@ -59,6 +71,63 @@ After installing the add-on, simply open any email in Thunderbird. A new informa
 You can also download the latest release directly from GitHub:  
 GitHubのReleasesからも最新版をダウンロードできます:  
 [**GitHub Releases**](https://github.com/shotacure/MailAuthInfoViewer/releases)
+
+---
+
+## 🔧 Building from Source / ソースからのビルド
+
+### Windows (PowerShell)
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File build.ps1
+```
+
+### Linux / macOS (Bash)
+```bash
+chmod +x build.sh
+./build.sh
+```
+
+Both scripts read the version from `manifest.json`, stage the required files, create a `.xpi` package, and generate a SHA256 checksum file under the `.release/` directory.
+
+どちらのスクリプトも `manifest.json` からバージョンを読み取り、必要なファイルをステージングして `.xpi` パッケージを作成し、`.release/` ディレクトリにSHA256チェックサムファイルを生成します。
+
+**Requirements / 必要なツール:**
+* **Windows:** PowerShell 7+ (`pwsh`)
+* **Linux/macOS:** `bash`, `zip`, and either `python3`, `node`, or `sed` (for version extraction)
+
+---
+
+## 🏗️ Architecture / アーキテクチャ
+
+The add-on consists of two main scripts:
+
+このアドオンは2つの主要スクリプトで構成されています:
+
+| File | Role |
+|---|---|
+| `background.js` | Registers the content script and relays message data from the Thunderbird API to the display script. |
+| `messagedisplay.js` | Parses headers, evaluates authentication, and renders the dashboard UI. |
+
+`messagedisplay.js` is organized into the following internal functions:
+
+`messagedisplay.js` は以下の内部関数で構成されています:
+
+| Function | Responsibility |
+|---|---|
+| `parseEnvelope()` | Extracts envelope/header addresses and evaluates domain alignment. |
+| `parseAuthResults()` | Parses SPF, DKIM (multi-signature), and DMARC results with policy info. |
+| `parseRoute()` | Builds the delivery route from `Received` headers in chronological order. |
+| `determineSecurityStatus()` | Aggregates auth results and alignment into an overall security verdict. |
+| `buildUI()` | Constructs the full dashboard DOM with dark mode, tooltips, and animations. |
+
+---
+
+## ⚠️ Known Limitations / 既知の制限事項
+
+* **Public Suffix awareness:** Domain alignment uses simple subdomain matching (`endsWith`). It does not consult the [Public Suffix List](https://publicsuffix.org/), so theoretically two unrelated domains sharing a public suffix (e.g., `evil.co.jp` vs `legit.co.jp`) could be evaluated incorrectly. Full PSL integration would add significant weight to a privacy-focused local add-on.
+    * **Public Suffix の考慮:** ドメインアライメントは単純なサブドメインマッチング（`endsWith`）を使用しています。[Public Suffix List](https://publicsuffix.org/) は参照しないため、公開サフィックスを共有する無関係なドメイン同士が理論上誤判定される可能性があります。
+* **`authserv-id` filtering:** While the parser skips the `authserv-id` segment per RFC 8601, it does not yet filter headers by a trusted server hostname. In environments with multiple MTA hops, an attacker-injected `Authentication-Results` header could still be evaluated.
+    * **`authserv-id` フィルタリング:** パーサーはRFC 8601に従い `authserv-id` セグメントをスキップしますが、信頼済みサーバーのホスト名によるフィルタリングはまだ実装されていません。
 
 ---
 
