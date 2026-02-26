@@ -3,7 +3,9 @@
 browser.messageDisplayScripts.register({
   js: [{ file: "messagedisplay.js" }],
   runAt: "document_end"
-}).catch(() => {});
+}).catch((e) => {
+  console.warn("MailAuthInfoViewer: Failed to register messageDisplayScripts:", e);
+});
 
 // 注入されたコンテンツスクリプトからの「メッセージ詳細取得」リクエストを待ち受け
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
