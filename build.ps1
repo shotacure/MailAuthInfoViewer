@@ -25,9 +25,13 @@ New-Item -ItemType Directory -Force (Join-Path $stageDir "images") | Out-Null
 
 Copy-Item -Force "manifest.json"     $stageDir
 Copy-Item -Force "background.js"     $stageDir
+Copy-Item -Force "psl_data.js"       $stageDir
 Copy-Item -Force "messagedisplay.js" $stageDir
 Copy-Item -Force "LICENSE"           $stageDir
 Copy-Item -Force "images/icon.svg"  (Join-Path $stageDir "images")
+
+# --- _locales ディレクトリをコピー ---
+Copy-Item -Recurse -Force "_locales" (Join-Path $stageDir "_locales")
 
 # --- 圧縮 ---
 Compress-Archive -Path (Join-Path $stageDir "*") -DestinationPath $outFile -Force

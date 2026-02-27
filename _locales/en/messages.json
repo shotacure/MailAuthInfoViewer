@@ -1,0 +1,44 @@
+{
+  "extensionName": {
+    "message": "Mail Auth Info Viewer",
+    "description": "Name of the extension."
+  },
+  "extensionDescription": {
+    "message": "Visualizes email authentication results (SPF, DKIM, DMARC), sender identity alignment, and delivery routes with time delays.",
+    "description": "Description of the extension."
+  },
+  "badgeAuthPass": { "message": "✅ AUTH PASS" },
+  "badgeAuthFailed": { "message": "❌ AUTH FAILED" },
+  "badgeAuthPassWarning": { "message": "⚠️ AUTH PASS" },
+  "badgeUnverified": { "message": "UNVERIFIED" },
+  "domainMismatch": { "message": "(DOMAIN MISMATCH)" },
+  "toggleDetails": { "message": "Click to toggle details" },
+
+  "cardTitleSpf": { "message": "SPF" },
+  "cardTitleDkim": { "message": "DKIM" },
+  "cardTitleDmarc": { "message": "DMARC" },
+  "cardTitleAddress": { "message": "ADDRESS & ALIGNMENT (SENDER IDENTITY)" },
+  "cardTitleRoute": { "message": "DELIVERY ROUTE (Sender → Recipient)" },
+
+  "tooltipSpf": { "message": "Sender Policy Framework: Checks if the sending server is authorized by the domain's DNS records." },
+  "tooltipDkim": { "message": "DomainKeys Identified Mail: Verifies the email's digital signature to ensure it wasn't altered in transit." },
+  "tooltipDmarc": { "message": "Domain-based Message Authentication, Reporting & Conformance: Ensures SPF/DKIM align with the From domain and defines the sender's policy." },
+  "tooltipAddress": { "message": "Compares the visible sender address with the actual envelope sender to detect spoofing." },
+  "tooltipRoute": { "message": "Shows the path the email took from sender to your inbox, with time delays between each server hop." },
+
+  "labelDisplayName": { "message": "Display Name:" },
+  "labelHeaderFrom": { "message": "Header From:" },
+  "labelEnvelopeFrom": { "message": "Envelope From:" },
+  "labelDomain": { "message": "domain:" },
+  "labelIpAddress": { "message": "IP address:" },
+  "labelPolicy": { "message": "policy:" },
+  "labelOrigin": { "message": "ORIGIN" },
+  "labelNone": { "message": "(None)" },
+
+  "alignOk": { "message": "✅ Domain aligned (Authenticated)" },
+  "alignMismatch": { "message": "⚠️ Domain mismatch between Header From and Envelope" },
+  "alignNotAuth": { "message": "⚠️ Domain aligned, but sender is not authenticated" },
+
+  "mailingListVia": { "message": "via Mailing List" },
+  "mailingListNote": { "message": "Domain mismatch may be due to mailing list forwarding" }
+}

@@ -27,9 +27,13 @@ mkdir -p "${STAGE_DIR}/images"
 
 cp manifest.json     "$STAGE_DIR/"
 cp background.js     "$STAGE_DIR/"
+cp psl_data.js       "$STAGE_DIR/"
 cp messagedisplay.js "$STAGE_DIR/"
 cp LICENSE           "$STAGE_DIR/"
 cp images/icon.svg   "${STAGE_DIR}/images/"
+
+# --- _locales ディレクトリをコピー ---
+cp -r _locales       "${STAGE_DIR}/_locales"
 
 # --- 圧縮 (zip → xpi) ---
 (cd "$STAGE_DIR" && zip -r -q "../../${OUT_FILE}" .)

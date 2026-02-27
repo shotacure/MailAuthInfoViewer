@@ -1,0 +1,42 @@
+{
+  "extensionName": {
+    "message": "Mail Auth Info Viewer"
+  },
+  "extensionDescription": {
+    "message": "يعرض نتائج مصادقة البريد الإلكتروني (SPF، DKIM، DMARC)، وهوية المرسل، ومسارات التسليم مع أوقات التأخير."
+  },
+  "badgeAuthPass": { "message": "✅ المصادقة ناجحة" },
+  "badgeAuthFailed": { "message": "❌ فشل المصادقة" },
+  "badgeAuthPassWarning": { "message": "⚠️ المصادقة ناجحة" },
+  "badgeUnverified": { "message": "غير موثق" },
+  "domainMismatch": { "message": "(عدم تطابق النطاق)" },
+  "toggleDetails": { "message": "انقر لعرض/إخفاء التفاصيل" },
+
+  "cardTitleSpf": { "message": "SPF" },
+  "cardTitleDkim": { "message": "DKIM" },
+  "cardTitleDmarc": { "message": "DMARC" },
+  "cardTitleAddress": { "message": "العنوان والمحاذاة (هوية المرسل)" },
+  "cardTitleRoute": { "message": "مسار التسليم (المرسل ← المستلم)" },
+
+  "tooltipSpf": { "message": "إطار سياسة المرسل: يتحقق مما إذا كان خادم الإرسال مصرحاً به في سجلات DNS للنطاق." },
+  "tooltipDkim": { "message": "البريد المعرّف بمفاتيح النطاق: يتحقق من التوقيع الرقمي للبريد لضمان عدم تعديله أثناء النقل." },
+  "tooltipDmarc": { "message": "مصادقة الرسائل المستندة إلى النطاق والإبلاغ والمطابقة: يتحقق من توافق SPF/DKIM مع نطاق From ويحدد سياسة المرسل." },
+  "tooltipAddress": { "message": "يقارن عنوان المرسل الظاهر مع المرسل الفعلي في المغلف لكشف التزوير." },
+  "tooltipRoute": { "message": "يعرض المسار الذي سلكه البريد من المرسل إلى صندوق الوارد، مع أوقات التأخير بين كل خادم." },
+
+  "labelDisplayName": { "message": "الاسم المعروض:" },
+  "labelHeaderFrom": { "message": "Header From:" },
+  "labelEnvelopeFrom": { "message": "Envelope From:" },
+  "labelDomain": { "message": "النطاق:" },
+  "labelIpAddress": { "message": "عنوان IP:" },
+  "labelPolicy": { "message": "السياسة:" },
+  "labelOrigin": { "message": "المصدر" },
+  "labelNone": { "message": "(لا يوجد)" },
+
+  "alignOk": { "message": "✅ النطاق متطابق (موثق)" },
+  "alignMismatch": { "message": "⚠️ عدم تطابق النطاق بين Header From والمغلف" },
+  "alignNotAuth": { "message": "⚠️ النطاق متطابق، لكن المرسل غير موثق" },
+
+  "mailingListVia": { "message": "عبر قائمة بريدية" },
+  "mailingListNote": { "message": "قد يكون عدم تطابق النطاق بسبب إعادة التوجيه عبر قائمة بريدية" }
+}

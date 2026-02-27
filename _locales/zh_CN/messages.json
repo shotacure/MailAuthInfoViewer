@@ -1,0 +1,42 @@
+{
+  "extensionName": {
+    "message": "Mail Auth Info Viewer"
+  },
+  "extensionDescription": {
+    "message": "可视化展示邮件认证结果（SPF、DKIM、DMARC）、发件人身份比对，以及包含延迟时间的投递路径。"
+  },
+  "badgeAuthPass": { "message": "✅ 认证通过" },
+  "badgeAuthFailed": { "message": "❌ 认证失败" },
+  "badgeAuthPassWarning": { "message": "⚠️ 认证通过" },
+  "badgeUnverified": { "message": "未验证" },
+  "domainMismatch": { "message": "（域名不匹配）" },
+  "toggleDetails": { "message": "点击展开/收起详情" },
+
+  "cardTitleSpf": { "message": "SPF" },
+  "cardTitleDkim": { "message": "DKIM" },
+  "cardTitleDmarc": { "message": "DMARC" },
+  "cardTitleAddress": { "message": "地址与对齐（发件人身份）" },
+  "cardTitleRoute": { "message": "投递路径（发件人 → 收件人）" },
+
+  "tooltipSpf": { "message": "发件人策略框架：检查发送服务器是否获得该域名 DNS 记录的授权。" },
+  "tooltipDkim": { "message": "域名密钥识别邮件：验证邮件的数字签名，确保邮件在传输过程中未被篡改。" },
+  "tooltipDmarc": { "message": "基于域名的消息认证、报告和一致性：确保 SPF/DKIM 与 From 域名一致，并定义发件人的策略。" },
+  "tooltipAddress": { "message": "比较可见的发件人地址与实际的信封发件人，以检测伪造。" },
+  "tooltipRoute": { "message": "显示邮件从发件人到收件箱的路径，以及每个服务器节点之间的延迟时间。" },
+
+  "labelDisplayName": { "message": "显示名称：" },
+  "labelHeaderFrom": { "message": "Header From：" },
+  "labelEnvelopeFrom": { "message": "Envelope From：" },
+  "labelDomain": { "message": "域名：" },
+  "labelIpAddress": { "message": "IP 地址：" },
+  "labelPolicy": { "message": "策略：" },
+  "labelOrigin": { "message": "来源" },
+  "labelNone": { "message": "（无）" },
+
+  "alignOk": { "message": "✅ 域名一致（已认证）" },
+  "alignMismatch": { "message": "⚠️ Header From 与信封之间的域名不匹配" },
+  "alignNotAuth": { "message": "⚠️ 域名一致，但发件人未经认证" },
+
+  "mailingListVia": { "message": "通过邮件列表" },
+  "mailingListNote": { "message": "域名不匹配可能是因为邮件列表转发所致" }
+}

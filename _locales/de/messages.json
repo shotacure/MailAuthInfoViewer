@@ -1,0 +1,42 @@
+{
+  "extensionName": {
+    "message": "Mail Auth Info Viewer"
+  },
+  "extensionDescription": {
+    "message": "Visualisiert E-Mail-Authentifizierungsergebnisse (SPF, DKIM, DMARC), Absenderidentität und Zustellwege mit Zeitverzögerungen."
+  },
+  "badgeAuthPass": { "message": "✅ AUTH BESTANDEN" },
+  "badgeAuthFailed": { "message": "❌ AUTH FEHLGESCHLAGEN" },
+  "badgeAuthPassWarning": { "message": "⚠️ AUTH BESTANDEN" },
+  "badgeUnverified": { "message": "NICHT VERIFIZIERT" },
+  "domainMismatch": { "message": "(DOMAIN-ABWEICHUNG)" },
+  "toggleDetails": { "message": "Klicken zum Ein-/Ausblenden der Details" },
+
+  "cardTitleSpf": { "message": "SPF" },
+  "cardTitleDkim": { "message": "DKIM" },
+  "cardTitleDmarc": { "message": "DMARC" },
+  "cardTitleAddress": { "message": "ADRESSE & ABGLEICH (ABSENDERIDENTITÄT)" },
+  "cardTitleRoute": { "message": "ZUSTELLWEG (Absender → Empfänger)" },
+
+  "tooltipSpf": { "message": "Sender Policy Framework: Prüft, ob der sendende Server durch die DNS-Einträge der Domain autorisiert ist." },
+  "tooltipDkim": { "message": "DomainKeys Identified Mail: Überprüft die digitale Signatur der E-Mail, um sicherzustellen, dass sie während der Übertragung nicht verändert wurde." },
+  "tooltipDmarc": { "message": "Domain-based Message Authentication, Reporting & Conformance: Stellt sicher, dass SPF/DKIM mit der From-Domain übereinstimmen, und definiert die Absenderrichtlinie." },
+  "tooltipAddress": { "message": "Vergleicht die sichtbare Absenderadresse mit dem tatsächlichen Envelope-Absender, um Spoofing zu erkennen." },
+  "tooltipRoute": { "message": "Zeigt den Weg der E-Mail vom Absender zu Ihrem Posteingang mit Zeitverzögerungen zwischen den Server-Hops." },
+
+  "labelDisplayName": { "message": "Anzeigename:" },
+  "labelHeaderFrom": { "message": "Header-From:" },
+  "labelEnvelopeFrom": { "message": "Envelope-From:" },
+  "labelDomain": { "message": "Domain:" },
+  "labelIpAddress": { "message": "IP-Adresse:" },
+  "labelPolicy": { "message": "Richtlinie:" },
+  "labelOrigin": { "message": "URSPRUNG" },
+  "labelNone": { "message": "(Keine)" },
+
+  "alignOk": { "message": "✅ Domain abgeglichen (Authentifiziert)" },
+  "alignMismatch": { "message": "⚠️ Domain-Abweichung zwischen Header-From und Envelope" },
+  "alignNotAuth": { "message": "⚠️ Domain abgeglichen, aber Absender ist nicht authentifiziert" },
+
+  "mailingListVia": { "message": "über Mailingliste" },
+  "mailingListNote": { "message": "Die Domain-Abweichung kann durch Mailinglisten-Weiterleitung verursacht sein" }
+}

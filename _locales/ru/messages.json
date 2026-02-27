@@ -1,0 +1,42 @@
+{
+  "extensionName": {
+    "message": "Mail Auth Info Viewer"
+  },
+  "extensionDescription": {
+    "message": "Визуализирует результаты аутентификации электронной почты (SPF, DKIM, DMARC), идентификацию отправителя и маршруты доставки с задержками."
+  },
+  "badgeAuthPass": { "message": "✅ АУТЕНТИФИКАЦИЯ ПРОЙДЕНА" },
+  "badgeAuthFailed": { "message": "❌ ОШИБКА АУТЕНТИФИКАЦИИ" },
+  "badgeAuthPassWarning": { "message": "⚠️ АУТЕНТИФИКАЦИЯ ПРОЙДЕНА" },
+  "badgeUnverified": { "message": "НЕ ПРОВЕРЕНО" },
+  "domainMismatch": { "message": "(НЕСООТВЕТСТВИЕ ДОМЕНА)" },
+  "toggleDetails": { "message": "Нажмите для отображения/скрытия деталей" },
+
+  "cardTitleSpf": { "message": "SPF" },
+  "cardTitleDkim": { "message": "DKIM" },
+  "cardTitleDmarc": { "message": "DMARC" },
+  "cardTitleAddress": { "message": "АДРЕС И ВЫРАВНИВАНИЕ (ЛИЧНОСТЬ ОТПРАВИТЕЛЯ)" },
+  "cardTitleRoute": { "message": "МАРШРУТ ДОСТАВКИ (Отправитель → Получатель)" },
+
+  "tooltipSpf": { "message": "Sender Policy Framework: Проверяет, авторизован ли отправляющий сервер DNS-записями домена." },
+  "tooltipDkim": { "message": "DomainKeys Identified Mail: Проверяет цифровую подпись письма, чтобы убедиться, что оно не было изменено при передаче." },
+  "tooltipDmarc": { "message": "Domain-based Message Authentication, Reporting & Conformance: Проверяет соответствие SPF/DKIM домену From и определяет политику отправителя." },
+  "tooltipAddress": { "message": "Сравнивает видимый адрес отправителя с фактическим отправителем конверта для обнаружения подделки." },
+  "tooltipRoute": { "message": "Показывает путь письма от отправителя до вашего почтового ящика с задержками между серверами." },
+
+  "labelDisplayName": { "message": "Отображаемое имя:" },
+  "labelHeaderFrom": { "message": "Header From:" },
+  "labelEnvelopeFrom": { "message": "Envelope From:" },
+  "labelDomain": { "message": "домен:" },
+  "labelIpAddress": { "message": "IP-адрес:" },
+  "labelPolicy": { "message": "политика:" },
+  "labelOrigin": { "message": "ИСТОЧНИК" },
+  "labelNone": { "message": "(Нет)" },
+
+  "alignOk": { "message": "✅ Домен совпадает (Аутентифицирован)" },
+  "alignMismatch": { "message": "⚠️ Несоответствие домена между Header From и конвертом" },
+  "alignNotAuth": { "message": "⚠️ Домен совпадает, но отправитель не аутентифицирован" },
+
+  "mailingListVia": { "message": "через список рассылки" },
+  "mailingListNote": { "message": "Несоответствие домена может быть вызвано пересылкой через список рассылки" }
+}

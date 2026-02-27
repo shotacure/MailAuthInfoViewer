@@ -1,0 +1,44 @@
+{
+  "extensionName": {
+    "message": "Mail Auth Info Viewer",
+    "description": "拡張機能の名前"
+  },
+  "extensionDescription": {
+    "message": "メールの認証結果（SPF, DKIM, DMARC）、送信者の身元確認、および遅延時間を含む送達経路を可視化します。",
+    "description": "拡張機能の説明"
+  },
+  "badgeAuthPass": { "message": "✅ 認証成功" },
+  "badgeAuthFailed": { "message": "❌ 認証失敗" },
+  "badgeAuthPassWarning": { "message": "⚠️ 認証成功" },
+  "badgeUnverified": { "message": "未検証" },
+  "domainMismatch": { "message": "（ドメイン不一致）" },
+  "toggleDetails": { "message": "クリックで詳細を開閉" },
+
+  "cardTitleSpf": { "message": "SPF" },
+  "cardTitleDkim": { "message": "DKIM" },
+  "cardTitleDmarc": { "message": "DMARC" },
+  "cardTitleAddress": { "message": "アドレスとアライメント（送信者の身元）" },
+  "cardTitleRoute": { "message": "送達経路（送信元 → 受信先）" },
+
+  "tooltipSpf": { "message": "Sender Policy Framework: 送信サーバーがドメインのDNSレコードで許可されているかを検証します。" },
+  "tooltipDkim": { "message": "DomainKeys Identified Mail: メールの電子署名を検証し、転送中に改ざんされていないことを確認します。" },
+  "tooltipDmarc": { "message": "Domain-based Message Authentication, Reporting & Conformance: SPF/DKIMがFromドメインと整合しているかを確認し、送信者のポリシーを定義します。" },
+  "tooltipAddress": { "message": "表示されている送信者アドレスと実際のエンベロープ送信者を比較し、なりすましを検知します。" },
+  "tooltipRoute": { "message": "メールが送信元から受信箱に届くまでの経路を、各サーバー間の遅延時間とともに表示します。" },
+
+  "labelDisplayName": { "message": "表示名:" },
+  "labelHeaderFrom": { "message": "ヘッダFrom:" },
+  "labelEnvelopeFrom": { "message": "エンベロープFrom:" },
+  "labelDomain": { "message": "ドメイン:" },
+  "labelIpAddress": { "message": "IPアドレス:" },
+  "labelPolicy": { "message": "ポリシー:" },
+  "labelOrigin": { "message": "送信元" },
+  "labelNone": { "message": "（なし）" },
+
+  "alignOk": { "message": "✅ ドメイン一致（認証済み）" },
+  "alignMismatch": { "message": "⚠️ ヘッダFromとエンベロープのドメインが不一致です" },
+  "alignNotAuth": { "message": "⚠️ ドメインは一致していますが、送信者が認証されていません" },
+
+  "mailingListVia": { "message": "メーリングリスト経由" },
+  "mailingListNote": { "message": "ドメイン不一致はメーリングリスト転送が原因の可能性があります" }
+}

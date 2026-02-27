@@ -1,0 +1,42 @@
+{
+  "extensionName": {
+    "message": "Mail Auth Info Viewer"
+  },
+  "extensionDescription": {
+    "message": "視覺化呈現電子郵件驗證結果（SPF、DKIM、DMARC）、寄件者身分比對，以及包含延遲時間的投遞路徑。"
+  },
+  "badgeAuthPass": { "message": "✅ 驗證通過" },
+  "badgeAuthFailed": { "message": "❌ 驗證失敗" },
+  "badgeAuthPassWarning": { "message": "⚠️ 驗證通過" },
+  "badgeUnverified": { "message": "未驗證" },
+  "domainMismatch": { "message": "（網域不符）" },
+  "toggleDetails": { "message": "點擊以顯示/隱藏詳細資訊" },
+
+  "cardTitleSpf": { "message": "SPF" },
+  "cardTitleDkim": { "message": "DKIM" },
+  "cardTitleDmarc": { "message": "DMARC" },
+  "cardTitleAddress": { "message": "地址與比對（寄件者身分）" },
+  "cardTitleRoute": { "message": "投遞路徑（寄件者 → 收件者）" },
+
+  "tooltipSpf": { "message": "寄件者政策框架：檢查發送伺服器是否獲得該網域 DNS 記錄的授權。" },
+  "tooltipDkim": { "message": "網域金鑰識別郵件：驗證電子郵件的數位簽章，確保郵件在傳輸過程中未被竄改。" },
+  "tooltipDmarc": { "message": "基於網域的訊息驗證、報告和一致性：確保 SPF/DKIM 與 From 網域一致，並定義寄件者的政策。" },
+  "tooltipAddress": { "message": "比較可見的寄件者地址與實際的信封寄件者，以偵測偽造。" },
+  "tooltipRoute": { "message": "顯示電子郵件從寄件者到收件匣的路徑，以及每個伺服器節點之間的延遲時間。" },
+
+  "labelDisplayName": { "message": "顯示名稱：" },
+  "labelHeaderFrom": { "message": "Header From：" },
+  "labelEnvelopeFrom": { "message": "Envelope From：" },
+  "labelDomain": { "message": "網域：" },
+  "labelIpAddress": { "message": "IP 位址：" },
+  "labelPolicy": { "message": "政策：" },
+  "labelOrigin": { "message": "來源" },
+  "labelNone": { "message": "（無）" },
+
+  "alignOk": { "message": "✅ 網域一致（已驗證）" },
+  "alignMismatch": { "message": "⚠️ Header From 與信封之間的網域不符" },
+  "alignNotAuth": { "message": "⚠️ 網域一致，但寄件者未經驗證" },
+
+  "mailingListVia": { "message": "透過郵件群組" },
+  "mailingListNote": { "message": "網域不符可能是因為郵件群組轉發所致" }
+}

@@ -1,0 +1,42 @@
+{
+  "extensionName": {
+    "message": "Mail Auth Info Viewer"
+  },
+  "extensionDescription": {
+    "message": "Visualise les résultats d'authentification des e-mails (SPF, DKIM, DMARC), l'identité de l'expéditeur et les routes de livraison avec les délais."
+  },
+  "badgeAuthPass": { "message": "✅ AUTH RÉUSSIE" },
+  "badgeAuthFailed": { "message": "❌ AUTH ÉCHOUÉE" },
+  "badgeAuthPassWarning": { "message": "⚠️ AUTH RÉUSSIE" },
+  "badgeUnverified": { "message": "NON VÉRIFIÉ" },
+  "domainMismatch": { "message": "(DOMAINE NON CONCORDANT)" },
+  "toggleDetails": { "message": "Cliquez pour afficher/masquer les détails" },
+
+  "cardTitleSpf": { "message": "SPF" },
+  "cardTitleDkim": { "message": "DKIM" },
+  "cardTitleDmarc": { "message": "DMARC" },
+  "cardTitleAddress": { "message": "ADRESSE ET ALIGNEMENT (IDENTITÉ DE L'EXPÉDITEUR)" },
+  "cardTitleRoute": { "message": "ROUTE DE LIVRAISON (Expéditeur → Destinataire)" },
+
+  "tooltipSpf": { "message": "Sender Policy Framework : Vérifie si le serveur d'envoi est autorisé par les enregistrements DNS du domaine." },
+  "tooltipDkim": { "message": "DomainKeys Identified Mail : Vérifie la signature numérique de l'e-mail pour s'assurer qu'il n'a pas été altéré en transit." },
+  "tooltipDmarc": { "message": "Domain-based Message Authentication, Reporting & Conformance : Vérifie l'alignement SPF/DKIM avec le domaine From et définit la politique de l'expéditeur." },
+  "tooltipAddress": { "message": "Compare l'adresse d'expéditeur visible avec l'expéditeur réel de l'enveloppe pour détecter l'usurpation d'identité." },
+  "tooltipRoute": { "message": "Affiche le chemin emprunté par l'e-mail de l'expéditeur à votre boîte de réception, avec les délais entre chaque serveur relais." },
+
+  "labelDisplayName": { "message": "Nom affiché :" },
+  "labelHeaderFrom": { "message": "En-tête From :" },
+  "labelEnvelopeFrom": { "message": "Enveloppe From :" },
+  "labelDomain": { "message": "domaine :" },
+  "labelIpAddress": { "message": "adresse IP :" },
+  "labelPolicy": { "message": "politique :" },
+  "labelOrigin": { "message": "ORIGINE" },
+  "labelNone": { "message": "(Aucun)" },
+
+  "alignOk": { "message": "✅ Domaines alignés (Authentifié)" },
+  "alignMismatch": { "message": "⚠️ Non-concordance de domaine entre l'en-tête From et l'enveloppe" },
+  "alignNotAuth": { "message": "⚠️ Domaines alignés, mais l'expéditeur n'est pas authentifié" },
+
+  "mailingListVia": { "message": "via liste de diffusion" },
+  "mailingListNote": { "message": "La non-concordance de domaine peut être due au transfert par liste de diffusion" }
+}
