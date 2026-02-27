@@ -1,7 +1,12 @@
 // メール表示画面(メッセージペインや別ウィンドウ)の読み込み完了時に、
-// UI操作用スクリプト (messagedisplay.js) を自動的に注入・実行するよう登録
+// PSLデータとUI操作用スクリプトを自動的に注入・実行するよう登録。
+// psl_data.js は messagedisplay.js が参照する getOrganizationalDomain() を提供するため、
+// 先に読み込む必要がある。
 browser.messageDisplayScripts.register({
-  js: [{ file: "messagedisplay.js" }],
+  js: [
+    { file: "psl_data.js" },
+    { file: "messagedisplay.js" }
+  ],
   runAt: "document_end"
 }).catch((e) => {
   console.warn("MailAuthInfoViewer: Failed to register messageDisplayScripts:", e);

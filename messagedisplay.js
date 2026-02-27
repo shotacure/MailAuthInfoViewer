@@ -17,6 +17,16 @@
         .replace(/'/g, "&#39;");
     };
 
+    // i18n ヘルパー: browser.i18n.getMessage() のラッパー (キーが見つからない場合はキー自体を返す)
+    const msg = (key) => {
+      try {
+        const translated = browser.i18n.getMessage(key);
+        return translated || key;
+      } catch (e) {
+        return key;
+      }
+    };
+
     // 日時文字列パース用ヘルパー関数
     // Receivedヘッダの末尾（セミコロン以降）に記録されている日時文字列を抽出・Date化
     const parseReceivedDate = (str) => {
@@ -32,7 +42,7 @@
     };
 
     // =========================================================
-    // 1. parseEnvelope - エンベロープ情報とアドレスアライメントの解析
+    // 1. parseEnvelope - エンベロープ情報・アドレスアライメント・メーリングリスト検知
     // =========================================================
     const parseEnvelope = (fullMsg, headers, msgHeader) => {
       // ■ エンベロープ情報の抽出
@@ -76,17 +86,25 @@
         ? envelopeFrom.split('@')[1].toLowerCase()
         : envelopeFrom.toLowerCase();
 
-      // ■ ドメインのアライメント（一致）判定
-      // DMARCの「Relaxed」アライメントに準拠: サブドメインも「一致」とみなす
-      //
-      // [制限事項] Public Suffix (co.jp, com.au 等) は考慮していません。
-      // 例えば evil.co.jp と legit.co.jp は理論上サブドメイン判定で一致する可能性があります。
-      // 完全な対応には Public Suffix List の組み込みが必要ですが、
-      // ローカル処理・軽量維持のためここでは簡易判定としています。
-      const isDomainAligned =
-        (headerFromDomain === envelopeFromDomain) ||
-        (envelopeFromDomain.endsWith("." + headerFromDomain)) ||
-        (headerFromDomain.endsWith("." + envelopeFromDomain));
+      // ■ 組織ドメイン (Organizational Domain) での比較 — RFC 7489 準拠
+      // psl_data.js で定義された getOrganizationalDomain() を使用し、
+      // Public Suffix List に基づいて正確な組織ドメインを抽出して比較する。
+      // これにより aaa.bbb.google.com と ccc.google.com は共に google.com として一致する。
+      const headerOrgDomain = window.getOrganizationalDomain
+        ? window.getOrganizationalDomain(headerFromDomain)
+        : headerFromDomain;
+      const envelopeOrgDomain = window.getOrganizationalDomain
+        ? window.getOrganizationalDomain(envelopeFromDomain)
+        : envelopeFromDomain;
+
+      const isDomainAligned = (headerOrgDomain === envelopeOrgDomain);
+
+      // ■ メーリングリスト検知
+      // List-Id または List-Unsubscribe ヘッダの存在でメーリングリスト経由と判断
+      const isMailingList = !!(
+        (headers["list-id"] && headers["list-id"].length > 0) ||
+        (headers["list-unsubscribe"] && headers["list-unsubscribe"].length > 0)
+      );
 
       return {
         envelopeFrom,
@@ -95,28 +113,59 @@
         headerFromAddress,
         headerFromDomain,
         envelopeFromDomain,
-        isDomainAligned
+        headerOrgDomain,
+        envelopeOrgDomain,
+        isDomainAligned,
+        isMailingList
       };
     };
 
     // =========================================================
-    // 2. parseAuthResults - メール認証結果の解析
+    // 2. parseAuthResults - メール認証結果の解析 (authserv-id フィルタリング付き)
     // =========================================================
     const parseAuthResults = (headers) => {
-      // Authentication-Results および ARC-Authentication-Results ヘッダを配列として結合し、
-      // 複数行に跨る場合やARC側にしか結果が存在しない場合に対応
-      const authHeaders = [
-        ...(headers["authentication-results"] || []),
-        ...(headers["arc-authentication-results"] || [])
-      ];
+      // ■ authserv-id による信頼フィルタリング
+      // 最新の Received ヘッダの by ホスト名と Authentication-Results の authserv-id を比較し、
+      // 信頼できるヘッダのみを採用する。攻撃者が注入した偽の認証結果を排除するため。
+      // ARC-Authentication-Results は独自のチェイン検証機構を持つため、フィルタリング対象外。
 
-      // セミコロンで区切ってメソッド単位に分割し、指定の認証タイプのステータスを抽出する。
-      // 先頭のセグメント(authserv-id)はスキップすることで、
-      // 攻撃者が注入した Authentication-Results との誤マッチリスクを軽減する。
+      const getLastReceivedBy = () => {
+        const received = headers["received"] || [];
+        if (received.length === 0) return "";
+        // received[0] が最新（受信MTA自身が追加）
+        const byMatch = received[0].match(/\bby\s+([^\s;]+)/i);
+        return byMatch ? byMatch[1].toLowerCase() : "";
+      };
+
+      const filterByAuthServId = (authResultHeaders, trustedHost) => {
+        if (!trustedHost || authResultHeaders.length === 0) return authResultHeaders;
+
+        const trusted = authResultHeaders.filter(h => {
+          // authserv-id はヘッダの先頭（最初のセミコロンの前）に記載される
+          const authServId = h.split(';')[0].trim().toLowerCase();
+          // 完全一致、またはサブドメイン関係を許容
+          return authServId === trustedHost ||
+                 authServId.endsWith("." + trustedHost) ||
+                 trustedHost.endsWith("." + authServId);
+        });
+
+        // マッチするものがなければフォールバック（全て信頼）
+        return trusted.length > 0 ? trusted : authResultHeaders;
+      };
+
+      const lastReceivedBy = getLastReceivedBy();
+      const regularAuth = headers["authentication-results"] || [];
+      const arcAuth = headers["arc-authentication-results"] || [];
+
+      // 通常の Authentication-Results のみ authserv-id でフィルタリング
+      const trustedRegular = filterByAuthServId(regularAuth, lastReceivedBy);
+      const authHeaders = [...trustedRegular, ...arcAuth];
+
+      // セミコロンで区切ってメソッド単位に分割し、認証タイプのステータスを抽出
       const parseAuthStatus = (type) => {
         const regex = new RegExp(`\\b${type}\\s*=\\s*([a-zA-Z0-9]+)`, "i");
         for (const h of authHeaders) {
-          const methods = h.split(';').slice(1); // 先頭の authserv-id をスキップ
+          const methods = h.split(';').slice(1);
           for (const m of methods) {
             const match = m.match(regex);
             if (match) return match[1].toLowerCase();
@@ -129,22 +178,13 @@
       // メールによっては複数の DKIM 署名があり、一部は pass・一部は fail のことがある。
       // 全結果を収集し、「1つでも pass なら pass」とする。
       const parseDkimResults = () => {
-        const results = []; // { status, domains }[]
-        const regex = /\bdkim\s*=\s*([a-zA-Z0-9]+)/ig;
-
+        const results = [];
         for (const h of authHeaders) {
           const methods = h.split(';').slice(1);
           for (const m of methods) {
-            const match = m.match(regex);
-            if (match) {
-              // ステータスを抽出
-              const statusMatch = m.match(/\bdkim\s*=\s*([a-zA-Z0-9]+)/i);
-              if (statusMatch) {
-                results.push({
-                  status: statusMatch[1].toLowerCase(),
-                  segment: m
-                });
-              }
+            const statusMatch = m.match(/\bdkim\s*=\s*([a-zA-Z0-9]+)/i);
+            if (statusMatch) {
+              results.push({ status: statusMatch[1].toLowerCase(), segment: m });
             }
           }
         }
@@ -184,10 +224,7 @@
               // IP: designates ... as permitted sender、または client-ip= から取得
               const ipMatch = m.match(/designates\s+([a-fA-F0-9.:]+)\s+as\s+permitted\s+sender/i) ||
                               m.match(/client-ip=([a-fA-F0-9.:]+)/i);
-              if (ipMatch) {
-                ip = ipMatch[1];
-              }
-
+              if (ipMatch) ip = ipMatch[1];
               if (domain || ip) return { domain, ip };
             }
           }
@@ -207,9 +244,7 @@
               let match;
               while ((match = domainRegex.exec(m)) !== null) {
                 let dkimDomain = match[1];
-                if (dkimDomain.includes('@')) {
-                  dkimDomain = dkimDomain.split('@')[1];
-                }
+                if (dkimDomain.includes('@')) dkimDomain = dkimDomain.split('@')[1];
                 if (dkimDomain) domains.add(dkimDomain);
               }
             }
@@ -287,18 +322,18 @@
       const isSecure = isSpfOk && isDkimOk && isDomainAligned;
 
       let badgeClass = "warning";
-      let badgeText = "UNVERIFIED";
+      let badgeText = msg("badgeUnverified");
       let headerDomainHTML = "";
 
       if (isSecure) {
         badgeClass = "secure";
-        badgeText = "✅ AUTH PASS";
+        badgeText = msg("badgeAuthPass");
       } else if (authResults.spf.status === "fail" || authResults.dkim.status === "fail" || authResults.dmarc.status === "fail") {
         badgeClass = "danger";
-        badgeText = "❌ AUTH FAILED";
+        badgeText = msg("badgeAuthFailed");
       } else if ((isSpfOk || isDkimOk) && !isDomainAligned && envelopeFrom !== "Unknown") {
         badgeClass = "warning";
-        badgeText = "⚠️ AUTH PASS";
+        badgeText = msg("badgeAuthPassWarning");
       }
 
       return {
@@ -313,23 +348,111 @@
     };
 
     // =========================================================
-    // 5. buildUI - UI構築 (HTML/CSS)
+    // 5. buildUI - UI構築 (HTML/CSS) — i18n・ダークモード完全対応
     // =========================================================
     const buildUI = (envelope, authResults, routeHops, security) => {
 
-      // --- スタイル定義 ---
+      // --- スタイル定義 (CSS変数によるダークモード完全対応) ---
       const style = document.createElement('style');
       style.textContent = `
-        /* === ライトモード (デフォルト) === */
+        /* === CSS カスタムプロパティ (ライトモードデフォルト) === */
+        .maiv-container {
+          --maiv-bg: #f9f9fa;
+          --maiv-border: #ccc;
+          --maiv-text: #333;
+          --maiv-text-secondary: #555;
+          --maiv-text-muted: #666;
+          --maiv-text-faint: #999;
+          --maiv-text-strong: #222;
+          --maiv-text-strongest: #111;
+          --maiv-card-bg: white;
+          --maiv-card-border: #e0e0e0;
+          --maiv-card-title-color: #555;
+          --maiv-card-title-border: #eee;
+          --maiv-highlight-bg: #f1f3f4;
+          --maiv-highlight-border: #ccc;
+          --maiv-route-border: #eee;
+          --maiv-route-origin-bg: #f0f8ff;
+          --maiv-link-color: #666;
+          --maiv-link-hover: #2196f3;
+          --maiv-shadow: rgba(0,0,0,0.05);
+          --maiv-pass: #2e7d32;
+          --maiv-fail: #d32f2f;
+          --maiv-none: #757575;
+          --maiv-delay-normal: #666;
+          --maiv-delay-warning: #e65100;
+          --maiv-delay-danger: #d32f2f;
+          --maiv-align-ok-text: #2e7d32;
+          --maiv-align-warn-bg: #fff3e0;
+          --maiv-align-warn-text: #e65100;
+          --maiv-align-ng-bg: #ffebee;
+          --maiv-align-ng-text: #c62828;
+          --maiv-policy-reject-bg: #ffebee;
+          --maiv-policy-reject-text: #c62828;
+          --maiv-policy-quarantine-bg: #fff3e0;
+          --maiv-policy-quarantine-text: #e65100;
+          --maiv-policy-none-bg: #f5f5f5;
+          --maiv-policy-none-text: #757575;
+          --maiv-mismatch-color: #e65100;
+          --maiv-mailing-list-bg: #e3f2fd;
+          --maiv-mailing-list-text: #1565c0;
+        }
+
+        /* === ダークモード === */
+        @media (prefers-color-scheme: dark) {
+          .maiv-container {
+            --maiv-bg: #2b2b2b;
+            --maiv-border: #555;
+            --maiv-text: #e0e0e0;
+            --maiv-text-secondary: #ccc;
+            --maiv-text-muted: #aaa;
+            --maiv-text-faint: #888;
+            --maiv-text-strong: #e0e0e0;
+            --maiv-text-strongest: #f0f0f0;
+            --maiv-card-bg: #3a3a3a;
+            --maiv-card-border: #555;
+            --maiv-card-title-color: #bbb;
+            --maiv-card-title-border: #555;
+            --maiv-highlight-bg: #444;
+            --maiv-highlight-border: #666;
+            --maiv-route-border: #555;
+            --maiv-route-origin-bg: #1a2a3a;
+            --maiv-link-color: #aaa;
+            --maiv-link-hover: #64b5f6;
+            --maiv-shadow: rgba(0,0,0,0.3);
+            --maiv-pass: #66bb6a;
+            --maiv-fail: #ef5350;
+            --maiv-none: #aaa;
+            --maiv-delay-normal: #aaa;
+            --maiv-delay-warning: #ffb74d;
+            --maiv-delay-danger: #ef5350;
+            --maiv-align-ok-text: #66bb6a;
+            --maiv-align-warn-bg: #4a3000;
+            --maiv-align-warn-text: #ffcc80;
+            --maiv-align-ng-bg: #4a1c1c;
+            --maiv-align-ng-text: #ef9a9a;
+            --maiv-policy-reject-bg: #4a1c1c;
+            --maiv-policy-reject-text: #ef9a9a;
+            --maiv-policy-quarantine-bg: #4a3000;
+            --maiv-policy-quarantine-text: #ffcc80;
+            --maiv-policy-none-bg: #444;
+            --maiv-policy-none-text: #aaa;
+            --maiv-mismatch-color: #ffb74d;
+            --maiv-mailing-list-bg: #1a2a3a;
+            --maiv-mailing-list-text: #64b5f6;
+          }
+        }
+
+        /* === コンポーネントスタイル (CSS変数使用) === */
         .maiv-container {
           font-family: "Segoe UI", Meiryo, sans-serif;
-          background-color: #f9f9fa;
-          border-bottom: 1px solid #ccc;
+          background-color: var(--maiv-bg);
+          border-bottom: 1px solid var(--maiv-border);
           padding: 10px 12px;
           margin-bottom: 15px;
-          color: #333;
+          color: var(--maiv-text);
           font-size: 13px;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+          box-shadow: 0 2px 4px var(--maiv-shadow);
         }
 
         .maiv-header {
@@ -339,18 +462,24 @@
         }
         .maiv-header:hover { opacity: 0.8; }
 
-        .maiv-badge { font-weight: bold; padding: 6px 10px; border-radius: 4px; margin-right: 8px; color: white; font-size: 14px; letter-spacing: 0.5px; }
+        .maiv-badge { font-weight: bold; padding: 6px 10px; border-radius: 4px; margin-right: 8px; color: white; font-size: 14px; letter-spacing: 0.5px; white-space: nowrap; }
         .maiv-badge.secure { background-color: #2e7d32; }
         .maiv-badge.warning { background-color: #ed6c02; }
         .maiv-badge.danger { background-color: #d32f2f; }
 
-        .maiv-header-domain { font-size: 17px; font-weight: bold; color: #222; }
-        .maiv-header-mismatch { font-size: 13px; color: #e65100; font-weight: bold; margin-left: 6px; }
+        .maiv-header-domain { font-size: 17px; font-weight: bold; color: var(--maiv-text-strong); }
+        .maiv-header-mismatch { font-size: 13px; color: var(--maiv-mismatch-color); font-weight: bold; margin-left: 6px; }
+        .maiv-mailing-list-tag {
+          font-size: 11px; font-weight: bold;
+          padding: 2px 8px; border-radius: 10px; margin-left: 8px;
+          background-color: var(--maiv-mailing-list-bg);
+          color: var(--maiv-mailing-list-text);
+        }
 
-        .maiv-toggle-icon { margin-left: 15px; margin-right: 15px; color: #999; font-size: 12px; transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1); }
+        .maiv-toggle-icon { margin-left: 15px; margin-right: 15px; color: var(--maiv-text-faint); font-size: 12px; transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1); }
         .maiv-toggle-icon.expanded { transform: rotate(180deg); }
-        .maiv-link { color: #666; text-decoration: none; }
-        .maiv-link:hover { text-decoration: underline; color: #2196f3; }
+        .maiv-link { color: var(--maiv-link-color); text-decoration: none; }
+        .maiv-link:hover { text-decoration: underline; color: var(--maiv-link-hover); }
 
         .maiv-body-wrapper {
           display: grid;
@@ -362,79 +491,52 @@
         .maiv-body-content { padding-top: 12px; }
 
         .maiv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 10px; }
-        .maiv-card { background: white; border: 1px solid #e0e0e0; border-radius: 4px; padding: 8px; }
-        .maiv-card-title { font-weight: bold; color: #555; margin-bottom: 6px; font-size: 11px; text-transform: uppercase; border-bottom: 1px solid #eee; padding-bottom: 4px; }
+        .maiv-card { background: var(--maiv-card-bg); border: 1px solid var(--maiv-card-border); border-radius: 4px; padding: 8px; }
+        .maiv-card-title { font-weight: bold; color: var(--maiv-card-title-color); margin-bottom: 6px; font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--maiv-card-title-border); padding-bottom: 4px; }
         .maiv-status-row { display: flex; align-items: center; gap: 6px; }
         .maiv-status-icon { font-size: 14px; }
 
-        .maiv-route-list { background: white; border: 1px solid #e0e0e0; border-radius: 4px; padding: 8px; font-family: monospace; font-size: 11px; overflow-x: auto; }
+        .maiv-route-list { background: var(--maiv-card-bg); border: 1px solid var(--maiv-card-border); border-radius: 4px; padding: 8px; font-family: monospace; font-size: 11px; overflow-x: auto; }
         .maiv-route-table { width: 100%; border-collapse: collapse; }
-        .maiv-route-table td { padding: 4px; border-bottom: 1px solid #eee; vertical-align: middle; }
+        .maiv-route-table td { padding: 4px; border-bottom: 1px solid var(--maiv-route-border); vertical-align: middle; }
 
-        .status-pass { color: #2e7d32; font-weight: bold; }
-        .status-fail { color: #d32f2f; font-weight: bold; }
-        .status-none { color: #757575; }
+        /* 送達経路テーブルの行スタイル (ダークモード完全対応) */
+        .maiv-route-origin { background-color: var(--maiv-route-origin-bg); font-weight: bold; color: var(--maiv-text-strongest); border-left: 3px solid #2196f3; }
+        .maiv-route-hop { color: var(--maiv-text-secondary); }
+        .maiv-route-by { color: var(--maiv-text-faint); font-size: 0.9em; font-weight: normal; }
+        .maiv-route-time { text-align: right; color: var(--maiv-text-faint); white-space: nowrap; }
+        .maiv-route-delay { width: 60px; text-align: right; font-weight: bold; font-size: 0.9em; }
+        .maiv-delay-none { color: var(--maiv-border); }
+        .maiv-delay-origin { color: var(--maiv-text-strongest); }
+        .maiv-delay-normal { color: var(--maiv-delay-normal); }
+        .maiv-delay-warning { color: var(--maiv-delay-warning); }
+        .maiv-delay-danger { color: var(--maiv-delay-danger); }
 
-        .align-ok { color: #2e7d32; font-weight: bold; font-size: 11px; margin-top: 6px; }
-        .align-ng { background-color: #ffebee; color: #c62828; font-weight: bold; padding: 6px; border-radius: 4px; font-size: 12px; margin-top: 6px; display: block; }
-        .align-warn { background-color: #fff3e0; color: #e65100; font-weight: bold; padding: 6px; border-radius: 4px; font-size: 12px; margin-top: 6px; display: block; }
+        .status-pass { color: var(--maiv-pass); font-weight: bold; }
+        .status-fail { color: var(--maiv-fail); font-weight: bold; }
+        .status-none { color: var(--maiv-none); }
+
+        .align-ok { color: var(--maiv-align-ok-text); font-weight: bold; font-size: 11px; margin-top: 6px; }
+        .align-ng { background-color: var(--maiv-align-ng-bg); color: var(--maiv-align-ng-text); font-weight: bold; padding: 6px; border-radius: 4px; font-size: 12px; margin-top: 6px; display: block; }
+        .align-warn { background-color: var(--maiv-align-warn-bg); color: var(--maiv-align-warn-text); font-weight: bold; padding: 6px; border-radius: 4px; font-size: 12px; margin-top: 6px; display: block; }
 
         .address-row { margin-bottom: 6px; display: flex; align-items: center; }
-        .address-label { color: #666; width: 110px; display: inline-block; font-size: 11px; text-transform: uppercase; flex-shrink: 0; }
+        .address-label { color: var(--maiv-text-muted); width: 110px; display: inline-block; font-size: 11px; text-transform: uppercase; flex-shrink: 0; }
         .address-highlight {
-          font-size: 13px; font-weight: bold; color: #111;
-          background-color: #f1f3f4; padding: 4px 8px; border-radius: 3px;
-          border: 1px solid #ccc; word-break: break-all;
+          font-size: 13px; font-weight: bold; color: var(--maiv-text-strongest);
+          background-color: var(--maiv-highlight-bg); padding: 4px 8px; border-radius: 3px;
+          border: 1px solid var(--maiv-highlight-border); word-break: break-all;
+          direction: ltr; unicode-bidi: embed;
         }
 
-        .maiv-detail-text { font-size: 11px; color: #666; margin-top: 4px; }
+        .maiv-detail-text { font-size: 11px; color: var(--maiv-text-muted); margin-top: 4px; }
         .maiv-policy-tag {
           display: inline-block; font-size: 10px; font-weight: bold;
           padding: 2px 6px; border-radius: 3px; margin-top: 4px;
         }
-        .maiv-policy-reject { background-color: #ffebee; color: #c62828; }
-        .maiv-policy-quarantine { background-color: #fff3e0; color: #e65100; }
-        .maiv-policy-none { background-color: #f5f5f5; color: #757575; }
-
-        /* === ダークモード === */
-        @media (prefers-color-scheme: dark) {
-          .maiv-container {
-            background-color: #2b2b2b;
-            border-bottom-color: #555;
-            color: #e0e0e0;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-          }
-          .maiv-header-domain { color: #e0e0e0; }
-          .maiv-header-mismatch { color: #ffb74d; }
-          .maiv-toggle-icon { color: #aaa; }
-          .maiv-link { color: #aaa; }
-          .maiv-link:hover { color: #64b5f6; }
-
-          .maiv-card { background: #3a3a3a; border-color: #555; }
-          .maiv-card-title { color: #bbb; border-bottom-color: #555; }
-
-          .maiv-route-list { background: #3a3a3a; border-color: #555; }
-          .maiv-route-table td { border-bottom-color: #555; }
-
-          .status-pass { color: #66bb6a; }
-          .status-fail { color: #ef5350; }
-          .status-none { color: #aaa; }
-
-          .align-ok { color: #66bb6a; }
-          .align-ng { background-color: #4a1c1c; color: #ef9a9a; }
-          .align-warn { background-color: #4a3000; color: #ffcc80; }
-
-          .address-label { color: #aaa; }
-          .address-highlight {
-            color: #e0e0e0; background-color: #444;
-            border-color: #666;
-          }
-
-          .maiv-detail-text { color: #aaa; }
-          .maiv-policy-reject { background-color: #4a1c1c; color: #ef9a9a; }
-          .maiv-policy-quarantine { background-color: #4a3000; color: #ffcc80; }
-          .maiv-policy-none { background-color: #444; color: #aaa; }
-        }
+        .maiv-policy-reject { background-color: var(--maiv-policy-reject-bg); color: var(--maiv-policy-reject-text); }
+        .maiv-policy-quarantine { background-color: var(--maiv-policy-quarantine-bg); color: var(--maiv-policy-quarantine-text); }
+        .maiv-policy-none { background-color: var(--maiv-policy-none-bg); color: var(--maiv-policy-none-text); }
       `;
       document.head.appendChild(style);
 
@@ -444,16 +546,26 @@
 
       // --- ヘッダーバッジとドメイン表示 ---
       let headerDomainText = "";
+      let mailingListTag = "";
+
       if (security.isSecure) {
         headerDomainText = escapeHTML(envelope.headerFromDomain);
-      } else if (security.badgeClass === "warning" && envelope.envelopeFrom !== "Unknown") {
-        headerDomainText = `${escapeHTML(envelope.envelopeFromDomain)} <span class="maiv-header-mismatch">(DOMAIN MISMATCH)</span>`;
+      } else if (!envelope.isDomainAligned && (security.isSpfOk || security.isDkimOk) && envelope.envelopeFrom !== "Unknown") {
+        // 認証は通っているがドメイン不一致の場合のみ DOMAIN MISMATCH を表示
+        // UNVERIFIED（認証情報なし）の場合は表示しない
+        headerDomainText = `${escapeHTML(envelope.envelopeFromDomain)} <span class="maiv-header-mismatch">${escapeHTML(msg("domainMismatch"))}</span>`;
+      }
+
+      // メーリングリスト経由の場合、ヘッダにタグを追加
+      if (envelope.isMailingList) {
+        mailingListTag = `<span class="maiv-mailing-list-tag">📋 ${escapeHTML(msg("mailingListVia"))}</span>`;
       }
 
       const headerHTML = `
-        <div class="maiv-header" id="maiv-header-toggle" title="Click to toggle details">
+        <div class="maiv-header" id="maiv-header-toggle" title="${escapeHTML(msg("toggleDetails"))}">
           <span class="maiv-badge ${security.badgeClass}">${security.badgeText}</span>
           <span class="maiv-header-domain">${headerDomainText}</span>
+          ${mailingListTag}
           <span style="flex-grow:1;"></span>
           <span class="maiv-toggle-icon" id="maiv-toggle-icon">▼</span>
           <a href="https://github.com/shotacure/MailAuthInfoViewer" class="maiv-link" target="_blank"><small>Mail Auth Info Viewer</small></a>
@@ -486,15 +598,15 @@
       const spfDetailHTML = (() => {
         const d = authResults.spf.detail;
         const parts = [];
-        if (d.domain) parts.push(`domain: ${escapeHTML(d.domain)}`);
-        if (d.ip) parts.push(`IP address: ${escapeHTML(d.ip)}`);
+        if (d.domain) parts.push(`${escapeHTML(msg("labelDomain"))} ${escapeHTML(d.domain)}`);
+        if (d.ip) parts.push(`${escapeHTML(msg("labelIpAddress"))} ${escapeHTML(d.ip)}`);
         return parts.join("<br>");
       })();
 
       const dkimDetailHTML = (() => {
         const d = authResults.dkim.detail;
         if (d.domains && d.domains.length > 0) {
-          return `domain: ${escapeHTML(d.domains.join(" / "))}`;
+          return `${escapeHTML(msg("labelDomain"))} ${escapeHTML(d.domains.join(" / "))}`;
         }
         return "";
       })();
@@ -502,70 +614,57 @@
       const dmarcDetailHTML = (() => {
         const d = authResults.dmarc.detail;
         const parts = [];
-        if (d.domain) parts.push(`domain: ${escapeHTML(d.domain)}`);
-        // DMARC ポリシー表示 (p=reject / p=quarantine / p=none)
+        if (d.domain) parts.push(`${escapeHTML(msg("labelDomain"))} ${escapeHTML(d.domain)}`);
         if (d.policy) {
           let policyClass = "maiv-policy-none";
           if (d.policy === "reject") policyClass = "maiv-policy-reject";
           else if (d.policy === "quarantine") policyClass = "maiv-policy-quarantine";
-          parts.push(`<span class="maiv-policy-tag ${policyClass}">policy: ${escapeHTML(d.policy)}</span>`);
+          parts.push(`<span class="maiv-policy-tag ${policyClass}">${escapeHTML(msg("labelPolicy"))} ${escapeHTML(d.policy)}</span>`);
         }
         return parts.join("<br>");
       })();
 
-      // 認証カード (ツールチップ付き)
-      const spfCard = createAuthCard(
-        "SPF",
-        "Sender Policy Framework: Checks if the sending server is authorized by the domain's DNS records.",
-        authResults.spf,
-        spfDetailHTML
-      );
-      const dkimCard = createAuthCard(
-        "DKIM",
-        "DomainKeys Identified Mail: Verifies the email's digital signature to ensure it wasn't altered in transit.",
-        authResults.dkim,
-        dkimDetailHTML
-      );
-      const dmarcCard = createAuthCard(
-        "DMARC",
-        "Domain-based Message Authentication, Reporting & Conformance: Ensures SPF/DKIM align with the From domain and defines the sender's policy.",
-        authResults.dmarc,
-        dmarcDetailHTML
-      );
+      // 認証カード
+      const spfCard = createAuthCard(msg("cardTitleSpf"), msg("tooltipSpf"), authResults.spf, spfDetailHTML);
+      const dkimCard = createAuthCard(msg("cardTitleDkim"), msg("tooltipDkim"), authResults.dkim, dkimDetailHTML);
+      const dmarcCard = createAuthCard(msg("cardTitleDmarc"), msg("tooltipDmarc"), authResults.dmarc, dmarcDetailHTML);
 
       // --- アドレス＆アライメント表示 ---
       let alignmentWarningHTML = "";
 
       if (!envelope.isDomainAligned && envelope.envelopeFrom !== "Unknown") {
-        if (security.isSpfOk || security.isDkimOk) {
-          alignmentWarningHTML = `<div class="align-warn">⚠️ Domain mismatch between Header From and Envelope</div>`;
+        if (envelope.isMailingList) {
+          // メーリングリスト経由: 不一致の原因が転送である可能性を明示
+          alignmentWarningHTML = `<div class="align-warn">📋 ${escapeHTML(msg("mailingListNote"))}</div>`;
+        } else if (security.isSpfOk || security.isDkimOk) {
+          alignmentWarningHTML = `<div class="align-warn">${escapeHTML(msg("alignMismatch"))}</div>`;
         } else {
-          alignmentWarningHTML = `<div class="align-ng">⚠️ Domain mismatch between Header From and Envelope</div>`;
+          alignmentWarningHTML = `<div class="align-ng">${escapeHTML(msg("alignMismatch"))}</div>`;
         }
       } else if (envelope.isDomainAligned && security.isSecure) {
-        alignmentWarningHTML = `<div class="align-ok">✅ Domain aligned (Authenticated)</div>`;
+        alignmentWarningHTML = `<div class="align-ok">${escapeHTML(msg("alignOk"))}</div>`;
       } else if (envelope.isDomainAligned && !security.isSecure) {
-        alignmentWarningHTML = `<div class="align-warn">⚠️ Domain aligned, but sender is not authenticated</div>`;
+        alignmentWarningHTML = `<div class="align-warn">${escapeHTML(msg("alignNotAuth"))}</div>`;
       }
 
       const displayNameHTML = envelope.headerFromName
         ? `<span class="address-highlight">${escapeHTML(envelope.headerFromName)}</span>`
-        : `<span style="color:#999; font-weight:normal;">(None)</span>`;
+        : `<span style="color:var(--maiv-text-faint); font-weight:normal;">${escapeHTML(msg("labelNone"))}</span>`;
 
       const addressHTML = `
         <div class="maiv-card" style="grid-column: span 2; border-left: 4px solid #2196f3;">
-          <div class="maiv-card-title" title="Compares the visible sender address with the actual envelope sender to detect spoofing.">ADDRESS & ALIGNMENT (SENDER IDENTITY)</div>
+          <div class="maiv-card-title" title="${escapeHTML(msg("tooltipAddress"))}">${escapeHTML(msg("cardTitleAddress"))}</div>
           <div style="font-size:11px; margin-top: 8px;">
             <div class="address-row">
-              <span class="address-label">Display Name:</span>
+              <span class="address-label">${escapeHTML(msg("labelDisplayName"))}</span>
               ${displayNameHTML}
             </div>
             <div class="address-row">
-              <span class="address-label">Header From:</span>
+              <span class="address-label">${escapeHTML(msg("labelHeaderFrom"))}</span>
               <span class="address-highlight">${escapeHTML(envelope.headerFromAddress)}</span>
             </div>
             <div class="address-row">
-              <span class="address-label">Envelope From:</span>
+              <span class="address-label">${escapeHTML(msg("labelEnvelopeFrom"))}</span>
               <span class="address-highlight">${escapeHTML(envelope.envelopeFrom)}</span>
             </div>
             ${alignmentWarningHTML}
@@ -573,7 +672,7 @@
         </div>
       `;
 
-      // --- 送達経路テーブル ---
+      // --- 送達経路テーブル (CSSクラスによるダークモード完全対応) ---
       let routeRows = "";
       let prevDate = null;
 
@@ -581,48 +680,46 @@
         const isFirst = idx === 0;
 
         let delayText = "--";
-        let delayColor = "#ccc";
+        let delayClass = "maiv-delay-none";
 
         if (hop.date && prevDate) {
           const diffMs = hop.date - prevDate;
           const diffSec = Math.floor(diffMs / 1000);
-
           if (diffSec < 60) {
             delayText = `+${diffSec}s`;
-            delayColor = "#666";
+            delayClass = "maiv-delay-normal";
           } else {
             const min = Math.floor(diffSec / 60);
             const sec = diffSec % 60;
             delayText = `+${min}m${sec}s`;
-            delayColor = diffSec > 300 ? "#d32f2f" : "#e65100";
+            delayClass = diffSec > 300 ? "maiv-delay-danger" : "maiv-delay-warning";
           }
         } else if (isFirst) {
-          delayText = "ORIGIN";
-          delayColor = "#000";
+          delayText = msg("labelOrigin");
+          delayClass = "maiv-delay-origin";
         }
         prevDate = hop.date;
 
         const hostLabel = hop.from || 'unknown';
         const byLabel = hop.by ? `(by ${hop.by})` : '';
-        const rowBg = isFirst ? 'background-color:#f0f8ff;' : '';
-        const rowStyle = isFirst ? 'font-weight:bold; color:#000; background-color:#f0f8ff;' : 'color:#555;';
         const timeStr = formatTimestamp(hop.date);
+        const rowClass = isFirst ? "maiv-route-origin" : "maiv-route-hop";
 
         routeRows += `
-          <tr style="${isFirst ? 'border-left: 3px solid #2196f3;' : ''} ${rowBg}">
-            <td style="width:60px; text-align:right; color:${delayColor}; font-weight:bold; font-size:0.9em;">${delayText}</td>
-            <td style="${rowStyle}">
+          <tr class="${rowClass}">
+            <td class="maiv-route-delay ${delayClass}">${delayText}</td>
+            <td>
                <div>${escapeHTML(hostLabel)} ${isFirst ? '🚀' : ''}</div>
-               <div style="color:#999; font-size:0.9em; font-weight:normal;">${escapeHTML(byLabel)}</div>
+               <div class="maiv-route-by">${escapeHTML(byLabel)}</div>
             </td>
-            <td style="text-align:right; color:#999; white-space:nowrap;">${timeStr}</td>
+            <td class="maiv-route-time">${timeStr}</td>
           </tr>
         `;
       });
 
       const routeHTML = `
         <div class="maiv-route-list">
-          <div class="maiv-card-title" title="Shows the path the email took from sender to your inbox, with time delays between each server hop.">DELIVERY ROUTE (Sender &rarr; Recipient)</div>
+          <div class="maiv-card-title" title="${escapeHTML(msg("tooltipRoute"))}">${escapeHTML(msg("cardTitleRoute"))}</div>
           <table class="maiv-route-table">
             ${routeRows}
           </table>

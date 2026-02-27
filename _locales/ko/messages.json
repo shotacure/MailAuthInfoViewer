@@ -1,0 +1,42 @@
+{
+  "extensionName": {
+    "message": "Mail Auth Info Viewer"
+  },
+  "extensionDescription": {
+    "message": "이메일 인증 결과(SPF, DKIM, DMARC), 발신자 신원 확인, 지연 시간을 포함한 전달 경로를 시각화합니다."
+  },
+  "badgeAuthPass": { "message": "✅ 인증 성공" },
+  "badgeAuthFailed": { "message": "❌ 인증 실패" },
+  "badgeAuthPassWarning": { "message": "⚠️ 인증 성공" },
+  "badgeUnverified": { "message": "미검증" },
+  "domainMismatch": { "message": "(도메인 불일치)" },
+  "toggleDetails": { "message": "클릭하여 세부 정보 표시/숨기기" },
+
+  "cardTitleSpf": { "message": "SPF" },
+  "cardTitleDkim": { "message": "DKIM" },
+  "cardTitleDmarc": { "message": "DMARC" },
+  "cardTitleAddress": { "message": "주소 및 정렬 (발신자 신원)" },
+  "cardTitleRoute": { "message": "전달 경로 (발신자 → 수신자)" },
+
+  "tooltipSpf": { "message": "Sender Policy Framework: 발신 서버가 도메인의 DNS 레코드에 의해 허가되었는지 확인합니다." },
+  "tooltipDkim": { "message": "DomainKeys Identified Mail: 이메일의 디지털 서명을 검증하여 전송 중 변조되지 않았는지 확인합니다." },
+  "tooltipDmarc": { "message": "Domain-based Message Authentication, Reporting & Conformance: SPF/DKIM이 From 도메인과 일치하는지 확인하고 발신자의 정책을 정의합니다." },
+  "tooltipAddress": { "message": "표시된 발신자 주소와 실제 엔벨로프 발신자를 비교하여 스푸핑을 감지합니다." },
+  "tooltipRoute": { "message": "이메일이 발신자에서 수신함까지 거친 경로를 서버 간 지연 시간과 함께 표시합니다." },
+
+  "labelDisplayName": { "message": "표시 이름:" },
+  "labelHeaderFrom": { "message": "Header From:" },
+  "labelEnvelopeFrom": { "message": "Envelope From:" },
+  "labelDomain": { "message": "도메인:" },
+  "labelIpAddress": { "message": "IP 주소:" },
+  "labelPolicy": { "message": "정책:" },
+  "labelOrigin": { "message": "발신지" },
+  "labelNone": { "message": "(없음)" },
+
+  "alignOk": { "message": "✅ 도메인 일치 (인증됨)" },
+  "alignMismatch": { "message": "⚠️ Header From과 Envelope 간 도메인 불일치" },
+  "alignNotAuth": { "message": "⚠️ 도메인은 일치하지만 발신자가 인증되지 않았습니다" },
+
+  "mailingListVia": { "message": "메일링 리스트 경유" },
+  "mailingListNote": { "message": "도메인 불일치는 메일링 리스트 전달 때문일 수 있습니다" }
+}

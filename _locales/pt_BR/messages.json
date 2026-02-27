@@ -1,0 +1,42 @@
+{
+  "extensionName": {
+    "message": "Mail Auth Info Viewer"
+  },
+  "extensionDescription": {
+    "message": "Visualiza os resultados de autenticação de e-mail (SPF, DKIM, DMARC), a identidade do remetente e as rotas de entrega com tempos de atraso."
+  },
+  "badgeAuthPass": { "message": "✅ AUTH APROVADA" },
+  "badgeAuthFailed": { "message": "❌ AUTH FALHOU" },
+  "badgeAuthPassWarning": { "message": "⚠️ AUTH APROVADA" },
+  "badgeUnverified": { "message": "NÃO VERIFICADO" },
+  "domainMismatch": { "message": "(DOMÍNIO DIVERGENTE)" },
+  "toggleDetails": { "message": "Clique para mostrar/ocultar detalhes" },
+
+  "cardTitleSpf": { "message": "SPF" },
+  "cardTitleDkim": { "message": "DKIM" },
+  "cardTitleDmarc": { "message": "DMARC" },
+  "cardTitleAddress": { "message": "ENDEREÇO E ALINHAMENTO (IDENTIDADE DO REMETENTE)" },
+  "cardTitleRoute": { "message": "ROTA DE ENTREGA (Remetente → Destinatário)" },
+
+  "tooltipSpf": { "message": "Sender Policy Framework: Verifica se o servidor de envio é autorizado pelos registros DNS do domínio." },
+  "tooltipDkim": { "message": "DomainKeys Identified Mail: Verifica a assinatura digital do e-mail para garantir que não foi alterado em trânsito." },
+  "tooltipDmarc": { "message": "Domain-based Message Authentication, Reporting & Conformance: Garante que SPF/DKIM estejam alinhados com o domínio From e define a política do remetente." },
+  "tooltipAddress": { "message": "Compara o endereço visível do remetente com o remetente real do envelope para detectar falsificação." },
+  "tooltipRoute": { "message": "Mostra o caminho que o e-mail percorreu do remetente até sua caixa de entrada, com tempos de atraso entre cada servidor." },
+
+  "labelDisplayName": { "message": "Nome exibido:" },
+  "labelHeaderFrom": { "message": "Header From:" },
+  "labelEnvelopeFrom": { "message": "Envelope From:" },
+  "labelDomain": { "message": "domínio:" },
+  "labelIpAddress": { "message": "endereço IP:" },
+  "labelPolicy": { "message": "política:" },
+  "labelOrigin": { "message": "ORIGEM" },
+  "labelNone": { "message": "(Nenhum)" },
+
+  "alignOk": { "message": "✅ Domínio alinhado (Autenticado)" },
+  "alignMismatch": { "message": "⚠️ Divergência de domínio entre Header From e Envelope" },
+  "alignNotAuth": { "message": "⚠️ Domínio alinhado, mas o remetente não está autenticado" },
+
+  "mailingListVia": { "message": "via lista de e-mails" },
+  "mailingListNote": { "message": "A divergência de domínio pode ser causada pelo encaminhamento de lista de e-mails" }
+}
