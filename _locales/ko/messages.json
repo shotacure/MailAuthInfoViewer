@@ -106,5 +106,11 @@
   },
   "mailingListNote": {
     "message": "도메인 불일치는 메일링 리스트 전달 때문일 수 있습니다"
+  },
+  "cardTitleArc": {
+    "message": "ARC 체인 (전달 검증)"
+  },
+  "tooltipArc": {
+    "message": "Authenticated Received Chain: 전달 과정에서 각 메일 서버가 추가한 검증 체인을 표시하여 원본 인증 결과를 보존합니다."
   }
 }

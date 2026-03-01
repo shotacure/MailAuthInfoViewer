@@ -106,5 +106,11 @@
   },
   "mailingListNote": {
     "message": "A divergência de domínio pode ser causada pelo encaminhamento de lista de e-mails"
+  },
+  "cardTitleArc": {
+    "message": "CADEIA ARC (Verificação de encaminhamento)"
+  },
+  "tooltipArc": {
+    "message": "Authenticated Received Chain: Mostra a cadeia de verificação adicionada por cada servidor de e-mail durante o encaminhamento, preservando os resultados de autenticação originais."
   }
 }

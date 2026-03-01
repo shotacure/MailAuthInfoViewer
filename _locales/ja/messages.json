@@ -108,5 +108,11 @@
   },
   "mailingListNote": {
     "message": "ドメイン不一致はメーリングリスト転送が原因の可能性があります"
+  },
+  "cardTitleArc": {
+    "message": "ARCチェーン（転送検証）"
+  },
+  "tooltipArc": {
+    "message": "Authenticated Received Chain: メール転送時に各中継サーバーが付与する検証チェーンを表示し、元の認証結果を保全します。"
   }
 }

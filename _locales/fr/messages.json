@@ -106,5 +106,11 @@
   },
   "mailingListNote": {
     "message": "La non-concordance de domaine peut être due au transfert par liste de diffusion"
+  },
+  "cardTitleArc": {
+    "message": "CHAÎNE ARC (Vérification de transfert)"
+  },
+  "tooltipArc": {
+    "message": "Authenticated Received Chain : Affiche la chaîne de vérification ajoutée par chaque serveur lors du transfert, préservant les résultats d'authentification originaux."
   }
 }

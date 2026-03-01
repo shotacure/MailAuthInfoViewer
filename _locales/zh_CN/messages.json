@@ -106,5 +106,11 @@
   },
   "mailingListNote": {
     "message": "域名不匹配可能是因为邮件列表转发所致"
+  },
+  "cardTitleArc": {
+    "message": "ARC 链（转发验证）"
+  },
+  "tooltipArc": {
+    "message": "已认证接收链：显示邮件转发过程中每个服务器添加的验证链，保留原始认证结果。"
   }
 }

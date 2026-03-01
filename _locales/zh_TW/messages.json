@@ -106,5 +106,11 @@
   },
   "mailingListNote": {
     "message": "網域不符可能是因為郵件群組轉發所致"
+  },
+  "cardTitleArc": {
+    "message": "ARC 鏈（轉發驗證）"
+  },
+  "tooltipArc": {
+    "message": "已驗證接收鏈：顯示郵件轉發過程中每個伺服器新增的驗證鏈，保留原始驗證結果。"
   }
 }

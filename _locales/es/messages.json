@@ -106,5 +106,11 @@
   },
   "mailingListNote": {
     "message": "La discrepancia de dominio puede deberse al reenvío por lista de correo"
+  },
+  "cardTitleArc": {
+    "message": "CADENA ARC (Verificación de reenvío)"
+  },
+  "tooltipArc": {
+    "message": "Authenticated Received Chain: Muestra la cadena de verificación añadida por cada servidor de correo durante el reenvío, preservando los resultados de autenticación originales."
   }
 }

@@ -108,5 +108,11 @@
   },
   "mailingListNote": {
     "message": "Domain mismatch may be due to mailing list forwarding"
+  },
+  "cardTitleArc": {
+    "message": "ARC CHAIN (Forwarding Verification)"
+  },
+  "tooltipArc": {
+    "message": "Authenticated Received Chain: Shows the verification chain added by each mail server during forwarding, preserving original authentication results."
   }
 }

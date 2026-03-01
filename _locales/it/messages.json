@@ -106,5 +106,11 @@
   },
   "mailingListNote": {
     "message": "La discrepanza di dominio potrebbe essere causata dall'inoltro tramite mailing list"
+  },
+  "cardTitleArc": {
+    "message": "CATENA ARC (Verifica inoltro)"
+  },
+  "tooltipArc": {
+    "message": "Authenticated Received Chain: Mostra la catena di verifica aggiunta da ogni server di posta durante l'inoltro, preservando i risultati di autenticazione originali."
   }
 }

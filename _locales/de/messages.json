@@ -106,5 +106,11 @@
   },
   "mailingListNote": {
     "message": "Die Domain-Abweichung kann durch Mailinglisten-Weiterleitung verursacht sein"
+  },
+  "cardTitleArc": {
+    "message": "ARC-KETTE (Weiterleitungsverifizierung)"
+  },
+  "tooltipArc": {
+    "message": "Authenticated Received Chain: Zeigt die Verifizierungskette, die jeder Mailserver bei der Weiterleitung hinzufügt, um die ursprünglichen Authentifizierungsergebnisse zu bewahren."
   }
 }
