@@ -41,6 +41,34 @@
       return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
     };
 
+    // プライベートIP判定 (RFC 1918 / RFC 4193)
+    // 送達経路上のホップがローカルネットワーク内かインターネット経由かを判別する
+    const isPrivateIP = (ip) => {
+      if (!ip) return false;
+      // IPv4 プライベートアドレス範囲
+      if (/^10\./.test(ip)) return true;                      // 10.0.0.0/8
+      if (/^172\.(1[6-9]|2\d|3[01])\./.test(ip)) return true; // 172.16.0.0/12
+      if (/^192\.168\./.test(ip)) return true;                 // 192.168.0.0/16
+      if (/^127\./.test(ip)) return true;                      // 127.0.0.0/8 (ループバック)
+      // IPv6 ユニークローカルアドレスとループバック
+      if (/^f[cd]/i.test(ip)) return true;                     // fc00::/7
+      if (/^::1$/.test(ip)) return true;                       // ::1
+      return false;
+    };
+
+    // Receivedヘッダ行からIPアドレスを抽出する
+    // "from hostname [1.2.3.4]" や "(1.2.3.4)" の形式に対応
+    const extractIPFromReceived = (line) => {
+      if (!line) return null;
+      // 角括弧内のIP (例: [10.0.0.1], [2001:db8::1])
+      const bracketMatch = line.match(/\[([a-fA-F0-9.:]+)\]/);
+      if (bracketMatch) return bracketMatch[1];
+      // 括弧内のIP (例: (192.168.1.1))
+      const parenMatch = line.match(/\(([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)\)/);
+      if (parenMatch) return parenMatch[1];
+      return null;
+    };
+
     // =========================================================
     // 1. parseEnvelope - エンベロープ情報・アドレスアライメント・メーリングリスト検知
     // =========================================================
@@ -123,7 +151,7 @@
     // =========================================================
     // 2. parseAuthResults - メール認証結果の解析 (authserv-id フィルタリング付き)
     // =========================================================
-    const parseAuthResults = (headers) => {
+    const parseAuthResults = (headers, envelope) => {
       // ■ authserv-id による信頼フィルタリング
       // 最新の Received ヘッダの by ホスト名と Authentication-Results の authserv-id を比較し、
       // 信頼できるヘッダのみを採用する。攻撃者が注入した偽の認証結果を排除するため。
@@ -176,24 +204,46 @@
 
       // ■ 複数 DKIM 署名への対応
       // メールによっては複数の DKIM 署名があり、一部は pass・一部は fail のことがある。
-      // 全結果を収集し、「1つでも pass なら pass」とする。
+      // 全結果を個別に収集し、集約ステータスと署名ごとの結果リストの両方を返す。
       const parseDkimResults = () => {
         const results = [];
+        // 重複排除用: "status|domain" の組み合わせを記録
+        const seen = new Set();
+
         for (const h of authHeaders) {
           const methods = h.split(';').slice(1);
           for (const m of methods) {
             const statusMatch = m.match(/\bdkim\s*=\s*([a-zA-Z0-9]+)/i);
             if (statusMatch) {
-              results.push({ status: statusMatch[1].toLowerCase(), segment: m });
+              // 各DKIM署名の d= ドメインを抽出
+              const dMatch = m.match(/header\.d=([^;\s()]+)/i);
+              const domain = dMatch ? dMatch[1].replace(/^[@"']|["']$/g, '') : "";
+              const status = statusMatch[1].toLowerCase();
+
+              // Authentication-Results と ARC-Authentication-Results に
+              // 同じ署名結果が記録されることがあるため、status+domain で重複排除
+              const key = `${status}|${domain.toLowerCase()}`;
+              if (seen.has(key)) continue;
+              seen.add(key);
+
+              results.push({
+                status: status,
+                domain: domain,
+                segment: m
+              });
             }
           }
         }
 
         // 集約: 1つでも pass なら pass
-        if (results.length === 0) return "none";
-        if (results.some(r => r.status === "pass")) return "pass";
-        if (results.some(r => r.status === "fail")) return "fail";
-        return results[0].status;
+        let aggregated = "none";
+        if (results.length > 0) {
+          if (results.some(r => r.status === "pass")) aggregated = "pass";
+          else if (results.some(r => r.status === "fail")) aggregated = "fail";
+          else aggregated = results[0].status;
+        }
+
+        return { aggregated, results };
       };
 
       // 認証タイプに関連する詳細情報(ドメイン, IP等)を構造化データとして抽出する
@@ -210,13 +260,14 @@
               // ドメイン: smtp.mailfrom= から取得
               const mailfromMatch = m.match(/smtp\.mailfrom=([^;\s()]+)/i);
               if (mailfromMatch) {
-                const fromStr = mailfromMatch[1].replace(/^<|>$/g, '');
+                // クォートで囲まれた値 (例: smtp.mailfrom="user@domain.com") に対応
+                const fromStr = mailfromMatch[1].replace(/^["'<]|["'>]$/g, '');
                 domain = fromStr.includes('@') ? fromStr.split('@')[1] : fromStr;
               } else {
                 // フォールバック: (domain of xxx@example.com ...) から取得
                 const domainOfMatch = m.match(/domain of ([^;\s()]+)/i);
                 if (domainOfMatch) {
-                  const fromStr = domainOfMatch[1];
+                  const fromStr = domainOfMatch[1].replace(/^["'<]|["'>]$/g, '');
                   domain = fromStr.includes('@') ? fromStr.split('@')[1] : fromStr;
                 }
               }
@@ -243,7 +294,7 @@
               const domainRegex = /header\.(?:d|i)=([^;\s()]+)/ig;
               let match;
               while ((match = domainRegex.exec(m)) !== null) {
-                let dkimDomain = match[1];
+                let dkimDomain = match[1].replace(/["']/g, '');
                 if (dkimDomain.includes('@')) dkimDomain = dkimDomain.split('@')[1];
                 if (dkimDomain) domains.add(dkimDomain);
               }
@@ -263,7 +314,7 @@
               if (!/\bdmarc\s*=/i.test(m)) continue;
 
               const domainMatch = m.match(/header\.from=([^;\s()]+)/i);
-              if (domainMatch) domain = domainMatch[1];
+              if (domainMatch) domain = domainMatch[1].replace(/["']/g, '');
 
               // DMARC ポリシー (p=reject / p=quarantine / p=none) の抽出
               const policyMatch = m.match(/\bp=([a-zA-Z]+)/i);
@@ -276,14 +327,76 @@
         return {};
       };
 
-      const spfStatus = parseAuthStatus("spf");
-      const dkimStatus = parseDkimResults();
+      // ■ SPF/DKIM アライメントの個別評価
+      // DMARCはSPFアライメントとDKIMアライメントを別々に評価する（RFC 7489）。
+      // SPFドメイン(smtp.mailfrom)とDKIM署名ドメイン(header.d)を
+      // それぞれヘッダFromの組織ドメインと比較する。
+      const evaluateAlignment = (spfDetail, dkimDetail, headerOrgDomain) => {
+        const getOrgDomain = window.getOrganizationalDomain || ((d) => d);
+
+        // SPF アライメント: smtp.mailfrom のドメインと Header From の組織ドメインを比較
+        let spfAligned = false;
+        if (spfDetail.domain) {
+          const spfOrgDomain = getOrgDomain(spfDetail.domain.toLowerCase());
+          spfAligned = (spfOrgDomain === headerOrgDomain);
+        }
+
+        // DKIM アライメント: いずれかの DKIM 署名ドメインと Header From の組織ドメインが一致すればOK
+        let dkimAligned = false;
+        const dkimDomains = dkimDetail.domains || [];
+        for (const d of dkimDomains) {
+          const dkimOrgDomain = getOrgDomain(d.toLowerCase());
+          if (dkimOrgDomain === headerOrgDomain) {
+            dkimAligned = true;
+            break;
+          }
+        }
+
+        return { spfAligned, dkimAligned };
+      };
+
+      let spfStatus = parseAuthStatus("spf");
+      const dkimResult = parseDkimResults();
       const dmarcStatus = parseAuthStatus("dmarc");
 
+      let spfDetail = extractDetail("spf");
+      const dkimDetail = extractDetail("dkim");
+      const dmarcDetail = extractDetail("dmarc");
+
+      // ■ Received-SPF フォールバック
+      // Authentication-Results に SPF 結果がない場合（古いMTAなど）、
+      // Received-SPF ヘッダから SPF ステータスとドメイン・IPを取得する
+      if (spfStatus === "none") {
+        const receivedSpf = headers["received-spf"] || [];
+        if (receivedSpf.length > 0) {
+          const spfLine = receivedSpf[0];
+          // ステータス: ヘッダの先頭単語 (例: "pass identity=mailfrom;")
+          const statusMatch = spfLine.match(/^\s*(pass|fail|softfail|neutral|temperror|permerror|none)/i);
+          if (statusMatch) {
+            spfStatus = statusMatch[1].toLowerCase();
+            // ドメイン: envelope-from="user@domain.com" から抽出
+            const envFromMatch = spfLine.match(/envelope-from=["']?([^"';\s]+)/i);
+            let domain = "";
+            if (envFromMatch) {
+              const fromStr = envFromMatch[1].replace(/["'>]/g, '');
+              domain = fromStr.includes('@') ? fromStr.split('@')[1] : fromStr;
+            }
+            // IP: client-ip=x.x.x.x から抽出
+            const ipMatch = spfLine.match(/client-ip=([a-fA-F0-9.:]+)/i);
+            const ip = ipMatch ? ipMatch[1] : spfDetail.ip;
+            spfDetail = { domain: domain || spfDetail.domain, ip: ip };
+          }
+        }
+      }
+
+      // SPF/DKIM アライメントの個別評価結果
+      const alignment = evaluateAlignment(spfDetail, dkimDetail, envelope.headerOrgDomain);
+
       return {
-        spf: { status: spfStatus, detail: extractDetail("spf") },
-        dkim: { status: dkimStatus, detail: extractDetail("dkim") },
-        dmarc: { status: dmarcStatus, detail: extractDetail("dmarc") }
+        spf: { status: spfStatus, detail: spfDetail },
+        dkim: { status: dkimResult.aggregated, detail: dkimDetail, signatures: dkimResult.results },
+        dmarc: { status: dmarcStatus, detail: dmarcDetail },
+        alignment
       };
     };
 
@@ -300,13 +413,85 @@
         const byMatch = line.match(/\bby\s+([^\s;]+)/i);
         const date = parseReceivedDate(line);
 
+        // from 句からIPアドレスを抽出し、内部/外部ネットワークを判定
+        const fromClause = fromMatch ? fromMatch[1] : "";
+        const ip = extractIPFromReceived(fromClause);
+        const isInternal = isPrivateIP(ip);
+
         return {
           from: fromMatch ? fromMatch[1].trim() : null,
           by: byMatch ? byMatch[1] : null,
           date: date,
+          ip: ip,
+          isInternal: isInternal,
           raw: line
         };
       }).filter(hop => hop.from || hop.by);
+    };
+
+    // =========================================================
+    // 3b. parseArcChain - ARC (Authenticated Received Chain) の解析
+    // =========================================================
+    // メールが転送される際に付与される ARC ヘッダセットを解析し、
+    // チェーン番号ごとの検証状態・署名ドメイン・認証サマリーを抽出する。
+    // ARC は転送先のMTAがオリジナルの認証結果を保証するための仕組み (RFC 8617)。
+    const parseArcChain = (headers) => {
+      const arcSeals = headers["arc-seal"] || [];
+      const arcAuthResults = headers["arc-authentication-results"] || [];
+
+      if (arcSeals.length === 0 && arcAuthResults.length === 0) return [];
+
+      // ARC-Seal から各チェーンの情報を抽出
+      const chains = new Map();
+      for (const seal of arcSeals) {
+        // チェーン番号 (i=1, i=2, ...)
+        const iMatch = seal.match(/\bi=(\d+)/);
+        // チェーン検証状態 (cv=none / cv=pass / cv=fail)
+        const cvMatch = seal.match(/\bcv=(\w+)/i);
+        // 署名ドメイン (d=example.com)
+        const dMatch = seal.match(/\bd=([^\s;]+)/i);
+
+        if (iMatch) {
+          const chainNum = parseInt(iMatch[1], 10);
+          chains.set(chainNum, {
+            i: chainNum,
+            cv: cvMatch ? cvMatch[1].toLowerCase() : "unknown",
+            domain: dMatch ? dMatch[1] : "",
+            authSummary: ""
+          });
+        }
+      }
+
+      // ARC-Authentication-Results から各チェーンの認証サマリーを抽出
+      for (const aar of arcAuthResults) {
+        const iMatch = aar.match(/\bi=(\d+)/);
+        if (!iMatch) continue;
+        const chainNum = parseInt(iMatch[1], 10);
+
+        // SPF/DKIM/DMARC の結果をコンパクトにまとめる
+        const summaryParts = [];
+        const spfMatch = aar.match(/\bspf=(\w+)/i);
+        const dkimMatch = aar.match(/\bdkim=(\w+)/i);
+        const dmarcMatch = aar.match(/\bdmarc=(\w+)/i);
+        if (spfMatch) summaryParts.push(`spf=${spfMatch[1].toLowerCase()}`);
+        if (dkimMatch) summaryParts.push(`dkim=${dkimMatch[1].toLowerCase()}`);
+        if (dmarcMatch) summaryParts.push(`dmarc=${dmarcMatch[1].toLowerCase()}`);
+
+        if (chains.has(chainNum)) {
+          chains.get(chainNum).authSummary = summaryParts.join(" ");
+        } else {
+          // ARC-Seal がなくても ARC-Authentication-Results だけある場合
+          chains.set(chainNum, {
+            i: chainNum,
+            cv: "unknown",
+            domain: "",
+            authSummary: summaryParts.join(" ")
+          });
+        }
+      }
+
+      // チェーン番号順にソートして返す
+      return Array.from(chains.values()).sort((a, b) => a.i - b.i);
     };
 
     // =========================================================
@@ -318,8 +503,16 @@
       // DMARCはポリシー未設定(none)の場合も許容する運用が一般的なため条件に含める
       const isDmarcOk = authResults.dmarc.status === "pass" || authResults.dmarc.status === "none";
 
-      // SPFとDKIMが共にpassであり、かつドメインアライメントが一致している場合を「安全」とみなす
-      const isSecure = isSpfOk && isDkimOk && isDomainAligned;
+      // ■ DMARCアライメント判定 (RFC 7489)
+      // SPFドメイン(smtp.mailfrom)またはDKIM署名ドメイン(header.d)の
+      // 少なくとも一方がHeader Fromの組織ドメインと一致する必要がある。
+      // 両方とも不一致の場合、認証が通っていても信頼性が低い。
+      const al = authResults.alignment || {};
+      const isDmarcAligned = !!(al.spfAligned || al.dkimAligned);
+
+      // SPFとDKIMが共にpassであり、エンベロープドメインが一致し、
+      // かつDMARCアライメントが成立している場合を「安全」とみなす
+      const isSecure = isSpfOk && isDkimOk && isDomainAligned && isDmarcAligned;
 
       let badgeClass = "warning";
       let badgeText = msg("badgeUnverified");
@@ -331,7 +524,8 @@
       } else if (authResults.spf.status === "fail" || authResults.dkim.status === "fail" || authResults.dmarc.status === "fail") {
         badgeClass = "danger";
         badgeText = msg("badgeAuthFailed");
-      } else if ((isSpfOk || isDkimOk) && !isDomainAligned && envelopeFrom !== "Unknown") {
+      } else if ((isSpfOk || isDkimOk) && (!isDomainAligned || !isDmarcAligned) && envelopeFrom !== "Unknown") {
+        // 認証は通っているがドメイン不一致またはアライメント不成立
         badgeClass = "warning";
         badgeText = msg("badgeAuthPassWarning");
       }
@@ -341,6 +535,7 @@
         isSpfOk,
         isDkimOk,
         isDmarcOk,
+        isDmarcAligned,
         badgeClass,
         badgeText,
         shouldAutoExpand: badgeClass !== "secure"
@@ -348,13 +543,20 @@
     };
 
     // =========================================================
-    // 5. buildUI - UI構築 (HTML/CSS) — i18n・ダークモード完全対応
+    // 5. buildUI - UI構築 (HTML/CSS) — Shadow DOM・i18n・ダークモード完全対応
     // =========================================================
-    const buildUI = (envelope, authResults, routeHops, security) => {
+    const buildUI = (envelope, authResults, routeHops, security, arcChain) => {
 
       // --- スタイル定義 (CSS変数によるダークモード完全対応) ---
       const style = document.createElement('style');
       style.textContent = `
+        /* === Shadow DOM ホスト要素のリセット === */
+        /* HTMLメールのCSSがアドオンUIに影響しないよう、:host で全スタイルを初期化する */
+        :host {
+          all: initial;
+          display: block;
+        }
+
         /* === CSS カスタムプロパティ (ライトモードデフォルト) === */
         .maiv-container {
           --maiv-bg: #f9f9fa;
@@ -496,6 +698,15 @@
         .maiv-status-row { display: flex; align-items: center; gap: 6px; }
         .maiv-status-icon { font-size: 14px; }
 
+        /* DKIM 個別署名リスト: 複数署名がある場合に各署名の結果を表示 */
+        .maiv-dkim-list { margin-top: 6px; font-size: 11px; }
+        .maiv-dkim-item { display: flex; align-items: center; gap: 4px; margin-top: 3px; color: var(--maiv-text-muted); }
+
+        /* SPF/DKIM アライメント: 各認証カード内に表示 */
+        .maiv-align-item { display: flex; align-items: center; gap: 4px; margin-top: 3px; }
+        .maiv-align-pass { color: var(--maiv-pass); }
+        .maiv-align-fail { color: var(--maiv-fail); }
+
         .maiv-route-list { background: var(--maiv-card-bg); border: 1px solid var(--maiv-card-border); border-radius: 4px; padding: 8px; font-family: monospace; font-size: 11px; overflow-x: auto; }
         .maiv-route-table { width: 100%; border-collapse: collapse; }
         .maiv-route-table td { padding: 4px; border-bottom: 1px solid var(--maiv-route-border); vertical-align: middle; }
@@ -537,8 +748,18 @@
         .maiv-policy-reject { background-color: var(--maiv-policy-reject-bg); color: var(--maiv-policy-reject-text); }
         .maiv-policy-quarantine { background-color: var(--maiv-policy-quarantine-bg); color: var(--maiv-policy-quarantine-text); }
         .maiv-policy-none { background-color: var(--maiv-policy-none-bg); color: var(--maiv-policy-none-text); }
+
+        /* ARC チェーン表示 */
+        .maiv-arc-list { background: var(--maiv-card-bg); border: 1px solid var(--maiv-card-border); border-radius: 4px; padding: 8px; margin-bottom: 10px; font-size: 11px; }
+        .maiv-arc-table { width: 100%; border-collapse: collapse; }
+        .maiv-arc-table td { padding: 3px 6px; border-bottom: 1px solid var(--maiv-route-border); }
+        .maiv-arc-chain-num { font-weight: bold; color: var(--maiv-text-strong); width: 30px; text-align: center; }
+        .maiv-arc-domain { color: var(--maiv-text-secondary); }
+        .maiv-arc-summary { color: var(--maiv-text-muted); font-family: monospace; font-size: 10px; }
+
+        /* IPタイプ表示: 送達経路上の内部/外部ネットワーク判定 */
+        .maiv-ip-tag { font-size: 10px; margin-left: 4px; }
       `;
-      document.head.appendChild(style);
 
       // --- コンテナ作成 ---
       const container = document.createElement("div");
@@ -562,12 +783,13 @@
       }
 
       const headerHTML = `
-        <div class="maiv-header" id="maiv-header-toggle" title="${escapeHTML(msg("toggleDetails"))}">
+        <div class="maiv-header" id="maiv-header-toggle" title="${escapeHTML(msg("toggleDetails"))}"
+             aria-expanded="${security.shouldAutoExpand}" aria-controls="maiv-body-wrapper">
           <span class="maiv-badge ${security.badgeClass}">${security.badgeText}</span>
           <span class="maiv-header-domain">${headerDomainText}</span>
           ${mailingListTag}
           <span style="flex-grow:1;"></span>
-          <span class="maiv-toggle-icon" id="maiv-toggle-icon">▼</span>
+          <span class="maiv-toggle-icon" id="maiv-toggle-icon" aria-hidden="true">▼</span>
           <a href="https://github.com/shotacure/MailAuthInfoViewer" class="maiv-link" target="_blank"><small>Mail Auth Info Viewer</small></a>
         </div>
       `;
@@ -595,20 +817,57 @@
       };
 
       // --- 構造化データからHTML詳細を生成 ---
+      // SPF カード詳細: ドメイン・IP・アライメント結果を表示
       const spfDetailHTML = (() => {
         const d = authResults.spf.detail;
+        const al = authResults.alignment;
         const parts = [];
         if (d.domain) parts.push(`${escapeHTML(msg("labelDomain"))} ${escapeHTML(d.domain)}`);
         if (d.ip) parts.push(`${escapeHTML(msg("labelIpAddress"))} ${escapeHTML(d.ip)}`);
+        // SPF アライメント: smtp.mailfrom ドメインが Header From の組織ドメインと一致するか
+        if (al) {
+          const icon = al.spfAligned ? "✅" : "❌";
+          const cls = al.spfAligned ? "maiv-align-pass" : "maiv-align-fail";
+          const label = al.spfAligned ? msg("alignedLabel") : msg("notAlignedLabel");
+          parts.push(`<div class="maiv-align-item" style="margin-top:4px;">${icon} <span class="${cls}">${escapeHTML(msg("labelSpfAlign"))} ${escapeHTML(label)}</span></div>`);
+        }
         return parts.join("<br>");
       })();
 
+      // DKIM カード詳細: 集約ドメイン・個別署名結果・アライメントを表示
       const dkimDetailHTML = (() => {
         const d = authResults.dkim.detail;
+        const sigs = authResults.dkim.signatures || [];
+        const al = authResults.alignment;
+        const parts = [];
+
+        // 集約ドメイン表示
         if (d.domains && d.domains.length > 0) {
-          return `${escapeHTML(msg("labelDomain"))} ${escapeHTML(d.domains.join(" / "))}`;
+          parts.push(`${escapeHTML(msg("labelDomain"))} ${escapeHTML(d.domains.join(" / "))}`);
         }
-        return "";
+
+        // 複数署名がある場合、ドメインが判明している署名のみ個別にリスト表示する
+        const sigsWithDomain = sigs.filter(s => s.domain);
+        if (sigsWithDomain.length > 1) {
+          let listHTML = '<div class="maiv-dkim-list">';
+          for (const sig of sigsWithDomain) {
+            const icon = sig.status === "pass" ? "✅" : (sig.status === "fail" ? "❌" : "⚠️");
+            const statusClass = sig.status === "pass" ? "status-pass" : (sig.status === "fail" ? "status-fail" : "status-none");
+            listHTML += `<div class="maiv-dkim-item">${icon} <span class="${statusClass}">${escapeHTML(sig.status.toUpperCase())}</span> ${escapeHTML(sig.domain)}</div>`;
+          }
+          listHTML += '</div>';
+          parts.push(listHTML);
+        }
+
+        // DKIM アライメント: いずれかの署名ドメインが Header From の組織ドメインと一致するか
+        if (al) {
+          const icon = al.dkimAligned ? "✅" : "❌";
+          const cls = al.dkimAligned ? "maiv-align-pass" : "maiv-align-fail";
+          const label = al.dkimAligned ? msg("alignedLabel") : msg("notAlignedLabel");
+          parts.push(`<div class="maiv-align-item" style="margin-top:4px;">${icon} <span class="${cls}">${escapeHTML(msg("labelDkimAlign"))} ${escapeHTML(label)}</span></div>`);
+        }
+
+        return parts.join("<br>");
       })();
 
       const dmarcDetailHTML = (() => {
@@ -651,6 +910,7 @@
         ? `<span class="address-highlight">${escapeHTML(envelope.headerFromName)}</span>`
         : `<span style="color:var(--maiv-text-faint); font-weight:normal;">${escapeHTML(msg("labelNone"))}</span>`;
 
+      // アドレスカード: 送信者アドレスの比較とドメインアライメント警告を表示
       const addressHTML = `
         <div class="maiv-card" style="grid-column: span 2; border-left: 4px solid #2196f3;">
           <div class="maiv-card-title" title="${escapeHTML(msg("tooltipAddress"))}">${escapeHTML(msg("cardTitleAddress"))}</div>
@@ -705,11 +965,16 @@
         const timeStr = formatTimestamp(hop.date);
         const rowClass = isFirst ? "maiv-route-origin" : "maiv-route-hop";
 
+        // IPアドレスの内部/外部ネットワーク判定マーカー
+        const ipTag = hop.ip
+          ? `<span class="maiv-ip-tag">${hop.isInternal ? '🏠' : '🌐'}</span>`
+          : '';
+
         routeRows += `
           <tr class="${rowClass}">
             <td class="maiv-route-delay ${delayClass}">${delayText}</td>
             <td>
-               <div>${escapeHTML(hostLabel)} ${isFirst ? '🚀' : ''}</div>
+               <div>${escapeHTML(hostLabel)} ${isFirst ? '🚀' : ''}${ipTag}</div>
                <div class="maiv-route-by">${escapeHTML(byLabel)}</div>
             </td>
             <td class="maiv-route-time">${timeStr}</td>
@@ -717,14 +982,52 @@
         `;
       });
 
+      // 送達経路セクション内に受信先アドレス (Envelope-To) を表示
+      // 送達経路は「送信元→受信先」の流れを示すため、受信先はここが自然な位置
+      const envelopeToHTML = `
+        <div style="font-size:11px; margin: 6px 0 8px 0; display:flex; align-items:center;">
+          <span class="address-label" style="width:auto; margin-right:8px;">${escapeHTML(msg("labelEnvelopeTo"))}</span>
+          <span class="address-highlight">${escapeHTML(envelope.envelopeTo)}</span>
+        </div>
+      `;
+
       const routeHTML = `
         <div class="maiv-route-list">
           <div class="maiv-card-title" title="${escapeHTML(msg("tooltipRoute"))}">${escapeHTML(msg("cardTitleRoute"))}</div>
+          ${envelopeToHTML}
           <table class="maiv-route-table">
             ${routeRows}
           </table>
         </div>
       `;
+
+      // --- ARC チェーン表示 (RFC 8617) ---
+      // メール転送時に各中継MTAが付与するARC検証チェーンを可視化する。
+      // チェーンが存在しない場合は表示しない。
+      let arcHTML = "";
+      if (arcChain && arcChain.length > 0) {
+        let arcRows = "";
+        for (const chain of arcChain) {
+          const cvIcon = chain.cv === "pass" ? "✅" : (chain.cv === "fail" ? "❌" : "⚠️");
+          const cvClass = chain.cv === "pass" ? "status-pass" : (chain.cv === "fail" ? "status-fail" : "status-none");
+          arcRows += `
+            <tr>
+              <td class="maiv-arc-chain-num">#${chain.i}</td>
+              <td>${cvIcon} <span class="${cvClass}">${escapeHTML(chain.cv.toUpperCase())}</span></td>
+              <td class="maiv-arc-domain">${escapeHTML(chain.domain)}</td>
+              <td class="maiv-arc-summary">${escapeHTML(chain.authSummary)}</td>
+            </tr>
+          `;
+        }
+        arcHTML = `
+          <div class="maiv-arc-list">
+            <div class="maiv-card-title" title="${escapeHTML(msg("tooltipArc"))}">${escapeHTML(msg("cardTitleArc"))}</div>
+            <table class="maiv-arc-table">
+              ${arcRows}
+            </table>
+          </div>
+        `;
+      }
 
       // --- 最終マークアップの組み立て ---
       const markup = `
@@ -738,6 +1041,7 @@
                 ${dkimCard}
                 ${dmarcCard}
               </div>
+              ${arcHTML}
               ${routeHTML}
             </div>
           </div>
@@ -747,20 +1051,37 @@
       const doc = new DOMParser().parseFromString(markup, "text/html");
       container.replaceChildren(...doc.body.childNodes);
 
-      // 既存のUIを削除して新しいコンテナを挿入
-      const existing = document.querySelector(".maiv-container");
-      if (existing) existing.remove();
-      document.body.insertAdjacentElement("afterbegin", container);
+      // ■ Shadow DOM によるCSS隔離
+      // HTMLメール側のCSS (例: * { font-size: 20px !important; }) がアドオンUIに
+      // 影響しないよう、Shadow DOM でカプセル化する。
+      // mode: "closed" により外部からの shadow root への参照も遮断する。
+      const hostId = "maiv-shadow-host";
+      let host = document.getElementById(hostId);
+      if (host) host.remove();
+      host = document.createElement("div");
+      host.id = hostId;
+      document.body.insertAdjacentElement("afterbegin", host);
+
+      const shadow = host.attachShadow({ mode: "closed" });
+      shadow.appendChild(style);
+      shadow.appendChild(container);
 
       // --- アコーディオンの開閉インタラクション ---
       const headerToggle = container.querySelector('#maiv-header-toggle');
       const bodyWrapper = container.querySelector('#maiv-body-wrapper');
       const toggleIcon = container.querySelector('#maiv-toggle-icon');
 
+      // 開閉状態を切り替え、aria-expanded 属性も同期させる共通関数
+      const togglePanel = () => {
+        const isExpanded = bodyWrapper.classList.toggle('expanded');
+        toggleIcon.classList.toggle('expanded');
+        headerToggle.setAttribute('aria-expanded', isExpanded);
+      };
+
+      // マウスクリックによる開閉（リンクをクリックした場合は除外）
       headerToggle.addEventListener('click', (e) => {
         if (e.target.closest('.maiv-link')) return;
-        bodyWrapper.classList.toggle('expanded');
-        toggleIcon.classList.toggle('expanded');
+        togglePanel();
       });
 
       // 「安全」以外の場合はアニメーション付き自動展開
@@ -768,6 +1089,7 @@
         setTimeout(() => {
           bodyWrapper.classList.add('expanded');
           toggleIcon.classList.add('expanded');
+          headerToggle.setAttribute('aria-expanded', 'true');
         }, 50);
       }
     };
@@ -783,11 +1105,12 @@
     const headers = fullMsg.headers || {};
 
     const envelope = parseEnvelope(fullMsg, headers, msgHeader);
-    const authResults = parseAuthResults(headers);
+    const authResults = parseAuthResults(headers, envelope);
     const routeHops = parseRoute(headers);
+    const arcChain = parseArcChain(headers);
     const security = determineSecurityStatus(authResults, envelope.isDomainAligned, envelope.envelopeFrom);
 
-    buildUI(envelope, authResults, routeHops, security);
+    buildUI(envelope, authResults, routeHops, security, arcChain);
 
   } catch (e) {
     console.error("MailAuthInfoViewer Error:", e);
