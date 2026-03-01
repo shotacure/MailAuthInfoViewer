@@ -783,12 +783,13 @@
       }
 
       const headerHTML = `
-        <div class="maiv-header" id="maiv-header-toggle" title="${escapeHTML(msg("toggleDetails"))}">
+        <div class="maiv-header" id="maiv-header-toggle" title="${escapeHTML(msg("toggleDetails"))}"
+             aria-expanded="${security.shouldAutoExpand}" aria-controls="maiv-body-wrapper">
           <span class="maiv-badge ${security.badgeClass}">${security.badgeText}</span>
           <span class="maiv-header-domain">${headerDomainText}</span>
           ${mailingListTag}
           <span style="flex-grow:1;"></span>
-          <span class="maiv-toggle-icon" id="maiv-toggle-icon">▼</span>
+          <span class="maiv-toggle-icon" id="maiv-toggle-icon" aria-hidden="true">▼</span>
           <a href="https://github.com/shotacure/MailAuthInfoViewer" class="maiv-link" target="_blank"><small>Mail Auth Info Viewer</small></a>
         </div>
       `;
@@ -1070,10 +1071,17 @@
       const bodyWrapper = container.querySelector('#maiv-body-wrapper');
       const toggleIcon = container.querySelector('#maiv-toggle-icon');
 
+      // 開閉状態を切り替え、aria-expanded 属性も同期させる共通関数
+      const togglePanel = () => {
+        const isExpanded = bodyWrapper.classList.toggle('expanded');
+        toggleIcon.classList.toggle('expanded');
+        headerToggle.setAttribute('aria-expanded', isExpanded);
+      };
+
+      // マウスクリックによる開閉（リンクをクリックした場合は除外）
       headerToggle.addEventListener('click', (e) => {
         if (e.target.closest('.maiv-link')) return;
-        bodyWrapper.classList.toggle('expanded');
-        toggleIcon.classList.toggle('expanded');
+        togglePanel();
       });
 
       // 「安全」以外の場合はアニメーション付き自動展開
@@ -1081,6 +1089,7 @@
         setTimeout(() => {
           bodyWrapper.classList.add('expanded');
           toggleIcon.classList.add('expanded');
+          headerToggle.setAttribute('aria-expanded', 'true');
         }, 50);
       }
     };
