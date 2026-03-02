@@ -112,5 +112,8 @@
   },
   "tooltipArc": {
     "message": "Authenticated Received Chain : Affiche la chaîne de vérification ajoutée par chaque serveur lors du transfert, préservant les résultats d'authentification originaux."
+  },
+  "displayNameSpoofWarning": {
+    "message": "⚠️ Le nom affiché contient une adresse e-mail d'un autre domaine (usurpation possible)"
   }
 }

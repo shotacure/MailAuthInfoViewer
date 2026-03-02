@@ -24,45 +24,70 @@ For fully authenticated and safe emails, the dashboard automatically collapses t
 
 ## 🌟 Key Features / 主な機能
 
+* **Shadow DOM CSS Isolation:** The dashboard is encapsulated in a closed Shadow DOM, completely preventing HTML email CSS (e.g., `* { font-size: 20px !important; }`) from contaminating the add-on display.
+    * **Shadow DOM CSS隔離:** ダッシュボードをclosed Shadow DOMでカプセル化し、HTMLメールのCSSがアドオン表示に影響することを完全に防止します。
 * **Smart Auto-Collapse:** The dashboard stays neatly collapsed for safe, authenticated emails to maximize your reading space. It automatically expands with a smooth animation only when an unverified sender or a domain mismatch is detected.
     * **スマート自動折りたたみ:** 安全な認証済みメールではダッシュボードが自動で折りたたまれ、メール本文の閲覧スペースを広く保ちます。未認証やドメイン不一致を検知した「要確認」のメールの場合のみ、自動的にスライド展開して警告します。
+* **Manual Toggle:** You can expand or collapse the detail view at any time by clicking the header bar.
+    * **手動開閉:** ヘッダーバーをクリックすることで、いつでも詳細ビューの展開・折りたたみを切り替えられます。
 * **Sender Identity & Alignment:** Instantly spot discrepancies between the Display Name, Header From, and Envelope From addresses side-by-side.
     * **送信者の身元とアライメント検証:** 「表示名」「ヘッダFrom」「エンベロープFrom」を並べて表示し、アドレスの不自然な乖離や偽装を瞬時に見抜きます。
+* **Display Name Spoofing Detection:** Detects when the display name contains an email address from a different domain than the actual sender — a common phishing trick to mislead recipients.
+    * **表示名なりすまし検知:** 表示名に実際の送信元とは異なるドメインのメールアドレスが含まれている場合を検知します。受信者を欺くためのフィッシング手口です。
 * **Domain Verification Badge:** Prominently displays the actual authenticated domain (e.g., `✅ AUTH PASS example.com`) to prevent false trust in fake display names.
     * **ドメイン認証バッジ:** 単なる「認証済」ではなく、実際に認証されたドメイン名を明記し、誤った安心感を与えません。
 * **Authentication Status:** Quickly check the pass/fail status of SPF, DKIM, and DMARC authentication with DMARC policy display.
     * **認証ステータス:** SPF、DKIM、DMARCの成否ステータスをDMARCポリシー表示と共に素早く確認できます。
-* **Delivery Route Visualization:** View the email's path from the sender (ORIGIN) to your inbox, including calculated time delays between each hop.
-    * **送達経路の可視化:** 送信元（ORIGIN）から受信ボックスまでのメールの経路を、各ホップ間の遅延時間とともに表示します。
-* **Dark Mode:** Full dark mode support that follows your system preference.
-    * **ダークモード:** システムの設定に連動した完全なダークモード対応。
-* **12-Language Support (i18n):** Available in English, Japanese, French, German, Spanish, Arabic, Korean, Traditional Chinese, Simplified Chinese, Portuguese (Brazil), Russian, and Italian.
-    * **12言語対応 (i18n):** 英語、日本語、フランス語、ドイツ語、スペイン語、アラビア語、韓国語、繁体字中国語、簡体字中国語、ポルトガル語（ブラジル）、ロシア語、イタリア語に対応。
-* **Organizational Domain Comparison (RFC 7489):** Uses a curated Public Suffix List to accurately compare domains. For example, `aaa.bbb.google.com` and `ccc.google.com` are correctly recognized as aligned.
-    * **組織ドメイン比較 (RFC 7489):** Public Suffix Listを使用してドメインを正確に比較。例えば `aaa.bbb.google.com` と `ccc.google.com` は共に `google.com` として正しく一致判定されます。
-* **Mailing List Detection:** When `List-Id` or `List-Unsubscribe` headers are present, the dashboard clearly indicates "via Mailing List" to explain domain mismatches caused by list forwarding.
-    * **メーリングリスト検知:** `List-Id` や `List-Unsubscribe` ヘッダの存在時、「メーリングリスト経由」と明示し、転送によるドメイン不一致を説明します。
-* **Trusted Authentication Filtering (authserv-id):** Filters `Authentication-Results` headers to only trust those from the receiving mail server, reducing the risk of spoofed authentication results.
-    * **信頼できる認証結果のフィルタリング (authserv-id):** 受信メールサーバーの `Authentication-Results` ヘッダのみを信頼し、偽装された認証結果のリスクを低減します。
-* **Privacy First:** All processing is performed strictly locally within Thunderbird. No external network requests are made.
-    * **プライバシー重視:** すべての解析処理はThunderbird内でローカルに完結します。外部ネットワークへの通信は一切行いません。
-
----
-
-## 🚀 How to Use / 使い方
-
-After installing the add-on, simply open any email in Thunderbird. A new information panel will appear at the top of the message view.
-
-アドオンをインストールした後、Thunderbirdでメールを開くだけです。メッセージ表示画面の上部に新しい情報パネルが表示されます。
-
-* **Overall Status:** A large badge indicates the verified domain or issues (e.g., `✅ AUTH PASS`, `❌ AUTH FAILED`, `⚠️ AUTH PASS (DOMAIN MISMATCH)`, `UNVERIFIED`).
-    * **総合ステータス:** 大きなバッジが認証されたドメインや問題を警告します。
-* **Manual Toggle:** You can click the header bar at any time to expand or collapse the detailed view.
-    * **手動開閉:** ヘッダーバーをクリックすることで、いつでも詳細ビューの展開・折りたたみを切り替えられます。
+* **DMARC Alignment Indicators (RFC 7489):** SPF and DKIM alignment status shown within each authentication card. The security verdict requires DMARC pass and at least one alignment match for AUTH PASS.
+    * **DMARCアライメント表示 (RFC 7489):** SPFとDKIMのアライメント状態を各認証カード内に表示。セキュリティ判定にはDMARC passと少なくとも一方のアライメント一致が必要です。
+* **Individual DKIM Signatures:** When multiple DKIM signatures exist, each is displayed individually with its pass/fail status, signing domain, and DKIM selector (`s=`), with deduplication across headers.
+    * **個別DKIM署名表示:** 複数のDKIM署名がある場合、各署名のpass/fail状態・署名ドメイン・DKIMセレクター (`s=`) を個別に表示。ヘッダ間の重複は自動排除します。
+* **ARC Chain Visualization (RFC 8617):** Displays the Authenticated Received Chain with verification status, signing domain, and authentication summary for each forwarding hop.
+    * **ARCチェーン表示 (RFC 8617):** メール転送時のAuthenticated Received Chainを、検証状態・署名ドメイン・認証サマリーとともに表示します。
+* **Delivery Route Visualization:** View the email's path from the sender (ORIGIN) to your inbox, including calculated time delays between each hop, Envelope-To recipient, and IP type indicators (🏠 internal / 🌐 external with IP address tooltips).
+    * **送達経路の可視化:** 送信元（ORIGIN）から受信ボックスまでのメールの経路を、各ホップ間の遅延時間、受信先（Envelope-To）、IPタイプ表示（🏠内部/🌐外部、ツールチップにIPアドレス表示）とともに表示します。
+* **Received-SPF Fallback:** When `Authentication-Results` headers lack SPF data, the add-on falls back to `Received-SPF` headers for compatibility with older mail servers.
+    * **Received-SPFフォールバック:** Authentication-ResultsにSPF結果がない場合、Received-SPFヘッダから自動的に取得し、古いメールサーバーとの互換性を確保します。
 * **Address & Alignment:** Highlights the sender's addresses. If the domain doesn't match the authenticated envelope, it alerts you to potential spoofing or mailing list routing.
     * **アドレスとアライメント:** 送信者のアドレスを強調表示します。ドメインがエンベロープと一致しない場合、なりすましやメーリングリスト経由の可能性を警告します。
 * **Delivery Route:** The table at the bottom shows the path. The first row ("ORIGIN 🚀") is the sender. The time difference between each hop is shown on the left.
     * **送達経路:** 下部のテーブルが経路を示します。最初の行（"ORIGIN 🚀"）が送信元です。各ホップ間の時間差が左側に表示されます。
+* **Organizational Domain Comparison (RFC 7489):** Uses a curated Public Suffix List covering 60+ countries for accurate domain alignment.
+    * **組織ドメイン比較 (RFC 7489):** 60か国以上をカバーするPublic Suffix Listを使用してドメインを正確に比較します。
+* **Mailing List Detection:** Indicates "via Mailing List" when `List-Id` or `List-Unsubscribe` headers are detected, explaining domain mismatches from list forwarding.
+    * **メーリングリスト検知:** `List-Id` や `List-Unsubscribe` ヘッダの検出時に「メーリングリスト経由」と表示し、転送によるドメイン不一致を説明します。
+* **Trusted Authentication Filtering (authserv-id):** Filters `Authentication-Results` headers to only trust those from the receiving mail server.
+    * **信頼できる認証結果のフィルタリング (authserv-id):** 受信メールサーバーの `Authentication-Results` ヘッダのみを信頼します。
+* **Dark Mode:** Full dark mode support that follows your system preference.
+    * **ダークモード:** システムの設定に連動した完全なダークモード対応。
+* **12-Language Support (i18n):** Available in English, Japanese, French, German, Spanish, Arabic, Korean, Traditional Chinese, Simplified Chinese, Portuguese (Brazil), Russian, and Italian.
+    * **12言語対応:** 英語、日本語、フランス語、ドイツ語、スペイン語、アラビア語、韓国語、繁体字中国語、簡体字中国語、ポルトガル語（ブラジル）、ロシア語、イタリア語に対応。
+* **Privacy First:** All processing is performed strictly locally within Thunderbird. No external network requests are made. No data is collected or transmitted.
+    * **プライバシー重視:** すべての解析処理はThunderbird内でローカルに完結します。外部ネットワークへの通信は一切行いません。
+
+---
+
+## 🔒 Security Verdict Philosophy / セキュリティ判定の思想
+
+This add-on is designed for mail administrators and security-conscious users who want to verify that email authentication is properly configured. The verdict logic is intentionally strict:
+
+このアドオンは、メール認証が正しく設定されているかを確認したいメール管理者やセキュリティ意識の高いユーザー向けに設計されています。判定ロジックは意図的に厳格です:
+
+* ✅ **AUTH PASS** (green) requires **all** of the following — anything less results in a warning:
+    * SPF pass, DKIM pass, **and** DMARC pass (a DMARC record must be published)
+    * Envelope domain aligned with Header From
+    * At least one DMARC alignment (SPF or DKIM) with Header From
+    * No display name spoofing detected
+
+* ✅ **認証成功**（グリーン）は以下の**すべて**を満たす場合のみ。1つでも欠ければ警告になります:
+    * SPF pass、DKIM pass、**かつ** DMARC pass（DMARCレコードの公開が必要）
+    * エンベロープドメインとHeader Fromの一致
+    * SPFまたはDKIMの少なくとも一方がHeader Fromとアライメント
+    * 表示名なりすましが検知されていないこと
+
+The principle is: **only unavoidable situations (e.g., third-party infrastructure) get a green badge; anything fixable by the domain administrator should be flagged.**
+
+原則: **業者や設定を変えてもどうしようもない不可抗力だけをグリーンに。管理者の努力で解決できる不備は警告対象にする。**
 
 ---
 
@@ -99,13 +124,14 @@ Both scripts read the version from `manifest.json`, stage the required files inc
 manifest.json           Extension manifest with i18n support
 background.js           Registers content scripts, handles message API
 psl_data.js             Public Suffix List data + getOrganizationalDomain()
-messagedisplay.js       Main logic — 5 core functions:
+messagedisplay.js       Main logic — 6 core functions:
 │
-├─ parseEnvelope()          Address extraction, PSL-based alignment, mailing list detection
-├─ parseAuthResults()       Auth parsing with authserv-id filtering & multi-DKIM
-├─ parseRoute()             Delivery route from Received headers
-├─ determineSecurityStatus()  Aggregate security verdict
-└─ buildUI()                i18n'd, dark-mode-aware rendering
+├─ parseEnvelope()          Address extraction, PSL-based alignment, mailing list & display name spoof detection
+├─ parseAuthResults()       Auth parsing with authserv-id filtering, multi-DKIM with selectors, Received-SPF fallback
+├─ parseRoute()             Delivery route from Received headers with IP classification
+├─ parseArcChain()          ARC chain parsing (RFC 8617)
+├─ determineSecurityStatus()  Strict aggregate security verdict (DMARC pass required)
+└─ buildUI()                Shadow DOM isolated, i18n'd, dark-mode-aware rendering
 
 _locales/
 ├─ en/messages.json     English (default)
@@ -128,25 +154,10 @@ Previous versions used simple suffix matching (`endsWith`), which could produce 
 
 v1.0.8 bundles a curated Public Suffix List (`psl_data.js`) covering 60+ countries to extract the **Organizational Domain** per RFC 7489. Both the Header-From domain and Envelope-From domain are reduced to their organizational domain before comparison.
 
-### authserv-id Trust Filtering
-
-`Authentication-Results` headers can be injected by any MTA in the delivery chain. To mitigate spoofed results, v1.0.8 compares each header's `authserv-id` (the hostname before the first semicolon) against the `by` hostname of the most recent `Received` header. Only matching headers are trusted. `ARC-Authentication-Results` are exempt from this filter as they have their own chain validation mechanism.
-
 ---
 
-## ⚠️ Known Limitations / 既知の制限事項
+## 📄 License / ライセンス
 
-* **Public Suffix List is curated, not exhaustive.** The bundled PSL covers the vast majority of email traffic (~60 countries + major hosted services), but exotic or newly created TLDs may fall back to the default single-level TLD assumption. Contributions to expand the list are welcome.
-* **authserv-id filtering is best-effort.** If the receiving MTA's hostname doesn't match any `authserv-id`, the filter falls back to trusting all headers. This ensures compatibility but reduces protection in edge cases.
-* **No BIMI or MTA-STS support.** These protocols require network lookups and are out of scope for a privacy-first local-only add-on.
-* **i18n coverage.** Technical terms (SPF, DKIM, DMARC, PASS, FAIL) remain in English across all locales for consistency and recognition.
+This project is licensed under the [GNU General Public License v3.0](LICENSE).
 
----
-
-## 📝 License / ライセンス
-
-This project is licensed under the GNU General Public License v3.0 (GPLv3).
-このプロジェクトは、GNU General Public License v3.0 (GPLv3) の下でライセンスされています。
-
-See the [LICENSE](LICENSE) file for details.
-詳細は [LICENSE](LICENSE) ファイルをご覧ください。
+Copyright (C) 2025 Shota (SHOWTIME)
