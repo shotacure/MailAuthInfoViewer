@@ -112,5 +112,8 @@
   },
   "tooltipArc": {
     "message": "Authenticated Received Chain: 전달 과정에서 각 메일 서버가 추가한 검증 체인을 표시하여 원본 인증 결과를 보존합니다."
+  },
+  "displayNameSpoofWarning": {
+    "message": "⚠️ 표시 이름에 다른 도메인의 이메일 주소가 포함되어 있습니다 (스푸핑 의심)"
   }
 }

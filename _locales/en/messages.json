@@ -114,5 +114,8 @@
   },
   "tooltipArc": {
     "message": "Authenticated Received Chain: Shows the verification chain added by each mail server during forwarding, preserving original authentication results."
+  },
+  "displayNameSpoofWarning": {
+    "message": "⚠️ Display name contains an email address from a different domain (possible spoofing)"
   }
 }

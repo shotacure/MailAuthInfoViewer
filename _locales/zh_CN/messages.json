@@ -112,5 +112,8 @@
   },
   "tooltipArc": {
     "message": "已认证接收链：显示邮件转发过程中每个服务器添加的验证链，保留原始认证结果。"
+  },
+  "displayNameSpoofWarning": {
+    "message": "⚠️ 显示名称包含不同域名的电子邮件地址（可能为伪造）"
   }
 }

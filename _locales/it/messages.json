@@ -112,5 +112,8 @@
   },
   "tooltipArc": {
     "message": "Authenticated Received Chain: Mostra la catena di verifica aggiunta da ogni server di posta durante l'inoltro, preservando i risultati di autenticazione originali."
+  },
+  "displayNameSpoofWarning": {
+    "message": "⚠️ Il nome visualizzato contiene un indirizzo e-mail di un altro dominio (possibile spoofing)"
   }
 }

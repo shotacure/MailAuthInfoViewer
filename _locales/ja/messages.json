@@ -114,5 +114,8 @@
   },
   "tooltipArc": {
     "message": "Authenticated Received Chain: メール転送時に各中継サーバーが付与する検証チェーンを表示し、元の認証結果を保全します。"
+  },
+  "displayNameSpoofWarning": {
+    "message": "⚠️ 表示名に別ドメインのメールアドレスが含まれています（なりすましの疑い）"
   }
 }

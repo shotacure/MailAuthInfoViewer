@@ -112,5 +112,8 @@
   },
   "tooltipArc": {
     "message": "已驗證接收鏈：顯示郵件轉發過程中每個伺服器新增的驗證鏈，保留原始驗證結果。"
+  },
+  "displayNameSpoofWarning": {
+    "message": "⚠️ 顯示名稱包含不同網域的電子郵件地址（可能為偽造）"
   }
 }

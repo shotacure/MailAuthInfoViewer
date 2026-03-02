@@ -112,5 +112,8 @@
   },
   "tooltipArc": {
     "message": "Authenticated Received Chain: Mostra a cadeia de verificação adicionada por cada servidor de e-mail durante o encaminhamento, preservando os resultados de autenticação originais."
+  },
+  "displayNameSpoofWarning": {
+    "message": "⚠️ O nome de exibição contém um endereço de e-mail de outro domínio (possível falsificação)"
   }
 }
