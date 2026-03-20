@@ -115,5 +115,62 @@
   },
   "displayNameSpoofWarning": {
     "message": "⚠️ 显示名称包含不同域名的电子邮件地址（可能为伪造）"
+  },
+  "cardTitleLinkSafety": {
+    "message": "链接安全分析"
+  },
+  "tooltipLinkSafety": {
+    "message": "分析邮件正文中的链接，检测伪装 URL、危险协议、可疑域名等钓鱼指标。"
+  },
+  "replyToMismatch": {
+    "message": "⚠️ Reply-To 地址与发件人的域名不同"
+  },
+  "linkDeceptiveText": {
+    "message": "链接伪装"
+  },
+  "linkDangerousScheme": {
+    "message": "检测到危险的链接协议"
+  },
+  "linkEmbeddedForm": {
+    "message": "邮件正文中嵌入了 HTML 表单（非常可疑）"
+  },
+  "linkIpAddress": {
+    "message": "链接指向 IP 地址而非域名"
+  },
+  "linkIdnHomograph": {
+    "message": "检测到国际化域名（可能为同形字攻击）"
+  },
+  "linkShortener": {
+    "message": "检测到短链接（隐藏了实际目标）"
+  },
+  "linkDomainListTitle": {
+    "message": "邮件正文中的链接域名一览："
+  },
+  "verdictReasonPhishing": {
+    "message": "检测到钓鱼指标"
+  },
+  "verdictReasonDmarcFail": {
+    "message": "DMARC 未通过"
+  },
+  "verdictReasonPolicyNone": {
+    "message": "DMARC 策略: p=none"
+  },
+  "verdictReasonSpfFail": {
+    "message": "SPF 未通过"
+  },
+  "verdictReasonDkimFail": {
+    "message": "DKIM 未通过"
+  },
+  "verdictReasonAlignment": {
+    "message": "DMARC 对齐失败"
+  },
+  "verdictReasonDomainMismatch": {
+    "message": "域名不匹配"
+  },
+  "verdictReasonSpoofing": {
+    "message": "显示名称伪造"
+  },
+  "verdictReasonSuspicious": {
+    "message": "检测到可疑链接"
   }
 }

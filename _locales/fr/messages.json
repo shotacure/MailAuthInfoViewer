@@ -54,16 +54,16 @@
     "message": "Affiche le chemin emprunté par l'e-mail de l'expéditeur à votre boîte de réception, avec les délais entre chaque serveur relais."
   },
   "labelDisplayName": {
-    "message": "Nom affiché :"
+    "message": "Nom d'affichage :"
   },
   "labelHeaderFrom": {
-    "message": "En-tête From :"
+    "message": "Header From :"
   },
   "labelEnvelopeFrom": {
-    "message": "Enveloppe From :"
+    "message": "Envelope From :"
   },
   "labelEnvelopeTo": {
-    "message": "Enveloppe To :"
+    "message": "Envelope To :"
   },
   "labelDomain": {
     "message": "domaine :"
@@ -93,13 +93,13 @@
     "message": "Non aligné"
   },
   "alignOk": {
-    "message": "✅ Domaines alignés (Authentifié)"
+    "message": "✅ Domaine aligné (Authentifié)"
   },
   "alignMismatch": {
-    "message": "⚠️ Non-concordance de domaine entre l'en-tête From et l'enveloppe"
+    "message": "⚠️ Non-concordance de domaine entre Header From et Envelope"
   },
   "alignNotAuth": {
-    "message": "⚠️ Domaines alignés, mais l'expéditeur n'est pas authentifié"
+    "message": "⚠️ Domaine aligné, mais l'expéditeur n'est pas authentifié"
   },
   "mailingListVia": {
     "message": "via liste de diffusion"
@@ -111,9 +111,66 @@
     "message": "CHAÎNE ARC (Vérification de transfert)"
   },
   "tooltipArc": {
-    "message": "Authenticated Received Chain : Affiche la chaîne de vérification ajoutée par chaque serveur lors du transfert, préservant les résultats d'authentification originaux."
+    "message": "Authenticated Received Chain : Affiche la chaîne de vérification ajoutée par chaque serveur de messagerie lors du transfert, préservant les résultats d'authentification originaux."
   },
   "displayNameSpoofWarning": {
-    "message": "⚠️ Le nom affiché contient une adresse e-mail d'un autre domaine (usurpation possible)"
+    "message": "⚠️ Le nom d'affichage contient une adresse e-mail d'un domaine différent (usurpation possible)"
+  },
+  "cardTitleLinkSafety": {
+    "message": "ANALYSE DE SÉCURITÉ DES LIENS"
+  },
+  "tooltipLinkSafety": {
+    "message": "Analyse les liens dans le corps de l'e-mail pour détecter les indicateurs de phishing tels que les URL trompeuses, les schémas dangereux et les domaines suspects."
+  },
+  "replyToMismatch": {
+    "message": "⚠️ L'adresse Reply-To est sur un domaine différent de l'expéditeur"
+  },
+  "linkDeceptiveText": {
+    "message": "Lien trompeur"
+  },
+  "linkDangerousScheme": {
+    "message": "Schéma de lien dangereux détecté"
+  },
+  "linkEmbeddedForm": {
+    "message": "Formulaire HTML intégré dans le corps de l'e-mail (très suspect)"
+  },
+  "linkIpAddress": {
+    "message": "Le lien pointe vers une adresse IP au lieu d'un nom de domaine"
+  },
+  "linkIdnHomograph": {
+    "message": "Nom de domaine internationalisé détecté (possible attaque homographe)"
+  },
+  "linkShortener": {
+    "message": "Raccourcisseur d'URL détecté (masque la destination réelle)"
+  },
+  "linkDomainListTitle": {
+    "message": "Domaines des liens dans le corps de l'e-mail :"
+  },
+  "verdictReasonPhishing": {
+    "message": "Indicateur de phishing détecté"
+  },
+  "verdictReasonDmarcFail": {
+    "message": "DMARC non validé"
+  },
+  "verdictReasonPolicyNone": {
+    "message": "Politique DMARC : p=none"
+  },
+  "verdictReasonSpfFail": {
+    "message": "SPF non validé"
+  },
+  "verdictReasonDkimFail": {
+    "message": "DKIM non validé"
+  },
+  "verdictReasonAlignment": {
+    "message": "Alignement DMARC échoué"
+  },
+  "verdictReasonDomainMismatch": {
+    "message": "Domaine non aligné"
+  },
+  "verdictReasonSpoofing": {
+    "message": "Usurpation du nom d'affichage"
+  },
+  "verdictReasonSuspicious": {
+    "message": "Lien suspect détecté"
   }
 }

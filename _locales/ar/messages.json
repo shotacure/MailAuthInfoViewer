@@ -114,6 +114,63 @@
     "message": "سلسلة الاستلام الموثقة: تعرض سلسلة التحقق المضافة من كل خادم بريد أثناء إعادة التوجيه، مع الحفاظ على نتائج المصادقة الأصلية."
   },
   "displayNameSpoofWarning": {
-    "message": "⚠️ يحتوي اسم العرض على عنوان بريد إلكتروني من نطاق مختلف (احتمال انتحال)"
+    "message": "⚠️ يحتوي الاسم المعروض على عنوان بريد إلكتروني من نطاق مختلف (تزوير محتمل)"
+  },
+  "cardTitleLinkSafety": {
+    "message": "تحليل أمان الروابط"
+  },
+  "tooltipLinkSafety": {
+    "message": "يحلل الروابط في نص البريد للكشف عن مؤشرات التصيد مثل عناوين URL المخادعة والمخططات الخطيرة والنطاقات المشبوهة."
+  },
+  "replyToMismatch": {
+    "message": "⚠️ عنوان Reply-To ينتمي لنطاق مختلف عن المرسل"
+  },
+  "linkDeceptiveText": {
+    "message": "رابط مخادع"
+  },
+  "linkDangerousScheme": {
+    "message": "تم اكتشاف مخطط رابط خطير"
+  },
+  "linkEmbeddedForm": {
+    "message": "نموذج HTML مضمن في نص البريد (مشبوه جداً)"
+  },
+  "linkIpAddress": {
+    "message": "الرابط يشير إلى عنوان IP بدلاً من اسم نطاق"
+  },
+  "linkIdnHomograph": {
+    "message": "تم اكتشاف اسم نطاق دولي (هجوم تماثلي محتمل)"
+  },
+  "linkShortener": {
+    "message": "تم اكتشاف مختصر URL (يخفي الوجهة الفعلية)"
+  },
+  "linkDomainListTitle": {
+    "message": "نطاقات الروابط في نص البريد:"
+  },
+  "verdictReasonPhishing": {
+    "message": "تم اكتشاف مؤشر تصيد"
+  },
+  "verdictReasonDmarcFail": {
+    "message": "DMARC غير ناجح"
+  },
+  "verdictReasonPolicyNone": {
+    "message": "سياسة DMARC: p=none"
+  },
+  "verdictReasonSpfFail": {
+    "message": "SPF غير ناجح"
+  },
+  "verdictReasonDkimFail": {
+    "message": "DKIM غير ناجح"
+  },
+  "verdictReasonAlignment": {
+    "message": "فشل محاذاة DMARC"
+  },
+  "verdictReasonDomainMismatch": {
+    "message": "النطاق غير متطابق"
+  },
+  "verdictReasonSpoofing": {
+    "message": "انتحال اسم العرض"
+  },
+  "verdictReasonSuspicious": {
+    "message": "تم اكتشاف رابط مشبوه"
   }
 }
