@@ -40,6 +40,9 @@
   "cardTitleRoute": {
     "message": "送達経路（送信元 → 受信先）"
   },
+  "cardTitleLinkSafety": {
+    "message": "リンク安全性分析"
+  },
   "tooltipSpf": {
     "message": "Sender Policy Framework: 送信サーバーがドメインのDNSレコードで許可されているかを検証します。"
   },
@@ -54,6 +57,9 @@
   },
   "tooltipRoute": {
     "message": "メールが送信元から受信箱に届くまでの経路を、各サーバー間の遅延時間とともに表示します。"
+  },
+  "tooltipLinkSafety": {
+    "message": "メール本文内のリンクを分析し、偽装URL・危険なスキーム・不審なドメインなどのフィッシング指標を検出します。"
   },
   "labelDisplayName": {
     "message": "表示名:"
@@ -117,5 +123,56 @@
   },
   "displayNameSpoofWarning": {
     "message": "⚠️ 表示名に別ドメインのメールアドレスが含まれています（なりすましの疑い）"
+  },
+  "replyToMismatch": {
+    "message": "⚠️ Reply-Toアドレスが送信者と異なるドメインです"
+  },
+  "linkDeceptiveText": {
+    "message": "リンク偽装"
+  },
+  "linkDangerousScheme": {
+    "message": "危険なリンクスキームが検出されました"
+  },
+  "linkEmbeddedForm": {
+    "message": "メール本文にHTMLフォームが埋め込まれています（非常に不審）"
+  },
+  "linkIpAddress": {
+    "message": "リンク先がドメイン名ではなくIPアドレスを指しています"
+  },
+  "linkIdnHomograph": {
+    "message": "国際化ドメイン名が検出されました（ホモグラフ攻撃の疑い）"
+  },
+  "linkShortener": {
+    "message": "短縮URLが検出されました（実際のリンク先が隠されています）"
+  },
+  "linkDomainListTitle": {
+    "message": "メール本文内のリンクドメイン一覧:"
+  },
+  "verdictReasonPhishing": {
+    "message": "フィッシング指標を検出"
+  },
+  "verdictReasonDmarcFail": {
+    "message": "DMARC未通過"
+  },
+  "verdictReasonPolicyNone": {
+    "message": "DMARCポリシー: p=none"
+  },
+  "verdictReasonSpfFail": {
+    "message": "SPF未通過"
+  },
+  "verdictReasonDkimFail": {
+    "message": "DKIM未通過"
+  },
+  "verdictReasonAlignment": {
+    "message": "DMARCアライメント不成立"
+  },
+  "verdictReasonDomainMismatch": {
+    "message": "ドメイン不一致"
+  },
+  "verdictReasonSpoofing": {
+    "message": "表示名なりすまし"
+  },
+  "verdictReasonSuspicious": {
+    "message": "不審なリンクを検出"
   }
 }

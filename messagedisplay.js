@@ -1,76 +1,62 @@
 // messagedisplay.js
+// Mail Auth Info Viewer — メッセージ表示画面に認証情報ダッシュボードを構築
+// Copyright (C) 2025 Shota (SHOWTIME)
+// License: GPL-3.0
 
 (async () => {
   try {
     // =========================================================
-    // ヘルパー関数
+    // i18n ヘルパー: browser.i18n.getMessage のショートハンド
     // =========================================================
+    const msg = (id) => browser.i18n.getMessage(id) || id;
 
-    // HTMLエスケープ用ヘルパー関数 (XSS対策: ATN審査必須要件)
+    // =========================================================
+    // HTML エスケープ: XSS防止のため、ユーザー由来文字列は必ず通す
+    // =========================================================
     const escapeHTML = (str) => {
       if (!str) return "";
-      return String(str)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#39;");
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
     };
 
-    // i18n ヘルパー: browser.i18n.getMessage() のラッパー (キーが見つからない場合はキー自体を返す)
-    const msg = (key) => {
-      try {
-        const translated = browser.i18n.getMessage(key);
-        return translated || key;
-      } catch (e) {
-        return key;
+    // =========================================================
+    // 日時パース: Received ヘッダのタイムスタンプを Date オブジェクトに変換
+    // =========================================================
+    const parseReceivedDate = (line) => {
+      const dateMatch = line.match(/;\s*(.+)$/);
+      if (dateMatch) {
+        const d = new Date(dateMatch[1].trim());
+        if (!isNaN(d.getTime())) return d;
       }
+      return null;
     };
 
-    // 日時文字列パース用ヘルパー関数
-    // Receivedヘッダの末尾（セミコロン以降）に記録されている日時文字列を抽出・Date化
-    const parseReceivedDate = (str) => {
-      const match = str.match(/;\s*([^;]+)$/);
-      if (!match) return null;
-      const d = new Date(match[1]);
-      return isNaN(d.getTime()) ? null : d;
-    };
+    // =========================================================
+    // IP アドレス判定ヘルパー群
+    // =========================================================
+    const isIPv4Like = (s) => /^\d{1,3}(\.\d{1,3}){3}$/.test(s);
+    const isIPv6Like = (s) => /^[a-fA-F0-9:]+$/.test(s) && s.includes(':');
 
-    // タイムスタンプの整形 (yyyy-MM-dd HH:mm:ss 形式)
-    const formatTimestamp = (date) => {
-      if (!date || isNaN(date.getTime())) return "--:--:--";
-      const pad = (n) => n.toString().padStart(2, '0');
-      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
-    };
-
-    // プライベートIP判定 (RFC 1918 / RFC 4193)
-    // 送達経路上のホップがローカルネットワーク内かインターネット経由かを判別する
+    // プライベートIPアドレス判定（内部/外部ネットワーク分類用）
     const isPrivateIP = (ip) => {
       if (!ip) return false;
-      // IPv4 プライベートアドレス範囲
-      if (/^10\./.test(ip)) return true;                      // 10.0.0.0/8
-      if (/^172\.(1[6-9]|2\d|3[01])\./.test(ip)) return true; // 172.16.0.0/12
-      if (/^192\.168\./.test(ip)) return true;                 // 192.168.0.0/16
-      if (/^127\./.test(ip)) return true;                      // 127.0.0.0/8 (ループバック)
-      if (/^169\.254\./.test(ip)) return true;                 // 169.254.0.0/16 (リンクローカル)
-      // IPv6 ユニークローカルアドレス・ループバック・リンクローカル
-      if (/^f[cd]/i.test(ip)) return true;                     // fc00::/7
-      if (/^::1$/.test(ip)) return true;                       // ::1
-      if (/^fe80:/i.test(ip)) return true;                     // fe80::/10 (リンクローカル)
-      return false;
+      if (ip.includes(':')) {
+        const lower = ip.toLowerCase();
+        return lower === '::1' || lower.startsWith('fe80:') || lower.startsWith('fc') || lower.startsWith('fd');
+      }
+      const parts = ip.split('.').map(Number);
+      if (parts.length !== 4) return false;
+      return (parts[0] === 10) ||
+             (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
+             (parts[0] === 192 && parts[1] === 168) ||
+             (parts[0] === 127);
     };
 
-    // Receivedヘッダ行からIPアドレスを抽出する
-    // "from hostname [1.2.3.4]" や "(1.2.3.4)" の形式に対応
+    // Received ヘッダの from 句からIPアドレスを抽出
     const extractIPFromReceived = (line) => {
       if (!line) return null;
-      // IPv4 形式のバリデーション (最低限 x.x.x.x のドット区切り)
-      const isIPv4Like = (s) => /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(s);
-      // IPv6 形式のバリデーション (コロンを含む16進数)
-      const isIPv6Like = (s) => /^[a-fA-F0-9:]+$/.test(s) && s.includes(':');
-
-      // 角括弧内の値 (例: [10.0.0.1], [2001:db8::1])
-      const bracketMatch = line.match(/\[([a-fA-F0-9.:]+)\]/);
+      // 角括弧内のIPv4/IPv6 (例: [192.168.1.1])
+      const bracketMatch = line.match(/\[([^\]]+)\]/);
       if (bracketMatch && (isIPv4Like(bracketMatch[1]) || isIPv6Like(bracketMatch[1]))) {
         return bracketMatch[1];
       }
@@ -163,6 +149,27 @@
         }
       }
 
+      // ■ Reply-To ドメイン不一致検知
+      // Reply-To が Header From と異なる組織ドメインの場合、
+      // フィッシングで返信先を攻撃者に誘導する手口の可能性がある
+      let isReplyToMismatch = false;
+      let replyToAddress = "";
+      const replyToRaw = headers["reply-to"]?.[0] || "";
+      if (replyToRaw) {
+        const replyToMatch = replyToRaw.match(/<([^>]+)>/);
+        replyToAddress = replyToMatch ? replyToMatch[1].trim() : replyToRaw.replace(/^<|>$/g, "").trim();
+        if (replyToAddress.includes('@')) {
+          const replyToDomain = replyToAddress.split('@')[1].toLowerCase();
+          const getOrgDomain = window.getOrganizationalDomain || ((d) => d);
+          const replyToOrgDomain = getOrgDomain(replyToDomain);
+          // Reply-To の組織ドメインが Header From と異なり、
+          // かつ Reply-To アドレスが Header From アドレスと完全一致でもない場合に警告
+          if (replyToOrgDomain !== headerOrgDomain && replyToAddress.toLowerCase() !== headerFromAddress.toLowerCase()) {
+            isReplyToMismatch = true;
+          }
+        }
+      }
+
       return {
         envelopeFrom,
         envelopeTo,
@@ -174,7 +181,9 @@
         envelopeOrgDomain,
         isDomainAligned,
         isMailingList,
-        isDisplayNameSpoofed
+        isDisplayNameSpoofed,
+        isReplyToMismatch,
+        replyToAddress
       };
     };
 
@@ -532,15 +541,194 @@
     };
 
     // =========================================================
-    // 5. determineSecurityStatus - 総合的なセキュリティ判定
+    // 5. parseMessageBody - MIME構造を走査してHTML本文を取得
     // =========================================================
-    const determineSecurityStatus = (authResults, isDomainAligned, envelopeFrom, isDisplayNameSpoofed) => {
+    // fullMessage.parts のツリーを再帰的に走査し、text/html パーツを優先的に取得する。
+    // HTML が見つからない場合は text/plain にフォールバックする。
+    const parseMessageBody = (fullMsg) => {
+      let htmlBody = "";
+      let textBody = "";
+
+      const walkParts = (parts) => {
+        if (!parts) return;
+        for (const part of parts) {
+          const ct = (part.contentType || "").toLowerCase();
+          if (ct === "text/html" && part.body && !htmlBody) {
+            htmlBody = part.body;
+          } else if (ct === "text/plain" && part.body && !textBody) {
+            textBody = part.body;
+          }
+          // multipart/* の子パーツを再帰走査
+          if (part.parts) walkParts(part.parts);
+        }
+      };
+
+      walkParts(fullMsg.parts);
+      return htmlBody || textBody || "";
+    };
+
+    // =========================================================
+    // 6. analyzeLinkSafety - メール本文のリンク安全性分析
+    // =========================================================
+    // メール本文のHTML/テキストを解析し、フィッシングの特徴を検出する。
+    // 検出項目:
+    //   [critical] リンクテキスト偽装、javascript:/data: URI、HTMLフォーム埋め込み
+    //   [suspicious] IPアドレスリンク、IDNホモグラフ、URLショートナー
+    //   [info] リンクドメイン一覧（Header Fromとの一致/不一致）
+    //   [info] Reply-To不一致（parseEnvelopeで検出済み、ここでは扱わない）
+    const analyzeLinkSafety = (bodyContent, headerOrgDomain) => {
+      const findings = [];   // { level: "critical"|"suspicious"|"info", type: string, detail: string }
+      const linkDomains = new Map(); // domain → { count, matchesFrom }
+      const deceptiveDomains = new Set(); // リンクテキスト偽装の実際のリンク先組織ドメイン
+
+      // フィッシングで多用される URL ショートナーサービスのドメインリスト
+      const URL_SHORTENERS = [
+        "bit.ly", "tinyurl.com", "t.co", "goo.gl", "ow.ly", "is.gd",
+        "buff.ly", "adf.ly", "bl.ink", "rb.gy", "cutt.ly", "shorturl.at",
+        "tiny.cc", "lnkd.in", "surl.li", "rebrand.ly", "v.gd", "qr.ae",
+        "bc.vc", "yourls.org"
+      ];
+
+      if (!bodyContent) return { findings, linkDomains, deceptiveDomains };
+
+      // DOMParser で本文HTMLをパースし、リンクとフォームを解析する
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(bodyContent, "text/html");
+      const getOrgDomain = window.getOrganizationalDomain || ((d) => d);
+
+      // ■ フォーム検知 (項目3): メール内の <form> 要素は極めて異常
+      const forms = doc.querySelectorAll("form");
+      if (forms.length > 0) {
+        findings.push({
+          level: "critical",
+          type: "embedded_form",
+          detail: msg("linkEmbeddedForm")
+        });
+      }
+
+      // ■ リンク解析: 全 <a href="..."> を走査
+      const anchors = doc.querySelectorAll("a[href]");
+      for (const a of anchors) {
+        const href = (a.getAttribute("href") || "").trim();
+        if (!href || href.startsWith("#") || href.startsWith("mailto:")) continue;
+
+        // --- 項目2: javascript: / data: URI 検知 ---
+        const hrefLower = href.toLowerCase().replace(/\s/g, '');
+        if (hrefLower.startsWith("javascript:") || hrefLower.startsWith("data:")) {
+          findings.push({
+            level: "critical",
+            type: "dangerous_scheme",
+            detail: msg("linkDangerousScheme") + ` (${escapeHTML(href.substring(0, 30))}...)`
+          });
+          continue;
+        }
+
+        // URL からホスト名を抽出
+        let linkHost = "";
+        try {
+          const url = new URL(href, "http://dummy.invalid");
+          linkHost = url.hostname.toLowerCase();
+        } catch {
+          continue; // パース不能なURLはスキップ
+        }
+
+        if (!linkHost || linkHost === "dummy.invalid") continue;
+
+        // --- 項目1: リンクテキスト偽装検知 ---
+        // 表示テキストがURLの形式を取っており、href先ドメインと異なる場合はほぼ確実にフィッシング
+        const linkText = (a.textContent || "").trim();
+        const urlInText = linkText.match(/^https?:\/\/([^\/\s?#]+)/i);
+        if (urlInText) {
+          const displayHost = urlInText[1].toLowerCase();
+          const displayOrgDomain = getOrgDomain(displayHost);
+          const hrefOrgDomain = getOrgDomain(linkHost);
+          if (displayOrgDomain !== hrefOrgDomain) {
+            findings.push({
+              level: "critical",
+              type: "deceptive_text",
+              detail: msg("linkDeceptiveText")
+            });
+            // 偽装リンクの実際のリンク先ドメインを記録し、ドメイン一覧で危険表示に使う
+            deceptiveDomains.add(hrefOrgDomain);
+          }
+        }
+
+        // --- 項目4: IPアドレス直指定リンク検知 ---
+        if (isIPv4Like(linkHost) || isIPv6Like(linkHost) || linkHost.startsWith("[")) {
+          findings.push({
+            level: "suspicious",
+            type: "ip_address_link",
+            detail: msg("linkIpAddress") + ` (${escapeHTML(linkHost)})`
+          });
+        }
+
+        // --- 項目5: IDNホモグラフ攻撃検知 ---
+        // Punycode (xn--) を含むドメインは、見た目が正規ドメインに酷似した
+        // Unicode文字を使ったなりすましの可能性がある
+        if (linkHost.includes("xn--")) {
+          findings.push({
+            level: "suspicious",
+            type: "idn_homograph",
+            detail: msg("linkIdnHomograph") + ` (${escapeHTML(linkHost)})`
+          });
+        }
+
+        // --- 項目6: URLショートナー検知 ---
+        const linkOrgDomain = getOrgDomain(linkHost);
+        if (URL_SHORTENERS.some(s => linkHost === s || linkHost.endsWith("." + s))) {
+          findings.push({
+            level: "suspicious",
+            type: "url_shortener",
+            detail: msg("linkShortener") + ` (${escapeHTML(linkHost)})`
+          });
+        }
+
+        // --- 項目7: リンクドメイン一覧収集 ---
+        // 全リンクのドメインを組織ドメインレベルで集計し、Header Fromとの一致/不一致を記録
+        const matchesFrom = (linkOrgDomain === headerOrgDomain);
+        if (linkDomains.has(linkOrgDomain)) {
+          linkDomains.get(linkOrgDomain).count++;
+        } else {
+          linkDomains.set(linkOrgDomain, { count: 1, matchesFrom });
+        }
+      }
+
+      // findings の重複排除（同じ type + detail は1回だけ）
+      const uniqueFindings = [];
+      const seenFindings = new Set();
+      for (const f of findings) {
+        const key = `${f.type}|${f.detail}`;
+        if (!seenFindings.has(key)) {
+          seenFindings.add(key);
+          uniqueFindings.push(f);
+        }
+      }
+
+      return { findings: uniqueFindings, linkDomains, deceptiveDomains };
+    };
+
+    // =========================================================
+    // 7. determineSecurityStatus - 総合的なセキュリティ判定
+    // =========================================================
+    // 認証結果・アライメント・フィッシング指標を総合し、バッジ色と判定理由を決定する。
+    // グリーン条件:
+    //   SPF pass, DKIM pass, DMARC pass (policy ≠ none),
+    //   DMARCアライメント成立, 表示名なりすましなし, フィッシング指標なし
+    // エンベロープドメイン不一致: DMARC pass かつアライメント成立時はグリーンを阻害しない
+    const determineSecurityStatus = (authResults, isDomainAligned, envelopeFrom, isDisplayNameSpoofed, linkSafety) => {
       const isSpfOk = authResults.spf.status === "pass";
       const isDkimOk = authResults.dkim.status === "pass";
       // DMARC は pass のみを合格とする。
       // status=none（DMARCレコード未設定）は管理者がレコードを追加すれば解決できるため、
       // 「設定不備」として警告対象にする。
       const isDmarcOk = authResults.dmarc.status === "pass";
+
+      // ■ DMARCポリシーの厳格性チェック
+      // p=none は「DMARCレコードはあるが認証失敗でも何もしない」という設定。
+      // 管理者が p=quarantine または p=reject に変更すれば解決できる不備のため、
+      // グリーン判定の条件から除外する。
+      const dmarcPolicy = authResults.dmarc.detail?.policy || "";
+      const isDmarcPolicyStrict = isDmarcOk && dmarcPolicy !== "" && dmarcPolicy !== "none";
 
       // ■ DMARCアライメント判定 (RFC 7489)
       // SPFドメイン(smtp.mailfrom)またはDKIM署名ドメイン(header.d)の
@@ -549,24 +737,48 @@
       const al = authResults.alignment || {};
       const isDmarcAligned = !!(al.spfAligned || al.dkimAligned);
 
-      // ■ 総合判定: すべての認証・アライメント・整合性チェックをクリアした場合のみ「安全」
-      // - SPF pass, DKIM pass, DMARC pass (レコード設定済み)
-      // - エンベロープドメイン一致, DMARCアライメント成立
-      // - 表示名なりすましなし
-      const isSecure = isSpfOk && isDkimOk && isDmarcOk &&
-                       isDomainAligned && isDmarcAligned && !isDisplayNameSpoofed;
+      // ■ フィッシング指標の集約
+      const hasCriticalPhishing = linkSafety?.findings?.some(f => f.level === "critical") || false;
+      const hasSuspiciousPhishing = linkSafety?.findings?.some(f => f.level === "suspicious") || false;
+
+      // ■ 判定理由の収集: なぜグリーンにならないか / なぜレッドなのかを記録
+      const verdictReasons = [];
+
+      // ■ 総合判定
+      // DMARCがpassかつアライメント成立していれば、エンベロープドメイン不一致はグリーンを阻害しない
+      // （SendGrid等の正当な外部配信サービス利用パターンに対応）
+      const domainCheckOk = isDmarcOk && isDmarcAligned ? true : isDomainAligned;
+
+      const isSecure = isSpfOk && isDkimOk && isDmarcPolicyStrict &&
+                       domainCheckOk && isDmarcAligned &&
+                       !isDisplayNameSpoofed && !hasCriticalPhishing && !hasSuspiciousPhishing;
+
+      // 判定理由を記録
+      if (!isSpfOk) verdictReasons.push("spf_not_pass");
+      if (!isDkimOk) verdictReasons.push("dkim_not_pass");
+      if (!isDmarcOk) verdictReasons.push("dmarc_not_pass");
+      if (isDmarcOk && !isDmarcPolicyStrict) verdictReasons.push("dmarc_policy_none");
+      if (!isDmarcAligned) verdictReasons.push("dmarc_not_aligned");
+      if (!domainCheckOk) verdictReasons.push("domain_not_aligned");
+      if (isDisplayNameSpoofed) verdictReasons.push("display_name_spoofed");
+      if (hasCriticalPhishing) verdictReasons.push("phishing_critical");
+      if (hasSuspiciousPhishing) verdictReasons.push("phishing_suspicious");
 
       let badgeClass = "warning";
       let badgeText = msg("badgeUnverified");
 
-      if (isSecure) {
+      if (hasCriticalPhishing) {
+        // フィッシングの確度が極めて高い指標が検出された場合は、認証結果に関わらずレッド
+        badgeClass = "danger";
+        badgeText = msg("badgeAuthFailed");
+      } else if (isSecure) {
         badgeClass = "secure";
         badgeText = msg("badgeAuthPass");
       } else if (authResults.spf.status === "fail" || authResults.dkim.status === "fail" || authResults.dmarc.status === "fail") {
         badgeClass = "danger";
         badgeText = msg("badgeAuthFailed");
-      } else if ((isSpfOk || isDkimOk) && (!isDomainAligned || !isDmarcAligned || !isDmarcOk || isDisplayNameSpoofed) && envelopeFrom !== "Unknown") {
-        // 認証は通っているがドメイン不一致・アライメント不成立・DMARC未設定・表示名なりすまし
+      } else if ((isSpfOk || isDkimOk) && envelopeFrom !== "Unknown") {
+        // 認証は通っているがグリーン条件を満たさない
         badgeClass = "warning";
         badgeText = msg("badgeAuthPassWarning");
       }
@@ -577,6 +789,10 @@
         isDkimOk,
         isDmarcOk,
         isDmarcAligned,
+        isDmarcPolicyStrict,
+        hasCriticalPhishing,
+        hasSuspiciousPhishing,
+        verdictReasons,
         badgeClass,
         badgeText,
         shouldAutoExpand: badgeClass !== "secure"
@@ -584,9 +800,9 @@
     };
 
     // =========================================================
-    // 6. buildUI - UI構築 (HTML/CSS) — Shadow DOM・i18n・ダークモード完全対応
+    // 8. buildUI - UI構築 (HTML/CSS) — Shadow DOM・i18n・ダークモード完全対応
     // =========================================================
-    const buildUI = (envelope, authResults, routeHops, security, arcChain) => {
+    const buildUI = (envelope, authResults, routeHops, security, arcChain, linkSafety) => {
 
       // --- スタイル定義 (CSS変数によるダークモード完全対応) ---
       const style = document.createElement('style');
@@ -718,41 +934,47 @@
           background-color: var(--maiv-mailing-list-bg);
           color: var(--maiv-mailing-list-text);
         }
-
-        .maiv-toggle-icon { margin-left: 15px; margin-right: 15px; color: var(--maiv-text-faint); font-size: 12px; transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1); }
-        .maiv-toggle-icon.expanded { transform: rotate(180deg); }
-        .maiv-link { color: var(--maiv-link-color); text-decoration: none; }
-        .maiv-link:hover { text-decoration: underline; color: var(--maiv-link-hover); }
-
-        .maiv-body-wrapper {
-          display: grid;
-          grid-template-rows: 0fr;
-          transition: grid-template-rows 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        /* 判定理由サマリー: バッジ横に表示する小さなタグ */
+        .maiv-verdict-reason {
+          font-size: 10px; font-weight: bold; margin-left: 8px;
+          padding: 2px 8px; border-radius: 10px;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 350px;
         }
-        .maiv-body-wrapper.expanded { grid-template-rows: 1fr; }
-        .maiv-body-inner { overflow: hidden; }
-        .maiv-body-content { padding-top: 12px; }
+        .maiv-verdict-reason.reason-warning {
+          background-color: var(--maiv-align-warn-bg); color: var(--maiv-align-warn-text);
+        }
+        .maiv-verdict-reason.reason-danger {
+          background-color: var(--maiv-align-ng-bg); color: var(--maiv-align-ng-text);
+        }
 
-        .maiv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 10px; }
-        .maiv-card { background: var(--maiv-card-bg); border: 1px solid var(--maiv-card-border); border-radius: 4px; padding: 8px; }
-        .maiv-card-title { font-weight: bold; color: var(--maiv-card-title-color); margin-bottom: 6px; font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--maiv-card-title-border); padding-bottom: 4px; }
-        .maiv-status-row { display: flex; align-items: center; gap: 6px; }
-        .maiv-status-icon { font-size: 14px; }
+        .maiv-toggle-icon { margin-left: 15px; margin-right: 15px; color: var(--maiv-text-faint); transition: transform 0.3s; display: inline-block; }
+        .maiv-toggle-icon.expanded { transform: rotate(180deg); }
 
-        /* DKIM 個別署名リスト: 複数署名がある場合に各署名の結果を表示 */
-        .maiv-dkim-list { margin-top: 6px; font-size: 11px; }
-        .maiv-dkim-item { display: flex; align-items: center; gap: 4px; margin-top: 3px; color: var(--maiv-text-muted); }
+        .maiv-link { text-decoration: none; color: var(--maiv-link-color); transition: color 0.2s; }
+        .maiv-link:hover { color: var(--maiv-link-hover); }
 
-        /* SPF/DKIM アライメント: 各認証カード内に表示 */
-        .maiv-align-item { display: flex; align-items: center; gap: 4px; margin-top: 3px; }
-        .maiv-align-pass { color: var(--maiv-pass); }
-        .maiv-align-fail { color: var(--maiv-fail); }
+        .maiv-body-wrapper { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
+        .maiv-body-wrapper.expanded { max-height: 3000px; transition: max-height 0.5s ease-in; }
+        .maiv-body-inner { padding-top: 10px; }
+        .maiv-body-content { display: flex; flex-direction: column; gap: 10px; }
 
-        .maiv-route-list { background: var(--maiv-card-bg); border: 1px solid var(--maiv-card-border); border-radius: 4px; padding: 8px; font-family: monospace; font-size: 11px; overflow-x: auto; }
-        .maiv-route-table { width: 100%; border-collapse: collapse; }
-        .maiv-route-table td { padding: 4px; border-bottom: 1px solid var(--maiv-route-border); vertical-align: middle; }
+        /* 上段: アドレス(2) / SPF(1) / DKIM(1) / DMARC(1) */
+        .maiv-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 10px; }
+        /* 下段: 送達経路(2) / ARCチェーン(2) / リンク安全性(1) */
+        .maiv-grid-bottom { display: grid; grid-template-columns: 2fr 2fr 1fr; gap: 10px; }
+        /* データなしカードの空状態表示 */
+        .maiv-empty-state { color: var(--maiv-text-faint); font-size: 11px; font-style: italic; padding: 8px 0; }
+        .maiv-card {
+          background-color: var(--maiv-card-bg);
+          border: 1px solid var(--maiv-card-border);
+          border-radius: 6px; padding: 10px;
+        }
+        .maiv-card-title { font-size: 11px; font-weight: bold; color: var(--maiv-card-title-color); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid var(--maiv-card-title-border); }
+        .maiv-status-row { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+        .maiv-status-icon { font-size: 16px; }
 
-        /* 送達経路テーブルの行スタイル (ダークモード完全対応) */
+        .maiv-route-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 4px; }
+        .maiv-route-table td { padding: 4px 6px; border-bottom: 1px solid var(--maiv-route-border); vertical-align: top; }
         .maiv-route-origin { background-color: var(--maiv-route-origin-bg); font-weight: bold; color: var(--maiv-text-strongest); border-left: 3px solid #2196f3; }
         .maiv-route-hop { color: var(--maiv-text-secondary); }
         .maiv-route-by { color: var(--maiv-text-faint); font-size: 0.9em; font-weight: normal; }
@@ -772,13 +994,13 @@
         .align-ng { background-color: var(--maiv-align-ng-bg); color: var(--maiv-align-ng-text); font-weight: bold; padding: 6px; border-radius: 4px; font-size: 12px; margin-top: 6px; display: block; }
         .align-warn { background-color: var(--maiv-align-warn-bg); color: var(--maiv-align-warn-text); font-weight: bold; padding: 6px; border-radius: 4px; font-size: 12px; margin-top: 6px; display: block; }
 
-        .address-row { margin-bottom: 6px; display: flex; align-items: center; }
-        .address-label { color: var(--maiv-text-muted); width: 110px; display: inline-block; font-size: 11px; text-transform: uppercase; flex-shrink: 0; }
+        .address-row { margin-bottom: 4px; display: flex; align-items: center; }
+        .address-label { color: var(--maiv-text-muted); width: 85px; display: inline-block; font-size: 10px; text-transform: uppercase; flex-shrink: 0; }
         .address-highlight {
-          font-size: 13px; font-weight: bold; color: var(--maiv-text-strongest);
-          background-color: var(--maiv-highlight-bg); padding: 4px 8px; border-radius: 3px;
+          font-size: 11px; font-weight: bold; color: var(--maiv-text-strongest);
+          background-color: var(--maiv-highlight-bg); padding: 3px 6px; border-radius: 3px;
           border: 1px solid var(--maiv-highlight-border); word-break: break-all;
-          direction: ltr; unicode-bidi: embed;
+          direction: ltr; unicode-bidi: embed; min-width: 0;
         }
 
         .maiv-detail-text { font-size: 11px; color: var(--maiv-text-muted); margin-top: 4px; }
@@ -791,8 +1013,7 @@
         .maiv-policy-none { background-color: var(--maiv-policy-none-bg); color: var(--maiv-policy-none-text); }
 
         /* ARC チェーン表示 */
-        .maiv-arc-list { background: var(--maiv-card-bg); border: 1px solid var(--maiv-card-border); border-radius: 4px; padding: 8px; margin-bottom: 10px; font-size: 11px; }
-        .maiv-arc-table { width: 100%; border-collapse: collapse; }
+        .maiv-arc-table { width: 100%; border-collapse: collapse; font-size: 11px; }
         .maiv-arc-table td { padding: 3px 6px; border-bottom: 1px solid var(--maiv-route-border); }
         .maiv-arc-chain-num { font-weight: bold; color: var(--maiv-text-strong); width: 30px; text-align: center; }
         .maiv-arc-domain { color: var(--maiv-text-secondary); }
@@ -800,6 +1021,24 @@
 
         /* IPタイプ表示: 送達経路上の内部/外部ネットワーク判定 */
         .maiv-ip-tag { font-size: 10px; margin-left: 4px; }
+
+        /* LINK SAFETY カード: フィッシング検知結果表示 */
+        .maiv-finding-critical {
+          background-color: var(--maiv-align-ng-bg); color: var(--maiv-align-ng-text);
+          font-weight: bold; padding: 5px 8px; border-radius: 4px; font-size: 11px;
+          margin-bottom: 4px;
+        }
+        .maiv-finding-suspicious {
+          background-color: var(--maiv-align-warn-bg); color: var(--maiv-align-warn-text);
+          font-weight: bold; padding: 5px 8px; border-radius: 4px; font-size: 11px;
+          margin-bottom: 4px;
+        }
+        .maiv-link-domain-list { font-size: 11px; margin-top: 6px; }
+        .maiv-link-domain-item { padding: 2px 0; display: flex; align-items: center; gap: 6px; }
+        .maiv-link-domain-match { color: var(--maiv-pass); }
+        .maiv-link-domain-mismatch { color: var(--maiv-align-warn-text); }
+        /* リンクテキスト偽装の実際のリンク先ドメイン: 赤色太字で危険性を強調 */
+        .maiv-link-domain-danger { color: var(--maiv-fail); font-weight: bold; }
 
       `;
 
@@ -812,11 +1051,11 @@
       let mailingListTag = "";
 
       if (security.isSecure) {
+        // グリーン判定時はドメイン名のみ表示
         headerDomainText = escapeHTML(envelope.headerFromDomain);
       } else if (!envelope.isDomainAligned && (security.isSpfOk || security.isDkimOk) && envelope.envelopeFrom !== "Unknown") {
-        // 認証は通っているがドメイン不一致の場合のみ DOMAIN MISMATCH を表示
-        // UNVERIFIED（認証情報なし）の場合は表示しない
-        headerDomainText = `${escapeHTML(envelope.envelopeFromDomain)} <span class="maiv-header-mismatch">${escapeHTML(msg("domainMismatch"))}</span>`;
+        // ドメイン不一致時もドメイン名のみ表示（詳細はアドレスカード内の警告で確認可能）
+        headerDomainText = escapeHTML(envelope.envelopeFromDomain);
       }
 
       // メーリングリスト経由の場合、ヘッダにタグを追加
@@ -824,12 +1063,46 @@
         mailingListTag = `<span class="maiv-mailing-list-tag">📋 ${escapeHTML(msg("mailingListVia"))}</span>`;
       }
 
+      // --- 判定理由サマリー: バッジの横に1行で「なぜこの判定か」を表示 ---
+      let verdictReasonText = "";
+      if (!security.isSecure && security.verdictReasons.length > 0) {
+        // 最も重要な理由を1つ選んで表示する（優先順位順）
+        const reasonMap = {
+          "phishing_critical": msg("verdictReasonPhishing"),
+          "dmarc_not_pass": msg("verdictReasonDmarcFail"),
+          "dmarc_policy_none": msg("verdictReasonPolicyNone"),
+          "spf_not_pass": msg("verdictReasonSpfFail"),
+          "dkim_not_pass": msg("verdictReasonDkimFail"),
+          "dmarc_not_aligned": msg("verdictReasonAlignment"),
+          "domain_not_aligned": msg("verdictReasonDomainMismatch"),
+          "display_name_spoofed": msg("verdictReasonSpoofing"),
+          "phishing_suspicious": msg("verdictReasonSuspicious")
+        };
+        const priorityOrder = [
+          "phishing_critical", "dmarc_not_pass", "dmarc_policy_none",
+          "spf_not_pass", "dkim_not_pass", "dmarc_not_aligned",
+          "domain_not_aligned", "display_name_spoofed", "phishing_suspicious"
+        ];
+        for (const key of priorityOrder) {
+          if (security.verdictReasons.includes(key) && reasonMap[key]) {
+            verdictReasonText = reasonMap[key];
+            break;
+          }
+        }
+      }
+      const verdictReasonHTML = (() => {
+        if (!verdictReasonText) return "";
+        const reasonClass = security.badgeClass === "danger" ? "reason-danger" : "reason-warning";
+        return `<span class="maiv-verdict-reason ${reasonClass}">${escapeHTML(verdictReasonText)}</span>`;
+      })();
+
       const headerHTML = `
         <div class="maiv-header" id="maiv-header-toggle" title="${escapeHTML(msg("toggleDetails"))}"
              aria-expanded="${security.shouldAutoExpand}" aria-controls="maiv-body-wrapper">
           <span class="maiv-badge ${security.badgeClass}">${security.badgeText}</span>
           <span class="maiv-header-domain">${headerDomainText}</span>
           ${mailingListTag}
+          ${verdictReasonHTML}
           <span style="flex-grow:1;"></span>
           <span class="maiv-toggle-icon" id="maiv-toggle-icon" aria-hidden="true">▼</span>
           <a href="https://github.com/shotacure/MailAuthInfoViewer" class="maiv-link" target="_blank"><small>Mail Auth Info Viewer</small></a>
@@ -949,127 +1222,115 @@
       if (!envelope.isDomainAligned && envelope.envelopeFrom !== "Unknown") {
         if (envelope.isMailingList) {
           // メーリングリスト経由: 不一致の原因が転送である可能性を明示
-          alignmentWarningHTML = `<div class="align-warn">📋 ${escapeHTML(msg("mailingListNote"))}</div>`;
+          alignmentWarningHTML += `<div class="align-warn">📋 ${escapeHTML(msg("mailingListNote"))}</div>`;
         } else if (security.isSpfOk || security.isDkimOk) {
-          alignmentWarningHTML = `<div class="align-warn">${escapeHTML(msg("alignMismatch"))}</div>`;
+          // 認証は通っている: DMARCアライメント成立時は情報提供レベル、非成立時は警告
+          alignmentWarningHTML += `<div class="align-warn">${escapeHTML(msg("alignMismatch"))}</div>`;
         } else {
-          alignmentWarningHTML = `<div class="align-ng">${escapeHTML(msg("alignMismatch"))}</div>`;
+          alignmentWarningHTML += `<div class="align-ng">${escapeHTML(msg("alignMismatch"))}</div>`;
         }
       } else if (envelope.isDomainAligned && security.isSecure) {
-        alignmentWarningHTML = `<div class="align-ok">${escapeHTML(msg("alignOk"))}</div>`;
+        alignmentWarningHTML += `<div class="align-ok">${escapeHTML(msg("alignOk"))}</div>`;
       } else if (envelope.isDomainAligned && !security.isSecure) {
-        alignmentWarningHTML = `<div class="align-warn">${escapeHTML(msg("alignNotAuth"))}</div>`;
+        alignmentWarningHTML += `<div class="align-warn">${escapeHTML(msg("alignNotAuth"))}</div>`;
+      }
+
+      // Reply-To 不一致警告: フィッシングで返信先を攻撃者に誘導する手口の可能性
+      if (envelope.isReplyToMismatch) {
+        alignmentWarningHTML += `<div class="align-warn">${escapeHTML(msg("replyToMismatch"))} (${escapeHTML(envelope.replyToAddress)})</div>`;
       }
 
       const displayNameHTML = envelope.headerFromName
-        ? `<span class="address-highlight">${escapeHTML(envelope.headerFromName)}</span>`
-        : `<span style="color:var(--maiv-text-faint); font-weight:normal;">${escapeHTML(msg("labelNone"))}</span>`;
-
-      // アドレスカード: 送信者アドレスの比較とドメインアライメント警告を表示
+        ? `<div class="address-row"><span class="address-label">${escapeHTML(msg("labelDisplayName"))}</span><span class="address-highlight">${escapeHTML(envelope.headerFromName)}</span></div>`
+        : "";
+      // エンベロープTo: 取得できない場合 (Unknown) は非表示
+      const envelopeToHTML = envelope.envelopeTo && envelope.envelopeTo !== "Unknown"
+        ? `<div class="address-row"><span class="address-label">${escapeHTML(msg("labelEnvelopeTo"))}</span><span class="address-highlight">${escapeHTML(envelope.envelopeTo)}</span></div>`
+        : "";
       const addressHTML = `
-        <div class="maiv-card" style="grid-column: span 2; border-left: 4px solid #2196f3;">
+        <div class="maiv-card">
           <div class="maiv-card-title" title="${escapeHTML(msg("tooltipAddress"))}">${escapeHTML(msg("cardTitleAddress"))}</div>
-          <div style="font-size:11px; margin-top: 8px;">
-            <div class="address-row">
-              <span class="address-label">${escapeHTML(msg("labelDisplayName"))}</span>
-              ${displayNameHTML}
-            </div>
-            <div class="address-row">
-              <span class="address-label">${escapeHTML(msg("labelHeaderFrom"))}</span>
-              <span class="address-highlight">${escapeHTML(envelope.headerFromAddress)}</span>
-            </div>
-            <div class="address-row">
-              <span class="address-label">${escapeHTML(msg("labelEnvelopeFrom"))}</span>
-              <span class="address-highlight">${escapeHTML(envelope.envelopeFrom)}</span>
-            </div>
-            ${alignmentWarningHTML}
-          </div>
-        </div>
-      `;
-
-      // --- 送達経路テーブル (CSSクラスによるダークモード完全対応) ---
-      let routeRows = "";
-      let prevDate = null;
-
-      routeHops.forEach((hop, idx) => {
-        const isFirst = idx === 0;
-
-        let delayText = "--";
-        let delayClass = "maiv-delay-none";
-
-        if (hop.date && prevDate && !isNaN(hop.date.getTime()) && !isNaN(prevDate.getTime())) {
-          const diffMs = hop.date - prevDate;
-          const diffSec = Math.floor(diffMs / 1000);
-          // サーバー間の時刻ずれにより負の値になる場合がある
-          if (diffSec < 0) {
-            delayText = `~${Math.abs(diffSec)}s`;
-            delayClass = "maiv-delay-none";
-          } else if (diffSec < 60) {
-            delayText = `+${diffSec}s`;
-            delayClass = "maiv-delay-normal";
-          } else {
-            const min = Math.floor(diffSec / 60);
-            const sec = diffSec % 60;
-            delayText = `+${min}m${sec}s`;
-            delayClass = diffSec > 300 ? "maiv-delay-danger" : "maiv-delay-warning";
-          }
-        } else if (isFirst) {
-          delayText = msg("labelOrigin");
-          delayClass = "maiv-delay-origin";
-        }
-        prevDate = hop.date;
-
-        const hostLabel = hop.from || 'unknown';
-        const byLabel = hop.by ? `(by ${hop.by})` : '';
-        const timeStr = formatTimestamp(hop.date);
-        const rowClass = isFirst ? "maiv-route-origin" : "maiv-route-hop";
-
-        // IPアドレスの内部/外部ネットワーク判定マーカー
-        // ツールチップに実際のIPアドレスとネットワーク種別を表示
-        const ipTag = hop.ip
-          ? `<span class="maiv-ip-tag" title="${escapeHTML(hop.ip)} (${hop.isInternal ? 'Internal' : 'External'})">${hop.isInternal ? '🏠' : '🌐'}</span>`
-          : '';
-
-        routeRows += `
-          <tr class="${rowClass}">
-            <td class="maiv-route-delay ${delayClass}">${delayText}</td>
-            <td>
-               <div>${escapeHTML(hostLabel)} ${isFirst ? '🚀' : ''}${ipTag}</div>
-               <div class="maiv-route-by">${escapeHTML(byLabel)}</div>
-            </td>
-            <td class="maiv-route-time">${timeStr}</td>
-          </tr>
-        `;
-      });
-
-      // 送達経路セクション内に受信先アドレス (Envelope-To) を表示
-      // 送達経路は「送信元→受信先」の流れを示すため、受信先はここが自然な位置
-      // ただし情報が取得できなかった場合は表示しない
-      const envelopeToHTML = (envelope.envelopeTo && envelope.envelopeTo !== "Unknown") ? `
-        <div style="font-size:11px; margin: 6px 0 8px 0; display:flex; align-items:center;">
-          <span class="address-label" style="width:auto; margin-right:8px;">${escapeHTML(msg("labelEnvelopeTo"))}</span>
-          <span class="address-highlight">${escapeHTML(envelope.envelopeTo)}</span>
-        </div>
-      ` : '';
-
-      const routeHTML = `
-        <div class="maiv-route-list">
-          <div class="maiv-card-title" title="${escapeHTML(msg("tooltipRoute"))}">${escapeHTML(msg("cardTitleRoute"))}</div>
+          ${displayNameHTML}
+          <div class="address-row"><span class="address-label">${escapeHTML(msg("labelHeaderFrom"))}</span><span class="address-highlight">${escapeHTML(envelope.headerFromAddress)}</span></div>
+          <div class="address-row"><span class="address-label">${escapeHTML(msg("labelEnvelopeFrom"))}</span><span class="address-highlight">${escapeHTML(envelope.envelopeFrom)}</span></div>
           ${envelopeToHTML}
-          <table class="maiv-route-table">
-            ${routeRows}
-          </table>
+          ${alignmentWarningHTML}
         </div>
       `;
 
-      // --- ARC チェーン表示 (RFC 8617) ---
-      // メール転送時に各中継MTAが付与するARC検証チェーンを可視化する。
-      // チェーンが存在しない場合は表示しない。
-      let arcHTML = "";
-      if (arcChain && arcChain.length > 0) {
+      // --- 送達経路表示（常時カード表示、データなし時は空状態） ---
+      let routeContentHTML = "";
+      if (routeHops.length > 0) {
+        let routeRows = "";
+        for (let i = 0; i < routeHops.length; i++) {
+          const hop = routeHops[i];
+          const isFirst = (i === 0);
+
+          // 前ホップとの時間差を計算して遅延を表示
+          let delayStr = "";
+          let delayClass = "maiv-delay-none";
+          if (isFirst) {
+            delayStr = "🚀";
+            delayClass = "maiv-delay-origin";
+          } else if (hop.date && routeHops[i - 1].date) {
+            const diffMs = hop.date - routeHops[i - 1].date;
+            const diffSec = Math.round(diffMs / 1000);
+            if (diffSec < 0) { delayStr = `${diffSec}s`; delayClass = "maiv-delay-warning"; }
+            else if (diffSec < 5) { delayStr = `${diffSec}s`; delayClass = "maiv-delay-normal"; }
+            else if (diffSec < 30) { delayStr = `${diffSec}s`; delayClass = "maiv-delay-warning"; }
+            else { delayStr = `${diffSec}s`; delayClass = "maiv-delay-danger"; }
+          }
+
+          // from/by のホスト名を表示用に整形
+          const fromDisplay = hop.from || "";
+          const byDisplay = hop.by ? ` <span class="maiv-route-by">→ ${escapeHTML(hop.by)}</span>` : "";
+
+          // IPアドレスタイプ (内部/外部) をアイコンとツールチップで表示
+          let ipTag = "";
+          if (hop.ip) {
+            const ipIcon = hop.isInternal ? "🏠" : "🌐";
+            ipTag = `<span class="maiv-ip-tag" title="${escapeHTML(hop.ip)}">${ipIcon}</span>`;
+          }
+
+          const rowClass = isFirst ? "maiv-route-origin" : "maiv-route-hop";
+          const timeDisplay = hop.date ? hop.date.toLocaleTimeString() : "";
+          const label = isFirst ? `${msg("labelOrigin")} 🚀` : `#${i + 1}`;
+
+          routeRows += `
+            <tr class="${rowClass}">
+              <td class="maiv-route-delay"><span class="${delayClass}">${delayStr}</span></td>
+              <td>${escapeHTML(label)} ${ipTag}${byDisplay}</td>
+              <td class="maiv-route-time">${escapeHTML(timeDisplay)}</td>
+            </tr>
+          `;
+        }
+
+        // Envelope-To を末尾行に追加（取得できない場合は省略）
+        if (envelope.envelopeTo && envelope.envelopeTo !== "Unknown") {
+          routeRows += `
+            <tr class="maiv-route-hop">
+              <td class="maiv-route-delay"><span class="maiv-delay-none">📬</span></td>
+              <td>${escapeHTML(msg("labelEnvelopeTo"))}: ${escapeHTML(envelope.envelopeTo)}</td>
+              <td class="maiv-route-time"></td>
+            </tr>
+          `;
+        }
+        routeContentHTML = `<table class="maiv-route-table">${routeRows}</table>`;
+      } else {
+        routeContentHTML = `<div class="maiv-empty-state">${escapeHTML(msg("labelNone"))}</div>`;
+      }
+      const routeHTML = `
+        <div class="maiv-card">
+          <div class="maiv-card-title" title="${escapeHTML(msg("tooltipRoute"))}">${escapeHTML(msg("cardTitleRoute"))}</div>
+          ${routeContentHTML}
+        </div>
+      `;
+
+      // --- ARC チェーン表示（常時カード表示、データなし時は空状態） ---
+      let arcContentHTML = "";
+      if (arcChain.length > 0) {
         let arcRows = "";
         for (const chain of arcChain) {
-          // cv=none は最初のチェーン(i=1)で前段が存在しない場合の正常値 (RFC 8617)
           const cvIcon = (chain.cv === "pass" || chain.cv === "none") ? "✅" : (chain.cv === "fail" ? "❌" : "⚠️");
           const cvClass = (chain.cv === "pass" || chain.cv === "none") ? "status-pass" : (chain.cv === "fail" ? "status-fail" : "status-none");
           arcRows += `
@@ -1081,15 +1342,80 @@
             </tr>
           `;
         }
-        arcHTML = `
-          <div class="maiv-arc-list">
-            <div class="maiv-card-title" title="${escapeHTML(msg("tooltipArc"))}">${escapeHTML(msg("cardTitleArc"))}</div>
-            <table class="maiv-arc-table">
-              ${arcRows}
-            </table>
-          </div>
-        `;
+        arcContentHTML = `<table class="maiv-arc-table">${arcRows}</table>`;
+      } else {
+        arcContentHTML = `<div class="maiv-empty-state">${escapeHTML(msg("labelNone"))}</div>`;
       }
+      const arcHTML = `
+        <div class="maiv-card">
+          <div class="maiv-card-title" title="${escapeHTML(msg("tooltipArc"))}">${escapeHTML(msg("cardTitleArc"))}</div>
+          ${arcContentHTML}
+        </div>
+      `;
+
+      // --- LINK SAFETY カード: フィッシング検知結果とリンクドメイン一覧（常時表示） ---
+      const hasFindings = linkSafety && linkSafety.findings && linkSafety.findings.length > 0;
+      const hasLinkDomains = linkSafety && linkSafety.linkDomains && linkSafety.linkDomains.size > 0;
+
+      let linkSafetyContentHTML = "";
+      if (hasFindings || hasLinkDomains) {
+        let findingsHTML = "";
+        if (hasFindings) {
+          for (const f of linkSafety.findings) {
+            const cls = f.level === "critical" ? "maiv-finding-critical" : "maiv-finding-suspicious";
+            const icon = f.level === "critical" ? "🚨" : "⚠️";
+            findingsHTML += `<div class="${cls}">${icon} ${escapeHTML(f.detail)}</div>`;
+          }
+        }
+
+        // リンクドメイン一覧: Header Fromとの一致/不一致/偽装先を色分け表示
+        let domainListHTML = "";
+        if (hasLinkDomains) {
+          let domainItems = "";
+          const deceptive = linkSafety.deceptiveDomains || new Set();
+          // 偽装先ドメインを最上位、不一致を中間、一致を末尾に並べる
+          const sorted = Array.from(linkSafety.linkDomains.entries())
+            .sort((a, b) => {
+              const aDeceptive = deceptive.has(a[0]) ? 2 : 0;
+              const bDeceptive = deceptive.has(b[0]) ? 2 : 0;
+              const aMatch = a[1].matchesFrom ? 0 : 1;
+              const bMatch = b[1].matchesFrom ? 0 : 1;
+              return (bDeceptive + bMatch) - (aDeceptive + aMatch);
+            });
+          for (const [domain, info] of sorted) {
+            let icon, cls;
+            if (deceptive.has(domain)) {
+              // リンクテキスト偽装の実際のリンク先: 赤色太字で危険性を強調
+              icon = "💀";
+              cls = "maiv-link-domain-danger";
+            } else if (info.matchesFrom) {
+              icon = "✅";
+              cls = "maiv-link-domain-match";
+            } else {
+              icon = "⚠️";
+              cls = "maiv-link-domain-mismatch";
+            }
+            domainItems += `<div class="maiv-link-domain-item">${icon} <span class="${cls}">${escapeHTML(domain)}</span> <span style="color:var(--maiv-text-faint);">(×${info.count})</span></div>`;
+          }
+          domainListHTML = `
+            <div class="maiv-link-domain-list">
+              <div style="font-weight:bold; margin-bottom:4px; color:var(--maiv-text-secondary);">${escapeHTML(msg("linkDomainListTitle"))}</div>
+              ${domainItems}
+            </div>
+          `;
+        }
+        linkSafetyContentHTML = findingsHTML + domainListHTML;
+      } else {
+        // リンクなし または テキストメールの場合の空状態
+        linkSafetyContentHTML = `<div class="maiv-empty-state">${escapeHTML(msg("labelNone"))}</div>`;
+      }
+
+      const linkSafetyHTML = `
+        <div class="maiv-card">
+          <div class="maiv-card-title" title="${escapeHTML(msg("tooltipLinkSafety"))}">${escapeHTML(msg("cardTitleLinkSafety"))}</div>
+          ${linkSafetyContentHTML}
+        </div>
+      `;
 
       // --- 最終マークアップの組み立て ---
       const markup = `
@@ -1103,8 +1429,11 @@
                 ${dkimCard}
                 ${dmarcCard}
               </div>
-              ${arcHTML}
-              ${routeHTML}
+              <div class="maiv-grid-bottom">
+                ${routeHTML}
+                ${arcHTML}
+                ${linkSafetyHTML}
+              </div>
             </div>
           </div>
         </div>
@@ -1170,9 +1499,11 @@
     const authResults = parseAuthResults(headers, envelope);
     const routeHops = parseRoute(headers);
     const arcChain = parseArcChain(headers);
-    const security = determineSecurityStatus(authResults, envelope.isDomainAligned, envelope.envelopeFrom, envelope.isDisplayNameSpoofed);
+    const bodyContent = parseMessageBody(fullMsg);
+    const linkSafety = analyzeLinkSafety(bodyContent, envelope.headerOrgDomain);
+    const security = determineSecurityStatus(authResults, envelope.isDomainAligned, envelope.envelopeFrom, envelope.isDisplayNameSpoofed, linkSafety);
 
-    buildUI(envelope, authResults, routeHops, security, arcChain);
+    buildUI(envelope, authResults, routeHops, security, arcChain, linkSafety);
 
   } catch (e) {
     console.error("MailAuthInfoViewer Error:", e);

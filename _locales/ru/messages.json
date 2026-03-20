@@ -96,24 +96,81 @@
     "message": "✅ Домен совпадает (Аутентифицирован)"
   },
   "alignMismatch": {
-    "message": "⚠️ Несоответствие домена между Header From и конвертом"
+    "message": "⚠️ Несоответствие домена между Header From и Envelope"
   },
   "alignNotAuth": {
     "message": "⚠️ Домен совпадает, но отправитель не аутентифицирован"
   },
   "mailingListVia": {
-    "message": "через список рассылки"
+    "message": "через рассылку"
   },
   "mailingListNote": {
-    "message": "Несоответствие домена может быть вызвано пересылкой через список рассылки"
+    "message": "Несоответствие домена может быть вызвано пересылкой через рассылку"
   },
   "cardTitleArc": {
-    "message": "ЦЕПОЧКА ARC (Верификация пересылки)"
+    "message": "ЦЕПОЧКА ARC (Проверка пересылки)"
   },
   "tooltipArc": {
-    "message": "Authenticated Received Chain: Показывает цепочку верификации, добавленную каждым почтовым сервером при пересылке, сохраняя исходные результаты аутентификации."
+    "message": "Authenticated Received Chain: Показывает цепочку проверки, добавленную каждым почтовым сервером при пересылке, сохраняя исходные результаты аутентификации."
   },
   "displayNameSpoofWarning": {
-    "message": "⚠️ Отображаемое имя содержит адрес электронной почты другого домена (возможная подделка)"
+    "message": "⚠️ Отображаемое имя содержит адрес электронной почты из другого домена (возможная подделка)"
+  },
+  "cardTitleLinkSafety": {
+    "message": "АНАЛИЗ БЕЗОПАСНОСТИ ССЫЛОК"
+  },
+  "tooltipLinkSafety": {
+    "message": "Анализирует ссылки в теле письма для обнаружения индикаторов фишинга: поддельных URL, опасных схем и подозрительных доменов."
+  },
+  "replyToMismatch": {
+    "message": "⚠️ Адрес Reply-To принадлежит другому домену, чем отправитель"
+  },
+  "linkDeceptiveText": {
+    "message": "Поддельная ссылка"
+  },
+  "linkDangerousScheme": {
+    "message": "Обнаружена опасная схема ссылки"
+  },
+  "linkEmbeddedForm": {
+    "message": "HTML-форма встроена в тело письма (крайне подозрительно)"
+  },
+  "linkIpAddress": {
+    "message": "Ссылка указывает на IP-адрес вместо доменного имени"
+  },
+  "linkIdnHomograph": {
+    "message": "Обнаружено интернационализированное доменное имя (возможная гомографическая атака)"
+  },
+  "linkShortener": {
+    "message": "Обнаружен сокращатель URL (скрывает реальное назначение)"
+  },
+  "linkDomainListTitle": {
+    "message": "Домены ссылок в теле письма:"
+  },
+  "verdictReasonPhishing": {
+    "message": "Обнаружен индикатор фишинга"
+  },
+  "verdictReasonDmarcFail": {
+    "message": "DMARC не пройден"
+  },
+  "verdictReasonPolicyNone": {
+    "message": "Политика DMARC: p=none"
+  },
+  "verdictReasonSpfFail": {
+    "message": "SPF не пройден"
+  },
+  "verdictReasonDkimFail": {
+    "message": "DKIM не пройден"
+  },
+  "verdictReasonAlignment": {
+    "message": "Выравнивание DMARC не пройдено"
+  },
+  "verdictReasonDomainMismatch": {
+    "message": "Домен не совпадает"
+  },
+  "verdictReasonSpoofing": {
+    "message": "Подмена отображаемого имени"
+  },
+  "verdictReasonSuspicious": {
+    "message": "Обнаружена подозрительная ссылка"
   }
 }

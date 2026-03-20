@@ -40,6 +40,9 @@
   "cardTitleRoute": {
     "message": "DELIVERY ROUTE (Sender → Recipient)"
   },
+  "cardTitleLinkSafety": {
+    "message": "LINK SAFETY ANALYSIS"
+  },
   "tooltipSpf": {
     "message": "Sender Policy Framework: Checks if the sending server is authorized by the domain's DNS records."
   },
@@ -54,6 +57,9 @@
   },
   "tooltipRoute": {
     "message": "Shows the path the email took from sender to your inbox, with time delays between each server hop."
+  },
+  "tooltipLinkSafety": {
+    "message": "Analyzes links in the email body to detect phishing indicators such as deceptive URLs, dangerous schemes, and suspicious domains."
   },
   "labelDisplayName": {
     "message": "Display Name:"
@@ -117,5 +123,56 @@
   },
   "displayNameSpoofWarning": {
     "message": "⚠️ Display name contains an email address from a different domain (possible spoofing)"
+  },
+  "replyToMismatch": {
+    "message": "⚠️ Reply-To address is on a different domain than the sender"
+  },
+  "linkDeceptiveText": {
+    "message": "Link URL spoofing"
+  },
+  "linkDangerousScheme": {
+    "message": "Dangerous link scheme detected"
+  },
+  "linkEmbeddedForm": {
+    "message": "HTML form embedded in email body (highly suspicious)"
+  },
+  "linkIpAddress": {
+    "message": "Link points to an IP address instead of a domain name"
+  },
+  "linkIdnHomograph": {
+    "message": "Internationalized domain name detected (possible homograph attack)"
+  },
+  "linkShortener": {
+    "message": "URL shortener detected (hides actual destination)"
+  },
+  "linkDomainListTitle": {
+    "message": "Link Domains in Email Body:"
+  },
+  "verdictReasonPhishing": {
+    "message": "Phishing indicator detected"
+  },
+  "verdictReasonDmarcFail": {
+    "message": "DMARC not passed"
+  },
+  "verdictReasonPolicyNone": {
+    "message": "DMARC policy: p=none"
+  },
+  "verdictReasonSpfFail": {
+    "message": "SPF not passed"
+  },
+  "verdictReasonDkimFail": {
+    "message": "DKIM not passed"
+  },
+  "verdictReasonAlignment": {
+    "message": "DMARC alignment failed"
+  },
+  "verdictReasonDomainMismatch": {
+    "message": "Domain not aligned"
+  },
+  "verdictReasonSpoofing": {
+    "message": "Display name spoofing"
+  },
+  "verdictReasonSuspicious": {
+    "message": "Suspicious link detected"
   }
 }

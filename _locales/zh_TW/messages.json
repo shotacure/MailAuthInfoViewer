@@ -115,5 +115,62 @@
   },
   "displayNameSpoofWarning": {
     "message": "⚠️ 顯示名稱包含不同網域的電子郵件地址（可能為偽造）"
+  },
+  "cardTitleLinkSafety": {
+    "message": "連結安全分析"
+  },
+  "tooltipLinkSafety": {
+    "message": "分析郵件內文中的連結，偵測偽裝 URL、危險協定、可疑網域等釣魚指標。"
+  },
+  "replyToMismatch": {
+    "message": "⚠️ Reply-To 地址與寄件者的網域不同"
+  },
+  "linkDeceptiveText": {
+    "message": "連結偽裝"
+  },
+  "linkDangerousScheme": {
+    "message": "偵測到危險的連結協定"
+  },
+  "linkEmbeddedForm": {
+    "message": "郵件內文中嵌入了 HTML 表單（非常可疑）"
+  },
+  "linkIpAddress": {
+    "message": "連結指向 IP 位址而非網域名稱"
+  },
+  "linkIdnHomograph": {
+    "message": "偵測到國際化網域名稱（可能為同形字攻擊）"
+  },
+  "linkShortener": {
+    "message": "偵測到短網址（隱藏了實際目標）"
+  },
+  "linkDomainListTitle": {
+    "message": "郵件內文中的連結網域一覽："
+  },
+  "verdictReasonPhishing": {
+    "message": "偵測到釣魚指標"
+  },
+  "verdictReasonDmarcFail": {
+    "message": "DMARC 未通過"
+  },
+  "verdictReasonPolicyNone": {
+    "message": "DMARC 政策: p=none"
+  },
+  "verdictReasonSpfFail": {
+    "message": "SPF 未通過"
+  },
+  "verdictReasonDkimFail": {
+    "message": "DKIM 未通過"
+  },
+  "verdictReasonAlignment": {
+    "message": "DMARC 比對失敗"
+  },
+  "verdictReasonDomainMismatch": {
+    "message": "網域不符"
+  },
+  "verdictReasonSpoofing": {
+    "message": "顯示名稱偽造"
+  },
+  "verdictReasonSuspicious": {
+    "message": "偵測到可疑連結"
   }
 }

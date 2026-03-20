@@ -3,16 +3,16 @@
     "message": "Mail Auth Info Viewer"
   },
   "extensionDescription": {
-    "message": "Visualiza los resultados de autenticación de correo electrónico (SPF, DKIM, DMARC), la identidad del remitente y las rutas de entrega con tiempos de retraso."
+    "message": "Visualiza los resultados de autenticación de correo (SPF, DKIM, DMARC), la identidad del remitente y las rutas de entrega con tiempos de retraso."
   },
   "badgeAuthPass": {
-    "message": "✅ AUTH EXITOSA"
+    "message": "✅ AUTH APROBADA"
   },
   "badgeAuthFailed": {
     "message": "❌ AUTH FALLIDA"
   },
   "badgeAuthPassWarning": {
-    "message": "⚠️ AUTH EXITOSA"
+    "message": "⚠️ AUTH APROBADA"
   },
   "badgeUnverified": {
     "message": "NO VERIFICADO"
@@ -45,13 +45,13 @@
     "message": "DomainKeys Identified Mail: Verifica la firma digital del correo para asegurar que no fue alterado en tránsito."
   },
   "tooltipDmarc": {
-    "message": "Domain-based Message Authentication, Reporting & Conformance: Asegura que SPF/DKIM estén alineados con el dominio From y define la política del remitente."
+    "message": "Domain-based Message Authentication, Reporting & Conformance: Verifica que SPF/DKIM estén alineados con el dominio From y define la política del remitente."
   },
   "tooltipAddress": {
-    "message": "Compara la dirección visible del remitente con el remitente real del sobre para detectar suplantación de identidad."
+    "message": "Compara la dirección del remitente visible con el remitente real del sobre para detectar suplantación."
   },
   "tooltipRoute": {
-    "message": "Muestra la ruta que siguió el correo desde el remitente hasta su bandeja de entrada, con los tiempos de retraso entre cada servidor."
+    "message": "Muestra la ruta del correo desde el remitente hasta su bandeja de entrada, con los tiempos de retraso entre cada servidor."
   },
   "labelDisplayName": {
     "message": "Nombre visible:"
@@ -114,6 +114,63 @@
     "message": "Authenticated Received Chain: Muestra la cadena de verificación añadida por cada servidor de correo durante el reenvío, preservando los resultados de autenticación originales."
   },
   "displayNameSpoofWarning": {
-    "message": "⚠️ El nombre visible contiene una dirección de correo de otro dominio (posible suplantación)"
+    "message": "⚠️ El nombre visible contiene una dirección de correo de un dominio diferente (posible suplantación)"
+  },
+  "cardTitleLinkSafety": {
+    "message": "ANÁLISIS DE SEGURIDAD DE ENLACES"
+  },
+  "tooltipLinkSafety": {
+    "message": "Analiza los enlaces en el cuerpo del correo para detectar indicadores de phishing como URLs engañosas, esquemas peligrosos y dominios sospechosos."
+  },
+  "replyToMismatch": {
+    "message": "⚠️ La dirección Reply-To pertenece a un dominio diferente al del remitente"
+  },
+  "linkDeceptiveText": {
+    "message": "Enlace engañoso"
+  },
+  "linkDangerousScheme": {
+    "message": "Esquema de enlace peligroso detectado"
+  },
+  "linkEmbeddedForm": {
+    "message": "Formulario HTML incrustado en el cuerpo del correo (muy sospechoso)"
+  },
+  "linkIpAddress": {
+    "message": "El enlace apunta a una dirección IP en lugar de un nombre de dominio"
+  },
+  "linkIdnHomograph": {
+    "message": "Nombre de dominio internacionalizado detectado (posible ataque homógrafo)"
+  },
+  "linkShortener": {
+    "message": "Acortador de URL detectado (oculta el destino real)"
+  },
+  "linkDomainListTitle": {
+    "message": "Dominios de enlaces en el cuerpo del correo:"
+  },
+  "verdictReasonPhishing": {
+    "message": "Indicador de phishing detectado"
+  },
+  "verdictReasonDmarcFail": {
+    "message": "DMARC no aprobado"
+  },
+  "verdictReasonPolicyNone": {
+    "message": "Política DMARC: p=none"
+  },
+  "verdictReasonSpfFail": {
+    "message": "SPF no aprobado"
+  },
+  "verdictReasonDkimFail": {
+    "message": "DKIM no aprobado"
+  },
+  "verdictReasonAlignment": {
+    "message": "Alineación DMARC fallida"
+  },
+  "verdictReasonDomainMismatch": {
+    "message": "Dominio no alineado"
+  },
+  "verdictReasonSpoofing": {
+    "message": "Suplantación de nombre"
+  },
+  "verdictReasonSuspicious": {
+    "message": "Enlace sospechoso detectado"
   }
 }

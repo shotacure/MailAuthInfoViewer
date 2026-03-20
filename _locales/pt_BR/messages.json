@@ -3,13 +3,13 @@
     "message": "Mail Auth Info Viewer"
   },
   "extensionDescription": {
-    "message": "Visualiza os resultados de autenticação de e-mail (SPF, DKIM, DMARC), a identidade do remetente e as rotas de entrega com tempos de atraso."
+    "message": "Visualiza os resultados de autenticação de e-mail (SPF, DKIM, DMARC), identidade do remetente e rotas de entrega com tempos de atraso."
   },
   "badgeAuthPass": {
     "message": "✅ AUTH APROVADA"
   },
   "badgeAuthFailed": {
-    "message": "❌ AUTH FALHOU"
+    "message": "❌ AUTH REPROVADA"
   },
   "badgeAuthPassWarning": {
     "message": "⚠️ AUTH APROVADA"
@@ -18,7 +18,7 @@
     "message": "NÃO VERIFICADO"
   },
   "domainMismatch": {
-    "message": "(DOMÍNIO DIVERGENTE)"
+    "message": "(DOMÍNIO NÃO COINCIDE)"
   },
   "toggleDetails": {
     "message": "Clique para mostrar/ocultar detalhes"
@@ -48,13 +48,13 @@
     "message": "Domain-based Message Authentication, Reporting & Conformance: Garante que SPF/DKIM estejam alinhados com o domínio From e define a política do remetente."
   },
   "tooltipAddress": {
-    "message": "Compara o endereço visível do remetente com o remetente real do envelope para detectar falsificação."
+    "message": "Compara o endereço do remetente visível com o remetente real do envelope para detectar falsificação."
   },
   "tooltipRoute": {
-    "message": "Mostra o caminho que o e-mail percorreu do remetente até sua caixa de entrada, com tempos de atraso entre cada servidor."
+    "message": "Mostra o caminho do e-mail do remetente até sua caixa de entrada, com os tempos de atraso entre cada servidor."
   },
   "labelDisplayName": {
-    "message": "Nome exibido:"
+    "message": "Nome de exibição:"
   },
   "labelHeaderFrom": {
     "message": "Header From:"
@@ -96,7 +96,7 @@
     "message": "✅ Domínio alinhado (Autenticado)"
   },
   "alignMismatch": {
-    "message": "⚠️ Divergência de domínio entre Header From e Envelope"
+    "message": "⚠️ Discrepância de domínio entre Header From e Envelope"
   },
   "alignNotAuth": {
     "message": "⚠️ Domínio alinhado, mas o remetente não está autenticado"
@@ -105,7 +105,7 @@
     "message": "via lista de e-mails"
   },
   "mailingListNote": {
-    "message": "A divergência de domínio pode ser causada pelo encaminhamento de lista de e-mails"
+    "message": "A discrepância de domínio pode ser devido ao encaminhamento por lista de e-mails"
   },
   "cardTitleArc": {
     "message": "CADEIA ARC (Verificação de encaminhamento)"
@@ -114,6 +114,63 @@
     "message": "Authenticated Received Chain: Mostra a cadeia de verificação adicionada por cada servidor de e-mail durante o encaminhamento, preservando os resultados de autenticação originais."
   },
   "displayNameSpoofWarning": {
-    "message": "⚠️ O nome de exibição contém um endereço de e-mail de outro domínio (possível falsificação)"
+    "message": "⚠️ O nome de exibição contém um endereço de e-mail de um domínio diferente (possível falsificação)"
+  },
+  "cardTitleLinkSafety": {
+    "message": "ANÁLISE DE SEGURANÇA DE LINKS"
+  },
+  "tooltipLinkSafety": {
+    "message": "Analisa os links no corpo do e-mail para detectar indicadores de phishing como URLs enganosas, esquemas perigosos e domínios suspeitos."
+  },
+  "replyToMismatch": {
+    "message": "⚠️ O endereço Reply-To pertence a um domínio diferente do remetente"
+  },
+  "linkDeceptiveText": {
+    "message": "Link enganoso"
+  },
+  "linkDangerousScheme": {
+    "message": "Esquema de link perigoso detectado"
+  },
+  "linkEmbeddedForm": {
+    "message": "Formulário HTML incorporado no corpo do e-mail (muito suspeito)"
+  },
+  "linkIpAddress": {
+    "message": "O link aponta para um endereço IP em vez de um nome de domínio"
+  },
+  "linkIdnHomograph": {
+    "message": "Nome de domínio internacionalizado detectado (possível ataque homógrafo)"
+  },
+  "linkShortener": {
+    "message": "Encurtador de URL detectado (oculta o destino real)"
+  },
+  "linkDomainListTitle": {
+    "message": "Domínios dos links no corpo do e-mail:"
+  },
+  "verdictReasonPhishing": {
+    "message": "Indicador de phishing detectado"
+  },
+  "verdictReasonDmarcFail": {
+    "message": "DMARC não aprovado"
+  },
+  "verdictReasonPolicyNone": {
+    "message": "Política DMARC: p=none"
+  },
+  "verdictReasonSpfFail": {
+    "message": "SPF não aprovado"
+  },
+  "verdictReasonDkimFail": {
+    "message": "DKIM não aprovado"
+  },
+  "verdictReasonAlignment": {
+    "message": "Alinhamento DMARC falhou"
+  },
+  "verdictReasonDomainMismatch": {
+    "message": "Domínio não alinhado"
+  },
+  "verdictReasonSpoofing": {
+    "message": "Spoofing de nome de exibição"
+  },
+  "verdictReasonSuspicious": {
+    "message": "Link suspeito detectado"
   }
 }

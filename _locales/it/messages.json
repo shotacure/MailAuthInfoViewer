@@ -96,16 +96,16 @@
     "message": "✅ Dominio allineato (Autenticato)"
   },
   "alignMismatch": {
-    "message": "⚠️ Discrepanza di dominio tra Header From e Busta"
+    "message": "⚠️ Discrepanza di dominio tra Header From ed Envelope"
   },
   "alignNotAuth": {
     "message": "⚠️ Dominio allineato, ma il mittente non è autenticato"
   },
   "mailingListVia": {
-    "message": "tramite mailing list"
+    "message": "via mailing list"
   },
   "mailingListNote": {
-    "message": "La discrepanza di dominio potrebbe essere causata dall'inoltro tramite mailing list"
+    "message": "La discrepanza di dominio potrebbe essere dovuta all'inoltro tramite mailing list"
   },
   "cardTitleArc": {
     "message": "CATENA ARC (Verifica inoltro)"
@@ -114,6 +114,63 @@
     "message": "Authenticated Received Chain: Mostra la catena di verifica aggiunta da ogni server di posta durante l'inoltro, preservando i risultati di autenticazione originali."
   },
   "displayNameSpoofWarning": {
-    "message": "⚠️ Il nome visualizzato contiene un indirizzo e-mail di un altro dominio (possibile spoofing)"
+    "message": "⚠️ Il nome visualizzato contiene un indirizzo email di un dominio diverso (possibile spoofing)"
+  },
+  "cardTitleLinkSafety": {
+    "message": "ANALISI SICUREZZA LINK"
+  },
+  "tooltipLinkSafety": {
+    "message": "Analizza i link nel corpo dell'email per rilevare indicatori di phishing come URL ingannevoli, schemi pericolosi e domini sospetti."
+  },
+  "replyToMismatch": {
+    "message": "⚠️ L'indirizzo Reply-To appartiene a un dominio diverso dal mittente"
+  },
+  "linkDeceptiveText": {
+    "message": "Link ingannevole"
+  },
+  "linkDangerousScheme": {
+    "message": "Schema di link pericoloso rilevato"
+  },
+  "linkEmbeddedForm": {
+    "message": "Modulo HTML incorporato nel corpo dell'email (molto sospetto)"
+  },
+  "linkIpAddress": {
+    "message": "Il link punta a un indirizzo IP anziché a un nome di dominio"
+  },
+  "linkIdnHomograph": {
+    "message": "Nome di dominio internazionalizzato rilevato (possibile attacco omografo)"
+  },
+  "linkShortener": {
+    "message": "Accorciatore di URL rilevato (nasconde la destinazione reale)"
+  },
+  "linkDomainListTitle": {
+    "message": "Domini dei link nel corpo dell'email:"
+  },
+  "verdictReasonPhishing": {
+    "message": "Indicatore di phishing rilevato"
+  },
+  "verdictReasonDmarcFail": {
+    "message": "DMARC non superato"
+  },
+  "verdictReasonPolicyNone": {
+    "message": "Policy DMARC: p=none"
+  },
+  "verdictReasonSpfFail": {
+    "message": "SPF non superato"
+  },
+  "verdictReasonDkimFail": {
+    "message": "DKIM non superato"
+  },
+  "verdictReasonAlignment": {
+    "message": "Allineamento DMARC fallito"
+  },
+  "verdictReasonDomainMismatch": {
+    "message": "Dominio non allineato"
+  },
+  "verdictReasonSpoofing": {
+    "message": "Spoofing del nome visualizzato"
+  },
+  "verdictReasonSuspicious": {
+    "message": "Link sospetto rilevato"
   }
 }

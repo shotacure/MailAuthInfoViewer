@@ -3,9 +3,9 @@
 **A Thunderbird add-on to visualize email authentication, sender identity, and delivery routes.**
 **メールの認証情報、送信者の身元、および送達経路を可視化するThunderbirdアドオンです。**
 
-Mail Auth Info Viewer is a powerful Thunderbird add-on designed to combat sophisticated phishing and "display name" spoofing. It analyzes message headers locally and presents a clear, color-coded dashboard showing sender alignment, authentication results (SPF, DKIM, DMARC), and delivery routes with time delays directly on the message view.
+Mail Auth Info Viewer is a powerful Thunderbird add-on designed to combat sophisticated phishing and "display name" spoofing. It analyzes message headers and body content locally, presenting a clear, color-coded dashboard showing sender alignment, authentication results (SPF, DKIM, DMARC), phishing link detection, and delivery routes with time delays directly on the message view.
 
-Mail Auth Info Viewer は、巧妙なフィッシング詐欺や「表示名（名乗り）」の偽装に対抗するために設計された強力なThunderbirdアドオンです。ローカルでメールヘッダを解析し、送信者のアライメント、認証結果（SPF, DKIM, DMARC）、および遅延時間を含む送達経路を、色分けされた分かりやすいダッシュボードでメッセージ画面上に直接表示します。
+Mail Auth Info Viewer は、巧妙なフィッシング詐欺や「表示名（名乗り）」の偽装に対抗するために設計された強力なThunderbirdアドオンです。ローカルでメールヘッダと本文を解析し、送信者のアライメント、認証結果（SPF, DKIM, DMARC）、フィッシングリンク検知、および遅延時間を含む送達経路を、色分けされた分かりやすいダッシュボードでメッセージ画面上に直接表示します。
 
 ---
 
@@ -36,6 +36,14 @@ For fully authenticated and safe emails, the dashboard automatically collapses t
     * **表示名なりすまし検知:** 表示名に実際の送信元とは異なるドメインのメールアドレスが含まれている場合を検知します。受信者を欺くためのフィッシング手口です。
 * **Domain Verification Badge:** Prominently displays the actual authenticated domain (e.g., `✅ AUTH PASS example.com`) to prevent false trust in fake display names.
     * **ドメイン認証バッジ:** 単なる「認証済」ではなく、実際に認証されたドメイン名を明記し、誤った安心感を与えません。
+* **Verdict Reason Display:** Shows why the badge is not green — e.g., "DMARC policy is p=none", "Phishing indicator detected" — so administrators know exactly what to fix.
+    * **判定理由の表示:** バッジがグリーンでない理由（例：「DMARCポリシーがp=none」「フィッシング指標を検出」）を表示し、管理者が何を修正すべきか明確にします。
+* **Link Safety Analysis:** Scans email body for phishing indicators including deceptive link text, dangerous URI schemes (`javascript:`, `data:`), embedded HTML forms, IP address links, IDN homograph attacks, and URL shorteners.
+    * **リンク安全性分析:** メール本文をスキャンし、リンクテキスト偽装、危険なURIスキーム（`javascript:`、`data:`）、HTMLフォーム埋め込み、IPアドレスリンク、IDNホモグラフ攻撃、短縮URLなどのフィッシング指標を検出します。
+* **Link Domain Overview:** Lists all unique link domains found in the email body, color-coded by whether they match the sender's organizational domain.
+    * **リンクドメイン一覧:** メール本文に含まれるすべてのリンクドメインを一覧表示し、送信者の組織ドメインとの一致/不一致を色分けします。
+* **Reply-To Mismatch Detection:** Warns when the Reply-To address belongs to a different domain than the sender, a technique used to redirect replies to attackers.
+    * **Reply-To不一致検知:** Reply-Toアドレスが送信者と異なるドメインの場合に警告します。返信を攻撃者に誘導するフィッシング手口です。
 * **Authentication Status:** Quickly check the pass/fail status of SPF, DKIM, and DMARC authentication with DMARC policy display.
     * **認証ステータス:** SPF、DKIM、DMARCの成否ステータスをDMARCポリシー表示と共に素早く確認できます。
 * **DMARC Alignment Indicators (RFC 7489):** SPF and DKIM alignment status shown within each authentication card. The security verdict requires DMARC pass and at least one alignment match for AUTH PASS.
@@ -74,16 +82,20 @@ This add-on is designed for mail administrators and security-conscious users who
 このアドオンは、メール認証が正しく設定されているかを確認したいメール管理者やセキュリティ意識の高いユーザー向けに設計されています。判定ロジックは意図的に厳格です:
 
 * ✅ **AUTH PASS** (green) requires **all** of the following — anything less results in a warning:
-    * SPF pass, DKIM pass, **and** DMARC pass (a DMARC record must be published)
-    * Envelope domain aligned with Header From
+    * SPF pass, DKIM pass, **and** DMARC pass
+    * DMARC policy must be `quarantine` or `reject` (not `none`)
     * At least one DMARC alignment (SPF or DKIM) with Header From
     * No display name spoofing detected
+    * No phishing indicators detected in email body (deceptive links, dangerous schemes, embedded forms, IP links, IDN homographs, URL shorteners)
+    * Note: Envelope domain mismatch alone does NOT block green when DMARC pass with alignment is satisfied (supports legitimate third-party sending services)
 
 * ✅ **認証成功**（グリーン）は以下の**すべて**を満たす場合のみ。1つでも欠ければ警告になります:
-    * SPF pass、DKIM pass、**かつ** DMARC pass（DMARCレコードの公開が必要）
-    * エンベロープドメインとHeader Fromの一致
+    * SPF pass、DKIM pass、**かつ** DMARC pass
+    * DMARCポリシーが `quarantine` または `reject`（`none` は不可）
     * SPFまたはDKIMの少なくとも一方がHeader Fromとアライメント
     * 表示名なりすましが検知されていないこと
+    * メール本文にフィッシング指標が検知されていないこと（リンク偽装、危険なスキーム、フォーム埋め込み、IPアドレスリンク、IDNホモグラフ、短縮URL）
+    * 注: DMARCがpassかつアライメント成立時は、エンベロープドメイン不一致のみではグリーンを阻害しない（正当な外部配信サービスに対応）
 
 The principle is: **only unavoidable situations (e.g., third-party infrastructure) get a green badge; anything fixable by the domain administrator should be flagged.**
 
@@ -124,14 +136,16 @@ Both scripts read the version from `manifest.json`, stage the required files inc
 manifest.json           Extension manifest with i18n support
 background.js           Registers content scripts, handles message API
 psl_data.js             Public Suffix List data + getOrganizationalDomain()
-messagedisplay.js       Main logic — 6 core functions:
+messagedisplay.js       Main logic — 8 core functions:
 │
-├─ parseEnvelope()          Address extraction, PSL-based alignment, mailing list & display name spoof detection
+├─ parseEnvelope()          Address extraction, PSL-based alignment, mailing list, display name spoof & Reply-To mismatch detection
 ├─ parseAuthResults()       Auth parsing with authserv-id filtering, multi-DKIM with selectors, Received-SPF fallback
 ├─ parseRoute()             Delivery route from Received headers with IP classification
 ├─ parseArcChain()          ARC chain parsing (RFC 8617)
-├─ determineSecurityStatus()  Strict aggregate security verdict (DMARC pass required)
-└─ buildUI()                Shadow DOM isolated, i18n'd, dark-mode-aware rendering
+├─ parseMessageBody()       MIME tree traversal to extract HTML/text body content
+├─ analyzeLinkSafety()      Phishing link detection: deceptive text, dangerous schemes, forms, IP links, IDN, shorteners, domain listing
+├─ determineSecurityStatus()  Strict aggregate verdict with DMARC p=none check, phishing indicator integration & verdict reasons
+└─ buildUI()                Shadow DOM isolated, i18n'd, dark-mode-aware rendering with LINK SAFETY card
 
 _locales/
 ├─ en/messages.json     English (default)
@@ -152,7 +166,7 @@ _locales/
 
 Previous versions used simple suffix matching (`endsWith`), which could produce false positives with multi-level TLDs (e.g., `evil.co.jp` matching `legit.co.jp`) and false negatives with deep subdomains (e.g., `a.b.google.com` not matching `c.google.com`).
 
-v1.0.8 bundles a curated Public Suffix List (`psl_data.js`) covering 60+ countries to extract the **Organizational Domain** per RFC 7489. Both the Header-From domain and Envelope-From domain are reduced to their organizational domain before comparison.
+v1.0.8+ bundles a curated Public Suffix List (`psl_data.js`) covering 60+ countries to extract the **Organizational Domain** per RFC 7489. Both the Header-From domain and Envelope-From domain are reduced to their organizational domain before comparison.
 
 ---
 

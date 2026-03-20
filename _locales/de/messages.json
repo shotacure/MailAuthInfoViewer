@@ -57,13 +57,13 @@
     "message": "Anzeigename:"
   },
   "labelHeaderFrom": {
-    "message": "Header-From:"
+    "message": "Header From:"
   },
   "labelEnvelopeFrom": {
-    "message": "Envelope-From:"
+    "message": "Envelope From:"
   },
   "labelEnvelopeTo": {
-    "message": "Envelope-To:"
+    "message": "Envelope To:"
   },
   "labelDomain": {
     "message": "Domain:"
@@ -96,24 +96,81 @@
     "message": "✅ Domain abgeglichen (Authentifiziert)"
   },
   "alignMismatch": {
-    "message": "⚠️ Domain-Abweichung zwischen Header-From und Envelope"
+    "message": "⚠️ Domain-Abweichung zwischen Header From und Envelope"
   },
   "alignNotAuth": {
-    "message": "⚠️ Domain abgeglichen, aber Absender ist nicht authentifiziert"
+    "message": "⚠️ Domain abgeglichen, aber Absender nicht authentifiziert"
   },
   "mailingListVia": {
     "message": "über Mailingliste"
   },
   "mailingListNote": {
-    "message": "Die Domain-Abweichung kann durch Mailinglisten-Weiterleitung verursacht sein"
+    "message": "Domain-Abweichung kann durch Mailinglisten-Weiterleitung verursacht werden"
   },
   "cardTitleArc": {
     "message": "ARC-KETTE (Weiterleitungsverifizierung)"
   },
   "tooltipArc": {
-    "message": "Authenticated Received Chain: Zeigt die Verifizierungskette, die jeder Mailserver bei der Weiterleitung hinzufügt, um die ursprünglichen Authentifizierungsergebnisse zu bewahren."
+    "message": "Authenticated Received Chain: Zeigt die Verifizierungskette, die von jedem Mailserver während der Weiterleitung hinzugefügt wird, und bewahrt die ursprünglichen Authentifizierungsergebnisse."
   },
   "displayNameSpoofWarning": {
     "message": "⚠️ Der Anzeigename enthält eine E-Mail-Adresse einer anderen Domain (mögliches Spoofing)"
+  },
+  "cardTitleLinkSafety": {
+    "message": "LINK-SICHERHEITSANALYSE"
+  },
+  "tooltipLinkSafety": {
+    "message": "Analysiert Links im E-Mail-Text, um Phishing-Indikatoren wie täuschende URLs, gefährliche Schemata und verdächtige Domains zu erkennen."
+  },
+  "replyToMismatch": {
+    "message": "⚠️ Die Reply-To-Adresse gehört zu einer anderen Domain als der Absender"
+  },
+  "linkDeceptiveText": {
+    "message": "Link-Täuschung"
+  },
+  "linkDangerousScheme": {
+    "message": "Gefährliches Link-Schema erkannt"
+  },
+  "linkEmbeddedForm": {
+    "message": "HTML-Formular im E-Mail-Text eingebettet (sehr verdächtig)"
+  },
+  "linkIpAddress": {
+    "message": "Link zeigt auf eine IP-Adresse statt auf einen Domainnamen"
+  },
+  "linkIdnHomograph": {
+    "message": "Internationalisierter Domainname erkannt (möglicher Homograph-Angriff)"
+  },
+  "linkShortener": {
+    "message": "URL-Verkürzer erkannt (verbirgt das tatsächliche Ziel)"
+  },
+  "linkDomainListTitle": {
+    "message": "Link-Domains im E-Mail-Text:"
+  },
+  "verdictReasonPhishing": {
+    "message": "Phishing-Indikator erkannt"
+  },
+  "verdictReasonDmarcFail": {
+    "message": "DMARC nicht bestanden"
+  },
+  "verdictReasonPolicyNone": {
+    "message": "DMARC-Richtlinie: p=none"
+  },
+  "verdictReasonSpfFail": {
+    "message": "SPF nicht bestanden"
+  },
+  "verdictReasonDkimFail": {
+    "message": "DKIM nicht bestanden"
+  },
+  "verdictReasonAlignment": {
+    "message": "DMARC-Abgleich fehlgeschlagen"
+  },
+  "verdictReasonDomainMismatch": {
+    "message": "Domain nicht abgeglichen"
+  },
+  "verdictReasonSpoofing": {
+    "message": "Anzeigename-Spoofing"
+  },
+  "verdictReasonSuspicious": {
+    "message": "Verdächtiger Link erkannt"
   }
 }
