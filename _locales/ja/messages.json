@@ -131,40 +131,25 @@
     "message": "リンク偽装"
   },
   "linkDangerousScheme": {
-    "message": "危険なリンクスキームが検出されました"
+    "message": "危険なリンクスキームを検出"
   },
   "linkEmbeddedForm": {
-    "message": "メール本文にHTMLフォームが埋め込まれています（非常に不審）"
+    "message": "HTMLフォームが埋め込まれています（非常に不審）"
   },
   "linkIpAddress": {
-    "message": "リンク先がドメイン名ではなくIPアドレスを指しています"
+    "message": "リンク先がIPアドレス"
   },
   "linkIdnHomograph": {
-    "message": "国際化ドメイン名が検出されました（ホモグラフ攻撃の疑い）"
+    "message": "国際化ドメイン名を検出（ホモグラフの疑い）"
   },
   "linkShortener": {
-    "message": "短縮URLが検出されました（実際のリンク先が隠されています）"
+    "message": "短縮URLを検出（リンク先が隠蔽）"
   },
   "linkDomainListTitle": {
     "message": "メール本文内のリンクドメイン一覧:"
   },
   "verdictReasonPhishing": {
-    "message": "フィッシング指標を検出"
-  },
-  "verdictReasonDmarcFail": {
-    "message": "DMARC未通過"
-  },
-  "verdictReasonPolicyNone": {
-    "message": "DMARCポリシー: p=none"
-  },
-  "verdictReasonSpfFail": {
-    "message": "SPF未通過"
-  },
-  "verdictReasonDkimFail": {
-    "message": "DKIM未通過"
-  },
-  "verdictReasonAlignment": {
-    "message": "DMARCアライメント不成立"
+    "message": "フィッシング検出"
   },
   "verdictReasonDomainMismatch": {
     "message": "ドメイン不一致"
@@ -173,6 +158,33 @@
     "message": "表示名なりすまし"
   },
   "verdictReasonSuspicious": {
-    "message": "不審なリンクを検出"
+    "message": "不審なリンク"
+  },
+  "verdictReasonSpfAlign": {
+    "message": "SPFアライメント不成立"
+  },
+  "verdictReasonDkimAlign": {
+    "message": "DKIMアライメント不成立"
+  },
+  "badgeAuthPartial": {
+    "message": "⚠️ 部分認証"
+  },
+  "linkSoleExternal": {
+    "message": "唯一のリンクが外部ドメイン"
+  },
+  "linkCtaExternal": {
+    "message": "メインのクリック領域が外部ドメイン"
+  },
+  "linkTrackingPixel": {
+    "message": "トラッキングピクセルを検出"
+  },
+  "resourceDomainListTitle": {
+    "message": "リソースドメイン一覧（画像等）:"
+  },
+  "badgePhishing": {
+    "message": "💀 フィッシング検出"
+  },
+  "verdictReasonTrackingPixel": {
+    "message": "トラッキングピクセル"
   }
 }

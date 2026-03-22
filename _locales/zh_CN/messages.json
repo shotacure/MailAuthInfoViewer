@@ -129,40 +129,25 @@
     "message": "链接伪装"
   },
   "linkDangerousScheme": {
-    "message": "检测到危险的链接协议"
+    "message": "检测到危险链接协议"
   },
   "linkEmbeddedForm": {
-    "message": "邮件正文中嵌入了 HTML 表单（非常可疑）"
+    "message": "嵌入了 HTML 表单（非常可疑）"
   },
   "linkIpAddress": {
-    "message": "链接指向 IP 地址而非域名"
+    "message": "链接指向 IP 地址"
   },
   "linkIdnHomograph": {
-    "message": "检测到国际化域名（可能为同形字攻击）"
+    "message": "检测到国际化域名（同形字风险）"
   },
   "linkShortener": {
-    "message": "检测到短链接（隐藏了实际目标）"
+    "message": "检测到短链接（目标被隐藏）"
   },
   "linkDomainListTitle": {
     "message": "邮件正文中的链接域名一览："
   },
   "verdictReasonPhishing": {
-    "message": "检测到钓鱼指标"
-  },
-  "verdictReasonDmarcFail": {
-    "message": "DMARC 未通过"
-  },
-  "verdictReasonPolicyNone": {
-    "message": "DMARC 策略: p=none"
-  },
-  "verdictReasonSpfFail": {
-    "message": "SPF 未通过"
-  },
-  "verdictReasonDkimFail": {
-    "message": "DKIM 未通过"
-  },
-  "verdictReasonAlignment": {
-    "message": "DMARC 对齐失败"
+    "message": "检测到钓鱼"
   },
   "verdictReasonDomainMismatch": {
     "message": "域名不匹配"
@@ -171,6 +156,33 @@
     "message": "显示名称伪造"
   },
   "verdictReasonSuspicious": {
-    "message": "检测到可疑链接"
+    "message": "可疑链接"
+  },
+  "verdictReasonSpfAlign": {
+    "message": "SPF 对齐失败"
+  },
+  "verdictReasonDkimAlign": {
+    "message": "DKIM 对齐失败"
+  },
+  "badgeAuthPartial": {
+    "message": "⚠️ 部分验证"
+  },
+  "linkSoleExternal": {
+    "message": "唯一的链接指向外部域名"
+  },
+  "linkCtaExternal": {
+    "message": "主要点击区域指向外部域名"
+  },
+  "linkTrackingPixel": {
+    "message": "检测到跟踪像素"
+  },
+  "resourceDomainListTitle": {
+    "message": "资源域名一览（图片等）："
+  },
+  "badgePhishing": {
+    "message": "💀 钓鱼检测"
+  },
+  "verdictReasonTrackingPixel": {
+    "message": "跟踪像素"
   }
 }

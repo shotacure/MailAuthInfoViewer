@@ -132,45 +132,57 @@
     "message": "Gefährliches Link-Schema erkannt"
   },
   "linkEmbeddedForm": {
-    "message": "HTML-Formular im E-Mail-Text eingebettet (sehr verdächtig)"
+    "message": "HTML-Formular eingebettet (sehr verdächtig)"
   },
   "linkIpAddress": {
-    "message": "Link zeigt auf eine IP-Adresse statt auf einen Domainnamen"
+    "message": "Link zeigt auf IP-Adresse"
   },
   "linkIdnHomograph": {
-    "message": "Internationalisierter Domainname erkannt (möglicher Homograph-Angriff)"
+    "message": "Internationalisierter Domainname erkannt (Homograph-Risiko)"
   },
   "linkShortener": {
-    "message": "URL-Verkürzer erkannt (verbirgt das tatsächliche Ziel)"
+    "message": "URL-Verkürzer erkannt (Ziel verborgen)"
   },
   "linkDomainListTitle": {
     "message": "Link-Domains im E-Mail-Text:"
   },
   "verdictReasonPhishing": {
-    "message": "Phishing-Indikator erkannt"
-  },
-  "verdictReasonDmarcFail": {
-    "message": "DMARC nicht bestanden"
-  },
-  "verdictReasonPolicyNone": {
-    "message": "DMARC-Richtlinie: p=none"
-  },
-  "verdictReasonSpfFail": {
-    "message": "SPF nicht bestanden"
-  },
-  "verdictReasonDkimFail": {
-    "message": "DKIM nicht bestanden"
-  },
-  "verdictReasonAlignment": {
-    "message": "DMARC-Abgleich fehlgeschlagen"
+    "message": "Phishing erkannt"
   },
   "verdictReasonDomainMismatch": {
-    "message": "Domain nicht abgeglichen"
+    "message": "Domain-Abweichung"
   },
   "verdictReasonSpoofing": {
     "message": "Anzeigename-Spoofing"
   },
   "verdictReasonSuspicious": {
-    "message": "Verdächtiger Link erkannt"
+    "message": "Verdächtiger Link"
+  },
+  "verdictReasonSpfAlign": {
+    "message": "SPF-Abgleich fehlgeschlagen"
+  },
+  "verdictReasonDkimAlign": {
+    "message": "DKIM-Abgleich fehlgeschlagen"
+  },
+  "badgeAuthPartial": {
+    "message": "⚠️ TEILWEISE"
+  },
+  "linkSoleExternal": {
+    "message": "Einziger Link zeigt auf externe Domain"
+  },
+  "linkCtaExternal": {
+    "message": "Haupt-Klickbereich zeigt auf externe Domain"
+  },
+  "linkTrackingPixel": {
+    "message": "Tracking-Pixel erkannt"
+  },
+  "resourceDomainListTitle": {
+    "message": "Ressourcen-Domains (Bilder usw.):"
+  },
+  "badgePhishing": {
+    "message": "💀 PHISHING"
+  },
+  "verdictReasonTrackingPixel": {
+    "message": "Tracking-Pixel"
   }
 }

@@ -134,45 +134,57 @@
     "message": "Dangerous link scheme detected"
   },
   "linkEmbeddedForm": {
-    "message": "HTML form embedded in email body (highly suspicious)"
+    "message": "HTML form embedded in email (highly suspicious)"
   },
   "linkIpAddress": {
-    "message": "Link points to an IP address instead of a domain name"
+    "message": "Link points to IP address instead of domain"
   },
   "linkIdnHomograph": {
-    "message": "Internationalized domain name detected (possible homograph attack)"
+    "message": "Internationalized domain name detected (homograph risk)"
   },
   "linkShortener": {
-    "message": "URL shortener detected (hides actual destination)"
+    "message": "URL shortener detected (hides destination)"
   },
   "linkDomainListTitle": {
     "message": "Link Domains in Email Body:"
   },
   "verdictReasonPhishing": {
-    "message": "Phishing indicator detected"
-  },
-  "verdictReasonDmarcFail": {
-    "message": "DMARC not passed"
-  },
-  "verdictReasonPolicyNone": {
-    "message": "DMARC policy: p=none"
-  },
-  "verdictReasonSpfFail": {
-    "message": "SPF not passed"
-  },
-  "verdictReasonDkimFail": {
-    "message": "DKIM not passed"
-  },
-  "verdictReasonAlignment": {
-    "message": "DMARC alignment failed"
+    "message": "Phishing detected"
   },
   "verdictReasonDomainMismatch": {
-    "message": "Domain not aligned"
+    "message": "Domain mismatch"
   },
   "verdictReasonSpoofing": {
     "message": "Display name spoofing"
   },
   "verdictReasonSuspicious": {
-    "message": "Suspicious link detected"
+    "message": "Suspicious link"
+  },
+  "verdictReasonSpfAlign": {
+    "message": "SPF alignment failed"
+  },
+  "verdictReasonDkimAlign": {
+    "message": "DKIM alignment failed"
+  },
+  "badgeAuthPartial": {
+    "message": "⚠️ PARTIAL"
+  },
+  "linkSoleExternal": {
+    "message": "Only link points to external domain"
+  },
+  "linkCtaExternal": {
+    "message": "Main click area points to external domain"
+  },
+  "linkTrackingPixel": {
+    "message": "Tracking pixel detected"
+  },
+  "resourceDomainListTitle": {
+    "message": "Resource Domains (images, etc.):"
+  },
+  "badgePhishing": {
+    "message": "💀 PHISHING"
+  },
+  "verdictReasonTrackingPixel": {
+    "message": "Tracking pixel"
   }
 }
