@@ -129,40 +129,25 @@
     "message": "링크 위조"
   },
   "linkDangerousScheme": {
-    "message": "위험한 링크 스키마가 감지되었습니다"
+    "message": "위험한 링크 스키마 감지됨"
   },
   "linkEmbeddedForm": {
-    "message": "이메일 본문에 HTML 폼이 포함되어 있습니다 (매우 의심스러움)"
+    "message": "HTML 폼이 포함됨 (매우 의심스러움)"
   },
   "linkIpAddress": {
-    "message": "링크가 도메인 이름이 아닌 IP 주소를 가리킵니다"
+    "message": "링크가 IP 주소를 가리킴"
   },
   "linkIdnHomograph": {
-    "message": "국제화 도메인 이름이 감지되었습니다 (호모그래프 공격 의심)"
+    "message": "국제화 도메인 이름 감지됨 (호모그래프 위험)"
   },
   "linkShortener": {
-    "message": "URL 단축기가 감지되었습니다 (실제 링크 대상이 숨겨져 있음)"
+    "message": "URL 단축기 감지됨 (링크 대상 숨겨짐)"
   },
   "linkDomainListTitle": {
     "message": "이메일 본문의 링크 도메인 목록:"
   },
   "verdictReasonPhishing": {
-    "message": "피싱 지표 감지됨"
-  },
-  "verdictReasonDmarcFail": {
-    "message": "DMARC 미통과"
-  },
-  "verdictReasonPolicyNone": {
-    "message": "DMARC 정책: p=none"
-  },
-  "verdictReasonSpfFail": {
-    "message": "SPF 미통과"
-  },
-  "verdictReasonDkimFail": {
-    "message": "DKIM 미통과"
-  },
-  "verdictReasonAlignment": {
-    "message": "DMARC 정렬 실패"
+    "message": "피싱 감지됨"
   },
   "verdictReasonDomainMismatch": {
     "message": "도메인 불일치"
@@ -171,6 +156,33 @@
     "message": "표시 이름 스푸핑"
   },
   "verdictReasonSuspicious": {
-    "message": "의심스러운 링크 감지됨"
+    "message": "의심스러운 링크"
+  },
+  "verdictReasonSpfAlign": {
+    "message": "SPF 정렬 실패"
+  },
+  "verdictReasonDkimAlign": {
+    "message": "DKIM 정렬 실패"
+  },
+  "badgeAuthPartial": {
+    "message": "⚠️ 부분 인증"
+  },
+  "linkSoleExternal": {
+    "message": "유일한 링크가 외부 도메인을 가리킴"
+  },
+  "linkCtaExternal": {
+    "message": "메인 클릭 영역이 외부 도메인을 가리킴"
+  },
+  "linkTrackingPixel": {
+    "message": "추적 픽셀 감지됨"
+  },
+  "resourceDomainListTitle": {
+    "message": "리소스 도메인 (이미지 등):"
+  },
+  "badgePhishing": {
+    "message": "💀 피싱 감지"
+  },
+  "verdictReasonTrackingPixel": {
+    "message": "추적 픽셀"
   }
 }

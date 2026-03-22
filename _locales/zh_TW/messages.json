@@ -129,40 +129,25 @@
     "message": "連結偽裝"
   },
   "linkDangerousScheme": {
-    "message": "偵測到危險的連結協定"
+    "message": "偵測到危險連結協定"
   },
   "linkEmbeddedForm": {
-    "message": "郵件內文中嵌入了 HTML 表單（非常可疑）"
+    "message": "嵌入了 HTML 表單（非常可疑）"
   },
   "linkIpAddress": {
-    "message": "連結指向 IP 位址而非網域名稱"
+    "message": "連結指向 IP 位址"
   },
   "linkIdnHomograph": {
-    "message": "偵測到國際化網域名稱（可能為同形字攻擊）"
+    "message": "偵測到國際化網域名稱（同形字風險）"
   },
   "linkShortener": {
-    "message": "偵測到短網址（隱藏了實際目標）"
+    "message": "偵測到短網址（目標被隱藏）"
   },
   "linkDomainListTitle": {
     "message": "郵件內文中的連結網域一覽："
   },
   "verdictReasonPhishing": {
-    "message": "偵測到釣魚指標"
-  },
-  "verdictReasonDmarcFail": {
-    "message": "DMARC 未通過"
-  },
-  "verdictReasonPolicyNone": {
-    "message": "DMARC 政策: p=none"
-  },
-  "verdictReasonSpfFail": {
-    "message": "SPF 未通過"
-  },
-  "verdictReasonDkimFail": {
-    "message": "DKIM 未通過"
-  },
-  "verdictReasonAlignment": {
-    "message": "DMARC 比對失敗"
+    "message": "偵測到釣魚"
   },
   "verdictReasonDomainMismatch": {
     "message": "網域不符"
@@ -171,6 +156,33 @@
     "message": "顯示名稱偽造"
   },
   "verdictReasonSuspicious": {
-    "message": "偵測到可疑連結"
+    "message": "可疑連結"
+  },
+  "verdictReasonSpfAlign": {
+    "message": "SPF 比對失敗"
+  },
+  "verdictReasonDkimAlign": {
+    "message": "DKIM 比對失敗"
+  },
+  "badgeAuthPartial": {
+    "message": "⚠️ 部分驗證"
+  },
+  "linkSoleExternal": {
+    "message": "唯一的連結指向外部網域"
+  },
+  "linkCtaExternal": {
+    "message": "主要點擊區域指向外部網域"
+  },
+  "linkTrackingPixel": {
+    "message": "偵測到追蹤像素"
+  },
+  "resourceDomainListTitle": {
+    "message": "資源網域一覽（圖片等）："
+  },
+  "badgePhishing": {
+    "message": "💀 釣魚偵測"
+  },
+  "verdictReasonTrackingPixel": {
+    "message": "追蹤像素"
   }
 }

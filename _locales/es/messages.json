@@ -132,45 +132,57 @@
     "message": "Esquema de enlace peligroso detectado"
   },
   "linkEmbeddedForm": {
-    "message": "Formulario HTML incrustado en el cuerpo del correo (muy sospechoso)"
+    "message": "Formulario HTML incrustado (muy sospechoso)"
   },
   "linkIpAddress": {
-    "message": "El enlace apunta a una dirección IP en lugar de un nombre de dominio"
+    "message": "El enlace apunta a una dirección IP"
   },
   "linkIdnHomograph": {
-    "message": "Nombre de dominio internacionalizado detectado (posible ataque homógrafo)"
+    "message": "Nombre de dominio internacionalizado detectado (riesgo homógrafo)"
   },
   "linkShortener": {
-    "message": "Acortador de URL detectado (oculta el destino real)"
+    "message": "Acortador de URL detectado (destino oculto)"
   },
   "linkDomainListTitle": {
     "message": "Dominios de enlaces en el cuerpo del correo:"
   },
   "verdictReasonPhishing": {
-    "message": "Indicador de phishing detectado"
-  },
-  "verdictReasonDmarcFail": {
-    "message": "DMARC no aprobado"
-  },
-  "verdictReasonPolicyNone": {
-    "message": "Política DMARC: p=none"
-  },
-  "verdictReasonSpfFail": {
-    "message": "SPF no aprobado"
-  },
-  "verdictReasonDkimFail": {
-    "message": "DKIM no aprobado"
-  },
-  "verdictReasonAlignment": {
-    "message": "Alineación DMARC fallida"
+    "message": "Phishing detectado"
   },
   "verdictReasonDomainMismatch": {
-    "message": "Dominio no alineado"
+    "message": "Dominio no coincide"
   },
   "verdictReasonSpoofing": {
     "message": "Suplantación de nombre"
   },
   "verdictReasonSuspicious": {
-    "message": "Enlace sospechoso detectado"
+    "message": "Enlace sospechoso"
+  },
+  "verdictReasonSpfAlign": {
+    "message": "Alineación SPF fallida"
+  },
+  "verdictReasonDkimAlign": {
+    "message": "Alineación DKIM fallida"
+  },
+  "badgeAuthPartial": {
+    "message": "⚠️ PARCIAL"
+  },
+  "linkSoleExternal": {
+    "message": "El único enlace apunta a un dominio externo"
+  },
+  "linkCtaExternal": {
+    "message": "El área de clic principal apunta a un dominio externo"
+  },
+  "linkTrackingPixel": {
+    "message": "Píxel de rastreo detectado"
+  },
+  "resourceDomainListTitle": {
+    "message": "Dominios de recursos (imágenes, etc.):"
+  },
+  "badgePhishing": {
+    "message": "💀 PHISHING"
+  },
+  "verdictReasonTrackingPixel": {
+    "message": "Píxel de rastreo"
   }
 }

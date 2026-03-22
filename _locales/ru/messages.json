@@ -132,45 +132,57 @@
     "message": "Обнаружена опасная схема ссылки"
   },
   "linkEmbeddedForm": {
-    "message": "HTML-форма встроена в тело письма (крайне подозрительно)"
+    "message": "HTML-форма встроена (крайне подозрительно)"
   },
   "linkIpAddress": {
-    "message": "Ссылка указывает на IP-адрес вместо доменного имени"
+    "message": "Ссылка ведёт на IP-адрес"
   },
   "linkIdnHomograph": {
-    "message": "Обнаружено интернационализированное доменное имя (возможная гомографическая атака)"
+    "message": "Обнаружен интернационализированный домен (гомографический риск)"
   },
   "linkShortener": {
-    "message": "Обнаружен сокращатель URL (скрывает реальное назначение)"
+    "message": "Обнаружен сокращатель URL (назначение скрыто)"
   },
   "linkDomainListTitle": {
     "message": "Домены ссылок в теле письма:"
   },
   "verdictReasonPhishing": {
-    "message": "Обнаружен индикатор фишинга"
-  },
-  "verdictReasonDmarcFail": {
-    "message": "DMARC не пройден"
-  },
-  "verdictReasonPolicyNone": {
-    "message": "Политика DMARC: p=none"
-  },
-  "verdictReasonSpfFail": {
-    "message": "SPF не пройден"
-  },
-  "verdictReasonDkimFail": {
-    "message": "DKIM не пройден"
-  },
-  "verdictReasonAlignment": {
-    "message": "Выравнивание DMARC не пройдено"
+    "message": "Обнаружен фишинг"
   },
   "verdictReasonDomainMismatch": {
-    "message": "Домен не совпадает"
+    "message": "Несоответствие домена"
   },
   "verdictReasonSpoofing": {
-    "message": "Подмена отображаемого имени"
+    "message": "Подмена имени"
   },
   "verdictReasonSuspicious": {
-    "message": "Обнаружена подозрительная ссылка"
+    "message": "Подозрительная ссылка"
+  },
+  "verdictReasonSpfAlign": {
+    "message": "Сбой выравнивания SPF"
+  },
+  "verdictReasonDkimAlign": {
+    "message": "Сбой выравнивания DKIM"
+  },
+  "badgeAuthPartial": {
+    "message": "⚠️ ЧАСТИЧНО"
+  },
+  "linkSoleExternal": {
+    "message": "Единственная ссылка ведёт на внешний домен"
+  },
+  "linkCtaExternal": {
+    "message": "Основная кнопка ведёт на внешний домен"
+  },
+  "linkTrackingPixel": {
+    "message": "Обнаружен пиксель отслеживания"
+  },
+  "resourceDomainListTitle": {
+    "message": "Домены ресурсов (изображения и т.д.):"
+  },
+  "badgePhishing": {
+    "message": "💀 ФИШИНГ"
+  },
+  "verdictReasonTrackingPixel": {
+    "message": "Пиксель отслеживания"
   }
 }

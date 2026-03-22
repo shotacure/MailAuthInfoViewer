@@ -377,24 +377,28 @@
       // DMARCはSPFアライメントとDKIMアライメントを別々に評価する（RFC 7489）。
       // SPFドメイン(smtp.mailfrom)とDKIM署名ドメイン(header.d)を
       // それぞれヘッダFromの組織ドメインと比較する。
-      const evaluateAlignment = (spfDetail, dkimDetail, headerOrgDomain) => {
+      const evaluateAlignment = (spfDetail, dkimDetail, headerOrgDomain, spfStatus, dkimStatus) => {
         const getOrgDomain = window.getOrganizationalDomain || ((d) => d);
 
         // SPF アライメント: smtp.mailfrom のドメインと Header From の組織ドメインを比較
+        // SPF が pass でない場合、ドメインが一致していてもアライメント成立とはみなさない
         let spfAligned = false;
-        if (spfDetail.domain) {
+        if (spfStatus === "pass" && spfDetail.domain) {
           const spfOrgDomain = getOrgDomain(spfDetail.domain.toLowerCase());
           spfAligned = (spfOrgDomain === headerOrgDomain);
         }
 
         // DKIM アライメント: いずれかの DKIM 署名ドメインと Header From の組織ドメインが一致すればOK
+        // DKIM が pass でない場合（permerror, fail 等）、アライメント成立とはみなさない
         let dkimAligned = false;
-        const dkimDomains = dkimDetail.domains || [];
-        for (const d of dkimDomains) {
-          const dkimOrgDomain = getOrgDomain(d.toLowerCase());
-          if (dkimOrgDomain === headerOrgDomain) {
-            dkimAligned = true;
-            break;
+        if (dkimStatus === "pass") {
+          const dkimDomains = dkimDetail.domains || [];
+          for (const d of dkimDomains) {
+            const dkimOrgDomain = getOrgDomain(d.toLowerCase());
+            if (dkimOrgDomain === headerOrgDomain) {
+              dkimAligned = true;
+              break;
+            }
           }
         }
 
@@ -436,7 +440,7 @@
       }
 
       // SPF/DKIM アライメントの個別評価結果
-      const alignment = evaluateAlignment(spfDetail, dkimDetail, envelope.headerOrgDomain);
+      const alignment = evaluateAlignment(spfDetail, dkimDetail, envelope.headerOrgDomain, spfStatus, dkimResult.aggregated);
 
       return {
         spf: { status: spfStatus, detail: spfDetail },
@@ -574,11 +578,12 @@
     // 検出項目:
     //   [critical] リンクテキスト偽装、javascript:/data: URI、HTMLフォーム埋め込み
     //   [suspicious] IPアドレスリンク、IDNホモグラフ、URLショートナー
-    //   [info] リンクドメイン一覧（Header Fromとの一致/不一致）
-    //   [info] Reply-To不一致（parseEnvelopeで検出済み、ここでは扱わない）
+    //   [suspicious] 唯一のリンクが外部ドメイン、最大CTAが外部ドメイン、トラッキングピクセル
+    //   [info] リンクドメイン一覧、リソースドメイン一覧
     const analyzeLinkSafety = (bodyContent, headerOrgDomain) => {
       const findings = [];   // { level: "critical"|"suspicious"|"info", type: string, detail: string }
       const linkDomains = new Map(); // domain → { count, matchesFrom }
+      const resourceDomains = new Map(); // domain → { count, matchesFrom } (画像等の外部リソース)
       const deceptiveDomains = new Set(); // リンクテキスト偽装の実際のリンク先組織ドメイン
 
       // フィッシングで多用される URL ショートナーサービスのドメインリスト
@@ -589,9 +594,9 @@
         "bc.vc", "yourls.org"
       ];
 
-      if (!bodyContent) return { findings, linkDomains, deceptiveDomains };
+      if (!bodyContent) return { findings, linkDomains, resourceDomains, deceptiveDomains, trackingPixelDomains: new Set() };
 
-      // DOMParser で本文HTMLをパースし、リンクとフォームを解析する
+      // DOMParser で本文HTMLをパースし、リンク・フォーム・画像を解析する
       const parser = new DOMParser();
       const doc = parser.parseFromString(bodyContent, "text/html");
       const getOrgDomain = window.getOrganizationalDomain || ((d) => d);
@@ -607,7 +612,10 @@
       }
 
       // ■ リンク解析: 全 <a href="..."> を走査
+      // 各リンクの推定表示面積も記録し、最大CTAの判定に使う
       const anchors = doc.querySelectorAll("a[href]");
+      const linkInfos = []; // { orgDomain, matchesFrom, estimatedArea }
+
       for (const a of anchors) {
         const href = (a.getAttribute("href") || "").trim();
         if (!href || href.startsWith("#") || href.startsWith("mailto:")) continue;
@@ -629,13 +637,12 @@
           const url = new URL(href, "http://dummy.invalid");
           linkHost = url.hostname.toLowerCase();
         } catch {
-          continue; // パース不能なURLはスキップ
+          continue;
         }
 
         if (!linkHost || linkHost === "dummy.invalid") continue;
 
         // --- 項目1: リンクテキスト偽装検知 ---
-        // 表示テキストがURLの形式を取っており、href先ドメインと異なる場合はほぼ確実にフィッシング
         const linkText = (a.textContent || "").trim();
         const urlInText = linkText.match(/^https?:\/\/([^\/\s?#]+)/i);
         if (urlInText) {
@@ -648,7 +655,6 @@
               type: "deceptive_text",
               detail: msg("linkDeceptiveText")
             });
-            // 偽装リンクの実際のリンク先ドメインを記録し、ドメイン一覧で危険表示に使う
             deceptiveDomains.add(hrefOrgDomain);
           }
         }
@@ -663,8 +669,6 @@
         }
 
         // --- 項目5: IDNホモグラフ攻撃検知 ---
-        // Punycode (xn--) を含むドメインは、見た目が正規ドメインに酷似した
-        // Unicode文字を使ったなりすましの可能性がある
         if (linkHost.includes("xn--")) {
           findings.push({
             level: "suspicious",
@@ -684,13 +688,124 @@
         }
 
         // --- 項目7: リンクドメイン一覧収集 ---
-        // 全リンクのドメインを組織ドメインレベルで集計し、Header Fromとの一致/不一致を記録
         const matchesFrom = (linkOrgDomain === headerOrgDomain);
         if (linkDomains.has(linkOrgDomain)) {
           linkDomains.get(linkOrgDomain).count++;
         } else {
           linkDomains.set(linkOrgDomain, { count: 1, matchesFrom });
         }
+
+        // --- CTA推定面積の計算 ---
+        // <a> 内に <img> がある場合はその画像サイズ、なければテキスト長で推定
+        let estimatedArea = linkText.length * 16; // テキストリンクのデフォルト推定
+        const innerImg = a.querySelector("img");
+        if (innerImg) {
+          const w = parseInt(innerImg.getAttribute("width")) || 0;
+          const h = parseInt(innerImg.getAttribute("height")) || 0;
+          if (w > 0 && h > 0) estimatedArea = w * h;
+          else estimatedArea = 10000; // サイズ不明の画像リンクは大きめに推定
+        }
+        // ボタン風スタイルの検出: padding や display:block があれば面積を加算
+        const style = a.getAttribute("style") || "";
+        if (/padding/i.test(style) || /display\s*:\s*block/i.test(style)) {
+          estimatedArea = Math.max(estimatedArea, 5000);
+        }
+
+        linkInfos.push({ orgDomain: linkOrgDomain, matchesFrom, estimatedArea });
+      }
+
+      // ■ テキスト状態のURL検出
+      const textContent = doc.body ? doc.body.textContent : "";
+      const textUrlRegex = /https?:\/\/([^\s"'<>)\]]+)/gi;
+      const textUrls = []; // テキスト中のURL一覧（唯一のURL判定に使用）
+      let textUrlMatch;
+      while ((textUrlMatch = textUrlRegex.exec(textContent)) !== null) {
+        try {
+          const url = new URL(textUrlMatch[0]);
+          const host = url.hostname.toLowerCase();
+          if (!host) continue;
+          const orgDomain = getOrgDomain(host);
+          const matchesFrom = (orgDomain === headerOrgDomain);
+          textUrls.push({ orgDomain, matchesFrom });
+          if (!linkDomains.has(orgDomain)) {
+            linkDomains.set(orgDomain, { count: 1, matchesFrom });
+          }
+        } catch {
+          // パース不能なURLはスキップ
+        }
+      }
+
+      // ■ 唯一のリンク/URLが外部ドメイン → フィッシング疑い
+      // HTMLメール: <a> リンクが1つだけで外部ドメイン
+      // テキストメール: URLが1つだけで外部ドメイン
+      const isHtml = /<[a-z][\s\S]*>/i.test(bodyContent);
+      let hasSoleLinkWarning = false;
+      if (isHtml && linkInfos.length === 1 && !linkInfos[0].matchesFrom) {
+        findings.push({ level: "suspicious", type: "sole_link_external", detail: msg("linkSoleExternal") });
+        hasSoleLinkWarning = true;
+      } else if (!isHtml && textUrls.length === 1 && !textUrls[0].matchesFrom) {
+        findings.push({ level: "suspicious", type: "sole_link_external", detail: msg("linkSoleExternal") });
+        hasSoleLinkWarning = true;
+      }
+
+      // ■ 最大CTAリンクが外部ドメイン → フィッシング疑い
+      // 唯一のリンク警告が出ている場合は冗長なので省略
+      if (!hasSoleLinkWarning && linkInfos.length > 0) {
+        const largestCta = linkInfos.reduce((max, cur) => cur.estimatedArea > max.estimatedArea ? cur : max);
+        if (!largestCta.matchesFrom && largestCta.estimatedArea >= 1000) {
+          findings.push({ level: "suspicious", type: "cta_external", detail: msg("linkCtaExternal") });
+        }
+      }
+
+      // ■ 画像・外部リソース解析
+      const images = doc.querySelectorAll("img[src]");
+      let trackingPixelCount = 0;
+      const trackingPixelDomains = new Set(); // トラッキングピクセルの配信元ドメイン
+      for (const img of images) {
+        const src = (img.getAttribute("src") || "").trim();
+        if (!src || src.startsWith("data:") || src.startsWith("cid:")) continue;
+
+        let imgHost = "";
+        try {
+          const url = new URL(src, "http://dummy.invalid");
+          imgHost = url.hostname.toLowerCase();
+        } catch {
+          continue;
+        }
+        if (!imgHost || imgHost === "dummy.invalid") continue;
+
+        const imgOrgDomain = getOrgDomain(imgHost);
+        const matchesFrom = (imgOrgDomain === headerOrgDomain);
+
+        // トラッキングピクセル検知: 1x1 や 0x0 の非表示画像
+        const w = parseInt(img.getAttribute("width")) || -1;
+        const h = parseInt(img.getAttribute("height")) || -1;
+        const style = img.getAttribute("style") || "";
+        const isPixel = (w >= 0 && w <= 2 && h >= 0 && h <= 2) ||
+                        /width\s*:\s*[01]px/i.test(style) ||
+                        /height\s*:\s*[01]px/i.test(style) ||
+                        /display\s*:\s*none/i.test(style) ||
+                        /visibility\s*:\s*hidden/i.test(style);
+        if (isPixel) {
+          trackingPixelCount++;
+          trackingPixelDomains.add(imgOrgDomain);
+        }
+
+        // リソースドメイン一覧に追加（トラッキングピクセルも含める）
+        if (resourceDomains.has(imgOrgDomain)) {
+          resourceDomains.get(imgOrgDomain).count++;
+        } else {
+          resourceDomains.set(imgOrgDomain, { count: 1, matchesFrom });
+        }
+      }
+
+      // トラッキングピクセルが検出された場合は警告
+      if (trackingPixelCount > 0) {
+        findings.push({
+          level: "suspicious",
+          type: "tracking_pixel",
+          detail: msg("linkTrackingPixel") + ` (×${trackingPixelCount})`
+        });
       }
 
       // findings の重複排除（同じ type + detail は1回だけ）
@@ -704,7 +819,7 @@
         }
       }
 
-      return { findings: uniqueFindings, linkDomains, deceptiveDomains };
+      return { findings: uniqueFindings, linkDomains, resourceDomains, deceptiveDomains, trackingPixelDomains };
     };
 
     // =========================================================
@@ -723,12 +838,11 @@
       // 「設定不備」として警告対象にする。
       const isDmarcOk = authResults.dmarc.status === "pass";
 
-      // ■ DMARCポリシーの厳格性チェック
+      // ■ DMARCポリシーの情報表示
       // p=none は「DMARCレコードはあるが認証失敗でも何もしない」という設定。
-      // 管理者が p=quarantine または p=reject に変更すれば解決できる不備のため、
-      // グリーン判定の条件から除外する。
-      const dmarcPolicy = authResults.dmarc.detail?.policy || "";
-      const isDmarcPolicyStrict = isDmarcOk && dmarcPolicy !== "" && dmarcPolicy !== "none";
+      // DMARCカード内でポリシーを赤色表示して管理者に改善を促すが、
+      // 認証自体は成功しているためグリーン判定は阻害しない。
+      // （一般ユーザーにはp=noneで自動展開しないことで情報過多を防ぐ）
 
       // ■ DMARCアライメント判定 (RFC 7489)
       // SPFドメイン(smtp.mailfrom)またはDKIM署名ドメイン(header.d)の
@@ -739,9 +853,12 @@
 
       // ■ フィッシング指標の集約
       const hasCriticalPhishing = linkSafety?.findings?.some(f => f.level === "critical") || false;
-      const hasSuspiciousPhishing = linkSafety?.findings?.some(f => f.level === "suspicious") || false;
+      // トラッキングピクセルはグリーン判定を阻害しない（情報提供のみ）
+      // 正規の企業メールにほぼ必ず含まれるため、阻害すると常態化してオオカミ少年になる
+      const hasSuspiciousLink = linkSafety?.findings?.some(f => f.level === "suspicious" && f.type !== "tracking_pixel") || false;
 
-      // ■ 判定理由の収集: なぜグリーンにならないか / なぜレッドなのかを記録
+      // ■ 判定理由の収集: グリーンでない全理由を記録
+      // 認証系は実ステータスを含め、アライメントはpassかつ不成立の場合のみ記録
       const verdictReasons = [];
 
       // ■ 総合判定
@@ -749,38 +866,44 @@
       // （SendGrid等の正当な外部配信サービス利用パターンに対応）
       const domainCheckOk = isDmarcOk && isDmarcAligned ? true : isDomainAligned;
 
-      const isSecure = isSpfOk && isDkimOk && isDmarcPolicyStrict &&
+      const isSecure = isSpfOk && isDkimOk && isDmarcOk &&
                        domainCheckOk && isDmarcAligned &&
-                       !isDisplayNameSpoofed && !hasCriticalPhishing && !hasSuspiciousPhishing;
+                       !isDisplayNameSpoofed && !hasCriticalPhishing && !hasSuspiciousLink;
 
-      // 判定理由を記録
-      if (!isSpfOk) verdictReasons.push("spf_not_pass");
-      if (!isDkimOk) verdictReasons.push("dkim_not_pass");
-      if (!isDmarcOk) verdictReasons.push("dmarc_not_pass");
-      if (isDmarcOk && !isDmarcPolicyStrict) verdictReasons.push("dmarc_policy_none");
-      if (!isDmarcAligned) verdictReasons.push("dmarc_not_aligned");
+      // 認証系: pass 以外なら実際のステータスを記録 (例: "SPF: softfail")
+      if (!isSpfOk) verdictReasons.push(`SPF: ${authResults.spf.status}`);
+      if (!isDkimOk) verdictReasons.push(`DKIM: ${authResults.dkim.status}`);
+      if (!isDmarcOk) verdictReasons.push(`DMARC: ${authResults.dmarc.status}`);
+      // アライメント: 認証が pass しているのにアライメント不成立の場合のみ表示
+      if (isSpfOk && !al.spfAligned) verdictReasons.push("spf_align_fail");
+      if (isDkimOk && !al.dkimAligned) verdictReasons.push("dkim_align_fail");
       if (!domainCheckOk) verdictReasons.push("domain_not_aligned");
       if (isDisplayNameSpoofed) verdictReasons.push("display_name_spoofed");
-      if (hasCriticalPhishing) verdictReasons.push("phishing_critical");
-      if (hasSuspiciousPhishing) verdictReasons.push("phishing_suspicious");
+      // phishing_critical はバッジ自体が「💀 フィッシング検出」になるため判定理由には含めない
+      // トラッキングピクセルは判定理由タグに出さない（リンク安全性カード内で情報提供）
+      if (hasSuspiciousLink) verdictReasons.push("phishing_suspicious");
 
       let badgeClass = "warning";
       let badgeText = msg("badgeUnverified");
 
       if (hasCriticalPhishing) {
-        // フィッシングの確度が極めて高い指標が検出された場合は、認証結果に関わらずレッド
-        badgeClass = "danger";
-        badgeText = msg("badgeAuthFailed");
+        // フィッシング確定: リンク偽装等の確度が極めて高い指標 → 専用バッジ（レッドより重い）
+        badgeClass = "phishing";
+        badgeText = msg("badgePhishing");
       } else if (isSecure) {
         badgeClass = "secure";
         badgeText = msg("badgeAuthPass");
       } else if (authResults.spf.status === "fail" || authResults.dkim.status === "fail" || authResults.dmarc.status === "fail") {
         badgeClass = "danger";
         badgeText = msg("badgeAuthFailed");
-      } else if ((isSpfOk || isDkimOk) && envelopeFrom !== "Unknown") {
-        // 認証は通っているがグリーン条件を満たさない
+      } else if ((isSpfOk || isDkimOk) && isDmarcOk && envelopeFrom !== "Unknown") {
+        // SPF/DKIM・DMARC全て通っているが他の条件（アライメント・なりすまし等）で不合格
         badgeClass = "warning";
         badgeText = msg("badgeAuthPassWarning");
+      } else if ((isSpfOk || isDkimOk) && envelopeFrom !== "Unknown") {
+        // SPF/DKIMの一部は通っているがDMARCがpassでない → 「認証成功」とは言わない
+        badgeClass = "warning";
+        badgeText = msg("badgeAuthPartial");
       }
 
       return {
@@ -789,9 +912,8 @@
         isDkimOk,
         isDmarcOk,
         isDmarcAligned,
-        isDmarcPolicyStrict,
         hasCriticalPhishing,
-        hasSuspiciousPhishing,
+        hasSuspiciousLink,
         verdictReasons,
         badgeClass,
         badgeText,
@@ -846,12 +968,12 @@
           --maiv-align-warn-text: #e65100;
           --maiv-align-ng-bg: #ffebee;
           --maiv-align-ng-text: #c62828;
-          --maiv-policy-reject-bg: #ffebee;
-          --maiv-policy-reject-text: #c62828;
+          --maiv-policy-reject-bg: #e3f2fd;
+          --maiv-policy-reject-text: #1565c0;
           --maiv-policy-quarantine-bg: #fff3e0;
           --maiv-policy-quarantine-text: #e65100;
-          --maiv-policy-none-bg: #f5f5f5;
-          --maiv-policy-none-text: #757575;
+          --maiv-policy-none-bg: #ffebee;
+          --maiv-policy-none-text: #c62828;
           --maiv-mismatch-color: #e65100;
           --maiv-mailing-list-bg: #e3f2fd;
           --maiv-mailing-list-text: #1565c0;
@@ -890,15 +1012,28 @@
             --maiv-align-warn-text: #ffcc80;
             --maiv-align-ng-bg: #4a1c1c;
             --maiv-align-ng-text: #ef9a9a;
-            --maiv-policy-reject-bg: #4a1c1c;
-            --maiv-policy-reject-text: #ef9a9a;
+            --maiv-policy-reject-bg: #1a2a3a;
+            --maiv-policy-reject-text: #64b5f6;
             --maiv-policy-quarantine-bg: #4a3000;
             --maiv-policy-quarantine-text: #ffcc80;
-            --maiv-policy-none-bg: #444;
-            --maiv-policy-none-text: #aaa;
+            --maiv-policy-none-bg: #4a1c1c;
+            --maiv-policy-none-text: #ef9a9a;
             --maiv-mismatch-color: #ffb74d;
             --maiv-mailing-list-bg: #1a2a3a;
             --maiv-mailing-list-text: #64b5f6;
+          }
+        }
+
+        /* ダークモードでのフィッシングバッジ */
+        @media (prefers-color-scheme: dark) {
+          .maiv-badge.phishing {
+            background-color: #2a0000;
+            color: #ff5252;
+            border-color: #ff5252;
+          }
+          @keyframes maiv-phishing-pulse {
+            0%, 100% { background-color: #2a0000; color: #ff5252; }
+            50% { background-color: #ff5252; color: #1a0000; }
           }
         }
 
@@ -925,6 +1060,16 @@
         .maiv-badge.secure { background-color: #2e7d32; }
         .maiv-badge.warning { background-color: #ed6c02; }
         .maiv-badge.danger { background-color: #d32f2f; }
+        .maiv-badge.phishing {
+          background-color: #fff;
+          color: #b71c1c;
+          border: 2px solid #d32f2f;
+          animation: maiv-phishing-pulse 0.8s ease-in-out 5;
+        }
+        @keyframes maiv-phishing-pulse {
+          0%, 100% { background-color: #fff; color: #b71c1c; }
+          50% { background-color: #d32f2f; color: #fff; }
+        }
 
         .maiv-header-domain { font-size: 17px; font-weight: bold; color: var(--maiv-text-strong); }
         .maiv-header-mismatch { font-size: 13px; color: var(--maiv-mismatch-color); font-weight: bold; margin-left: 6px; }
@@ -934,11 +1079,14 @@
           background-color: var(--maiv-mailing-list-bg);
           color: var(--maiv-mailing-list-text);
         }
-        /* 判定理由サマリー: バッジ横に表示する小さなタグ */
+        /* 判定理由タグ: 全理由をピルタグで横並び（折り返し可） */
+        .maiv-verdict-reasons-wrap {
+          display: inline-flex; flex-wrap: wrap; gap: 4px; margin-left: 8px; align-items: center;
+        }
         .maiv-verdict-reason {
-          font-size: 10px; font-weight: bold; margin-left: 8px;
+          font-size: 10px; font-weight: bold;
           padding: 2px 8px; border-radius: 10px;
-          white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 350px;
+          white-space: nowrap;
         }
         .maiv-verdict-reason.reason-warning {
           background-color: var(--maiv-align-warn-bg); color: var(--maiv-align-warn-text);
@@ -1047,54 +1195,44 @@
       container.className = "maiv-container";
 
       // --- ヘッダーバッジとドメイン表示 ---
-      let headerDomainText = "";
+      // バッジ横のドメイン表示: 常にヘッダFromドメインを表示
+      // 認証成功時は「このドメインが認証済み」の意味、
+      // それ以外は「このドメインを名乗っているメール」と人間が判断する材料
+      const headerDomainText = escapeHTML(envelope.headerFromDomain);
       let mailingListTag = "";
-
-      if (security.isSecure) {
-        // グリーン判定時はドメイン名のみ表示
-        headerDomainText = escapeHTML(envelope.headerFromDomain);
-      } else if (!envelope.isDomainAligned && (security.isSpfOk || security.isDkimOk) && envelope.envelopeFrom !== "Unknown") {
-        // ドメイン不一致時もドメイン名のみ表示（詳細はアドレスカード内の警告で確認可能）
-        headerDomainText = escapeHTML(envelope.envelopeFromDomain);
-      }
 
       // メーリングリスト経由の場合、ヘッダにタグを追加
       if (envelope.isMailingList) {
         mailingListTag = `<span class="maiv-mailing-list-tag">📋 ${escapeHTML(msg("mailingListVia"))}</span>`;
       }
 
-      // --- 判定理由サマリー: バッジの横に1行で「なぜこの判定か」を表示 ---
-      let verdictReasonText = "";
+      // --- 判定理由サマリー: バッジの横に該当する全理由をピルタグで表示 ---
+      let verdictReasonHTML = "";
       if (!security.isSecure && security.verdictReasons.length > 0) {
-        // 最も重要な理由を1つ選んで表示する（優先順位順）
-        const reasonMap = {
-          "phishing_critical": msg("verdictReasonPhishing"),
-          "dmarc_not_pass": msg("verdictReasonDmarcFail"),
-          "dmarc_policy_none": msg("verdictReasonPolicyNone"),
-          "spf_not_pass": msg("verdictReasonSpfFail"),
-          "dkim_not_pass": msg("verdictReasonDkimFail"),
-          "dmarc_not_aligned": msg("verdictReasonAlignment"),
+        // 認証系 ("SPF: softfail" 等) はそのまま表示、その他はローカライズ
+        const reasonLabelMap = {
+          "spf_align_fail": msg("verdictReasonSpfAlign"),
+          "dkim_align_fail": msg("verdictReasonDkimAlign"),
           "domain_not_aligned": msg("verdictReasonDomainMismatch"),
           "display_name_spoofed": msg("verdictReasonSpoofing"),
           "phishing_suspicious": msg("verdictReasonSuspicious")
         };
-        const priorityOrder = [
-          "phishing_critical", "dmarc_not_pass", "dmarc_policy_none",
-          "spf_not_pass", "dkim_not_pass", "dmarc_not_aligned",
-          "domain_not_aligned", "display_name_spoofed", "phishing_suspicious"
-        ];
-        for (const key of priorityOrder) {
-          if (security.verdictReasons.includes(key) && reasonMap[key]) {
-            verdictReasonText = reasonMap[key];
-            break;
+        const defaultReasonClass = (security.badgeClass === "danger" || security.badgeClass === "phishing") ? "reason-danger" : "reason-warning";
+        // 認証ステータスの深刻度別色分け
+        const softStatuses = new Set(["none", "softfail", "neutral"]);
+        const tags = security.verdictReasons.map(r => {
+          // 認証系は "SPF: softfail" のようにコロンを含む → そのまま表示
+          const label = r.includes(":") ? r : (reasonLabelMap[r] || r);
+          let tagClass = defaultReasonClass;
+          if (r.includes(":")) {
+            // 認証系タグ: ステータスに応じて色を変える
+            const status = r.split(":")[1].trim().toLowerCase();
+            tagClass = softStatuses.has(status) ? "reason-warning" : "reason-danger";
           }
-        }
+          return `<span class="maiv-verdict-reason ${tagClass}">${escapeHTML(label)}</span>`;
+        }).join("");
+        verdictReasonHTML = `<span class="maiv-verdict-reasons-wrap">${tags}</span>`;
       }
-      const verdictReasonHTML = (() => {
-        if (!verdictReasonText) return "";
-        const reasonClass = security.badgeClass === "danger" ? "reason-danger" : "reason-warning";
-        return `<span class="maiv-verdict-reason ${reasonClass}">${escapeHTML(verdictReasonText)}</span>`;
-      })();
 
       const headerHTML = `
         <div class="maiv-header" id="maiv-header-toggle" title="${escapeHTML(msg("toggleDetails"))}"
@@ -1140,8 +1278,9 @@
         const parts = [];
         if (d.domain) parts.push(`${escapeHTML(msg("labelDomain"))} ${escapeHTML(d.domain)}`);
         if (d.ip) parts.push(`${escapeHTML(msg("labelIpAddress"))} ${escapeHTML(d.ip)}`);
-        // SPF アライメント: smtp.mailfrom ドメインが Header From の組織ドメインと一致するか
-        if (al) {
+        // SPF アライメント: SPF が pass の場合のみ表示
+        // pass 以外のとき「不一致」を出すのは誤解を招くため非表示にする
+        if (al && authResults.spf.status === "pass") {
           const icon = al.spfAligned ? "✅" : "❌";
           const cls = al.spfAligned ? "maiv-align-pass" : "maiv-align-fail";
           const label = al.spfAligned ? msg("alignedLabel") : msg("notAlignedLabel");
@@ -1182,8 +1321,9 @@
           parts.push(listHTML);
         }
 
-        // DKIM アライメント: いずれかの署名ドメインが Header From の組織ドメインと一致するか
-        if (al) {
+        // DKIM アライメント: DKIM が pass の場合のみ表示
+        // permerror/fail 等のとき「不一致」を出すのは誤解を招くため非表示にする
+        if (al && authResults.dkim.status === "pass") {
           const icon = al.dkimAligned ? "✅" : "❌";
           const cls = al.dkimAligned ? "maiv-align-pass" : "maiv-align-fail";
           const label = al.dkimAligned ? msg("alignedLabel") : msg("notAlignedLabel");
@@ -1229,9 +1369,12 @@
         } else {
           alignmentWarningHTML += `<div class="align-ng">${escapeHTML(msg("alignMismatch"))}</div>`;
         }
-      } else if (envelope.isDomainAligned && security.isSecure) {
+      } else if (envelope.isDomainAligned && (security.isSpfOk || security.isDkimOk)) {
+        // ドメイン一致かつ認証も通っている場合はグリーン表示
+        // （p=none等で総合判定がグリーンでなくても、認証自体は成功している）
         alignmentWarningHTML += `<div class="align-ok">${escapeHTML(msg("alignOk"))}</div>`;
-      } else if (envelope.isDomainAligned && !security.isSecure) {
+      } else if (envelope.isDomainAligned) {
+        // ドメインは一致しているが認証が通っていない
         alignmentWarningHTML += `<div class="align-warn">${escapeHTML(msg("alignNotAuth"))}</div>`;
       }
 
@@ -1353,12 +1496,13 @@
         </div>
       `;
 
-      // --- LINK SAFETY カード: フィッシング検知結果とリンクドメイン一覧（常時表示） ---
+      // --- LINK SAFETY カード: フィッシング検知結果・リンクドメイン・リソースドメイン一覧（常時表示） ---
       const hasFindings = linkSafety && linkSafety.findings && linkSafety.findings.length > 0;
       const hasLinkDomains = linkSafety && linkSafety.linkDomains && linkSafety.linkDomains.size > 0;
+      const hasResourceDomains = linkSafety && linkSafety.resourceDomains && linkSafety.resourceDomains.size > 0;
 
       let linkSafetyContentHTML = "";
-      if (hasFindings || hasLinkDomains) {
+      if (hasFindings || hasLinkDomains || hasResourceDomains) {
         let findingsHTML = "";
         if (hasFindings) {
           for (const f of linkSafety.findings) {
@@ -1368,45 +1512,46 @@
           }
         }
 
-        // リンクドメイン一覧: Header Fromとの一致/不一致/偽装先を色分け表示
-        let domainListHTML = "";
-        if (hasLinkDomains) {
-          let domainItems = "";
-          const deceptive = linkSafety.deceptiveDomains || new Set();
-          // 偽装先ドメインを最上位、不一致を中間、一致を末尾に並べる
-          const sorted = Array.from(linkSafety.linkDomains.entries())
+        // ドメイン一覧のソート・レンダリング共通ヘルパー
+        // deceptive: 偽装先ドメインSet（💀表示）、trackers: トラッキングピクセル配信元Set（🕵️表示）
+        const renderDomainList = (title, domains, deceptive, trackers) => {
+          if (!domains || domains.size === 0) return "";
+          let items = "";
+          const sorted = Array.from(domains.entries())
             .sort((a, b) => {
-              const aDeceptive = deceptive.has(a[0]) ? 2 : 0;
-              const bDeceptive = deceptive.has(b[0]) ? 2 : 0;
-              const aMatch = a[1].matchesFrom ? 0 : 1;
-              const bMatch = b[1].matchesFrom ? 0 : 1;
-              return (bDeceptive + bMatch) - (aDeceptive + aMatch);
+              const aD = deceptive && deceptive.has(a[0]) ? 2 : 0;
+              const bD = deceptive && deceptive.has(b[0]) ? 2 : 0;
+              const aM = a[1].matchesFrom ? 0 : 1;
+              const bM = b[1].matchesFrom ? 0 : 1;
+              return (bD + bM) - (aD + aM);
             });
           for (const [domain, info] of sorted) {
             let icon, cls;
-            if (deceptive.has(domain)) {
-              // リンクテキスト偽装の実際のリンク先: 赤色太字で危険性を強調
-              icon = "💀";
-              cls = "maiv-link-domain-danger";
+            if (deceptive && deceptive.has(domain)) {
+              icon = "💀"; cls = "maiv-link-domain-danger";
             } else if (info.matchesFrom) {
-              icon = "✅";
-              cls = "maiv-link-domain-match";
+              icon = "✅"; cls = "maiv-link-domain-match";
             } else {
-              icon = "⚠️";
-              cls = "maiv-link-domain-mismatch";
+              icon = "⚠️"; cls = "maiv-link-domain-mismatch";
             }
-            domainItems += `<div class="maiv-link-domain-item">${icon} <span class="${cls}">${escapeHTML(domain)}</span> <span style="color:var(--maiv-text-faint);">(×${info.count})</span></div>`;
+            // トラッキングピクセル配信元には 🕵️ マーカーを付与
+            const trackerMark = trackers && trackers.has(domain) ? " 🕵️" : "";
+            items += `<div class="maiv-link-domain-item">${icon} <span class="${cls}">${escapeHTML(domain)}</span>${trackerMark} <span style="color:var(--maiv-text-faint);">(×${info.count})</span></div>`;
           }
-          domainListHTML = `
+          return `
             <div class="maiv-link-domain-list">
-              <div style="font-weight:bold; margin-bottom:4px; color:var(--maiv-text-secondary);">${escapeHTML(msg("linkDomainListTitle"))}</div>
-              ${domainItems}
+              <div style="font-weight:bold; margin-bottom:4px; color:var(--maiv-text-secondary);">${escapeHTML(title)}</div>
+              ${items}
             </div>
           `;
-        }
-        linkSafetyContentHTML = findingsHTML + domainListHTML;
+        };
+
+        const deceptive = linkSafety.deceptiveDomains || new Set();
+        const trackers = linkSafety.trackingPixelDomains || new Set();
+        const linkListHTML = renderDomainList(msg("linkDomainListTitle"), linkSafety.linkDomains, deceptive, null);
+        const resourceListHTML = renderDomainList(msg("resourceDomainListTitle"), linkSafety.resourceDomains, null, trackers);
+        linkSafetyContentHTML = findingsHTML + linkListHTML + resourceListHTML;
       } else {
-        // リンクなし または テキストメールの場合の空状態
         linkSafetyContentHTML = `<div class="maiv-empty-state">${escapeHTML(msg("labelNone"))}</div>`;
       }
 

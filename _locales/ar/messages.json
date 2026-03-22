@@ -132,45 +132,57 @@
     "message": "تم اكتشاف مخطط رابط خطير"
   },
   "linkEmbeddedForm": {
-    "message": "نموذج HTML مضمن في نص البريد (مشبوه جداً)"
+    "message": "نموذج HTML مضمن (مشبوه جداً)"
   },
   "linkIpAddress": {
-    "message": "الرابط يشير إلى عنوان IP بدلاً من اسم نطاق"
+    "message": "الرابط يشير إلى عنوان IP"
   },
   "linkIdnHomograph": {
-    "message": "تم اكتشاف اسم نطاق دولي (هجوم تماثلي محتمل)"
+    "message": "تم اكتشاف اسم نطاق دولي (خطر تماثلي)"
   },
   "linkShortener": {
-    "message": "تم اكتشاف مختصر URL (يخفي الوجهة الفعلية)"
+    "message": "تم اكتشاف مختصر URL (الوجهة مخفية)"
   },
   "linkDomainListTitle": {
     "message": "نطاقات الروابط في نص البريد:"
   },
   "verdictReasonPhishing": {
-    "message": "تم اكتشاف مؤشر تصيد"
-  },
-  "verdictReasonDmarcFail": {
-    "message": "DMARC غير ناجح"
-  },
-  "verdictReasonPolicyNone": {
-    "message": "سياسة DMARC: p=none"
-  },
-  "verdictReasonSpfFail": {
-    "message": "SPF غير ناجح"
-  },
-  "verdictReasonDkimFail": {
-    "message": "DKIM غير ناجح"
-  },
-  "verdictReasonAlignment": {
-    "message": "فشل محاذاة DMARC"
+    "message": "تم اكتشاف تصيد"
   },
   "verdictReasonDomainMismatch": {
-    "message": "النطاق غير متطابق"
+    "message": "عدم تطابق النطاق"
   },
   "verdictReasonSpoofing": {
     "message": "انتحال اسم العرض"
   },
   "verdictReasonSuspicious": {
-    "message": "تم اكتشاف رابط مشبوه"
+    "message": "رابط مشبوه"
+  },
+  "verdictReasonSpfAlign": {
+    "message": "فشل محاذاة SPF"
+  },
+  "verdictReasonDkimAlign": {
+    "message": "فشل محاذاة DKIM"
+  },
+  "badgeAuthPartial": {
+    "message": "⚠️ جزئي"
+  },
+  "linkSoleExternal": {
+    "message": "الرابط الوحيد يشير إلى نطاق خارجي"
+  },
+  "linkCtaExternal": {
+    "message": "منطقة النقر الرئيسية تشير إلى نطاق خارجي"
+  },
+  "linkTrackingPixel": {
+    "message": "تم اكتشاف بكسل تتبع"
+  },
+  "resourceDomainListTitle": {
+    "message": "نطاقات الموارد (الصور وغيرها):"
+  },
+  "badgePhishing": {
+    "message": "💀 تصيد"
+  },
+  "verdictReasonTrackingPixel": {
+    "message": "بكسل تتبع"
   }
 }
