@@ -87,10 +87,10 @@
     "message": "محاذاة DKIM:"
   },
   "alignedLabel": {
-    "message": "متطابق"
+    "message": "متوافق"
   },
   "notAlignedLabel": {
-    "message": "غير متطابق"
+    "message": "غير متوافق"
   },
   "alignOk": {
     "message": "✅ النطاق متطابق (موثق)"
@@ -184,5 +184,8 @@
   },
   "verdictReasonTrackingPixel": {
     "message": "بكسل تتبع"
+  },
+  "labelSelector": {
+    "message": "المُحدِّد:"
   }
 }

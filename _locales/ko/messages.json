@@ -87,10 +87,10 @@
     "message": "DKIM 정렬:"
   },
   "alignedLabel": {
-    "message": "일치"
+    "message": "정렬됨"
   },
   "notAlignedLabel": {
-    "message": "불일치"
+    "message": "비정렬"
   },
   "alignOk": {
     "message": "✅ 도메인 일치 (인증됨)"
@@ -184,5 +184,8 @@
   },
   "verdictReasonTrackingPixel": {
     "message": "추적 픽셀"
+  },
+  "labelSelector": {
+    "message": "셀렉터:"
   }
 }

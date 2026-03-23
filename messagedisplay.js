@@ -254,9 +254,17 @@
           for (const m of methods) {
             const statusMatch = m.match(/\bdkim\s*=\s*([a-zA-Z0-9]+)/i);
             if (statusMatch) {
-              // 各DKIM署名の d= ドメインを抽出
+              // 各DKIM署名の d= ドメインを抽出。なければ i= から取得
               const dMatch = m.match(/header\.d=([^;\s()]+)/i);
-              const domain = dMatch ? dMatch[1].replace(/^[@"']|["']$/g, '') : "";
+              let domain = dMatch ? dMatch[1].replace(/^[@"']|["']$/g, '') : "";
+              if (!domain) {
+                // header.i=@domain or header.i=user@domain からドメイン部分を取得
+                const iMatch = m.match(/header\.i=([^;\s()]+)/i);
+                if (iMatch) {
+                  let ival = iMatch[1].replace(/["']/g, '');
+                  domain = ival.includes('@') ? ival.split('@').pop() : ival;
+                }
+              }
               // DKIM セレクター (header.s=) を抽出: デバッグやDNS確認時に有用
               const sMatch = m.match(/header\.s=([^;\s()]+)/i);
               const selector = sMatch ? sMatch[1].replace(/["']/g, '') : "";
@@ -294,20 +302,20 @@
         if (type === 'spf') {
           let domain = "";
           let ip = "";
+          let rawSegment = "";
 
           for (const h of authHeaders) {
             const methods = h.split(';').slice(1);
             for (const m of methods) {
               if (!/\bspf\s*=/i.test(m)) continue;
+              rawSegment = m.trim();
 
-              // ドメイン: smtp.mailfrom= から取得
+              // smtp.mailfrom
               const mailfromMatch = m.match(/smtp\.mailfrom=([^;\s()]+)/i);
               if (mailfromMatch) {
-                // クォートで囲まれた値 (例: smtp.mailfrom="user@domain.com") に対応
                 const fromStr = mailfromMatch[1].replace(/^["'<]|["'>]$/g, '');
                 domain = fromStr.includes('@') ? fromStr.split('@')[1] : fromStr;
               } else {
-                // フォールバック: (domain of xxx@example.com ...) から取得
                 const domainOfMatch = m.match(/domain of ([^;\s()]+)/i);
                 if (domainOfMatch) {
                   const fromStr = domainOfMatch[1].replace(/^["'<]|["'>]$/g, '');
@@ -315,15 +323,16 @@
                 }
               }
 
-              // IP: designates ... as permitted sender、client-ip=、または smtp.remote-ip= から取得
+              // IP
               const ipMatch = m.match(/designates\s+([a-fA-F0-9.:]+)\s+as\s+permitted\s+sender/i) ||
                               m.match(/client-ip=([a-fA-F0-9.:]+)/i) ||
                               m.match(/smtp\.remote-ip=([a-fA-F0-9.:]+)/i);
               if (ipMatch) ip = ipMatch[1];
-              if (domain || ip) return { domain, ip };
+
+              if (domain || ip) return { domain, ip, rawSegment };
             }
           }
-          return { domain, ip };
+          return { domain, ip, rawSegment };
         }
 
         if (type === 'dkim') {
@@ -334,7 +343,6 @@
             for (const m of methods) {
               if (!/\bdkim\s*=/i.test(m)) continue;
 
-              // header.d= と header.i= を両方抽出
               const domainRegex = /header\.(?:d|i)=([^;\s()]+)/ig;
               let match;
               while ((match = domainRegex.exec(m)) !== null) {
@@ -351,23 +359,23 @@
         if (type === 'dmarc') {
           let domain = "";
           let policy = "";
+          let rawSegment = "";
 
           for (const h of authHeaders) {
             const methods = h.split(';').slice(1);
             for (const m of methods) {
               if (!/\bdmarc\s*=/i.test(m)) continue;
+              rawSegment = m.trim();
 
               const domainMatch = m.match(/header\.from=([^;\s()]+)/i);
               if (domainMatch) domain = domainMatch[1].replace(/["']/g, '');
 
-              // DMARC ポリシー (p=reject / p=quarantine / p=none) の抽出
-              // sp= (サブドメインポリシー) や pct= との誤マッチを防ぐため、
-              // 先頭または空白の直後に限定する
+              // p= (ポリシー) - sp= / pct= との誤マッチ防止
               const policyMatch = m.match(/(?:^|[\s(])p=([a-zA-Z]+)/i);
               if (policyMatch) policy = policyMatch[1].toLowerCase();
             }
           }
-          return { domain, policy };
+          return { domain, policy, rawSegment };
         }
 
         return {};
@@ -443,6 +451,9 @@
       const alignment = evaluateAlignment(spfDetail, dkimDetail, envelope.headerOrgDomain, spfStatus, dkimResult.aggregated);
 
       return {
+        authServId: trustedRegular.length > 0
+          ? trustedRegular[0].split(';')[0].trim()
+          : lastReceivedBy,
         spf: { status: spfStatus, detail: spfDetail },
         dkim: { status: dkimResult.aggregated, detail: dkimDetail, signatures: dkimResult.results },
         dmarc: { status: dmarcStatus, detail: dmarcDetail },
@@ -641,6 +652,22 @@
         }
 
         if (!linkHost || linkHost === "dummy.invalid") continue;
+
+        // ■ AWS SES クリックトラッキング解決
+        // awstrack.me はAWS SESのクリックトラッキングドメインで、URLパスに実際のリンク先が埋め込まれている
+        // 形式: https://r.us-east-1.awstrack.me/L0/https://actual-destination.com/path/.../tracking-id
+        // 実際のリンク先を抽出し、そのドメインで安全性を評価する
+        if (linkHost.endsWith("awstrack.me")) {
+          const awsMatch = href.match(/awstrack\.me\/L0\/(https?:\/\/[^\/\s]+)/i);
+          if (awsMatch) {
+            try {
+              const realUrl = new URL(awsMatch[1]);
+              linkHost = realUrl.hostname.toLowerCase();
+            } catch {
+              // パース失敗時はawstrack.meのまま評価（フォールバック）
+            }
+          }
+        }
 
         // --- 項目1: リンクテキスト偽装検知 ---
         const linkText = (a.textContent || "").trim();
@@ -1118,6 +1145,26 @@
           border-radius: 6px; padding: 10px;
         }
         .maiv-card-title { font-size: 11px; font-weight: bold; color: var(--maiv-card-title-color); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid var(--maiv-card-title-border); }
+
+        /* 折りたたみ可能なカード */
+        .maiv-card-title.maiv-collapsible {
+          cursor: pointer; user-select: none; display: flex; align-items: center; gap: 4px;
+        }
+        .maiv-card-title.maiv-collapsible:hover { opacity: 0.7; }
+        .maiv-card-title.maiv-collapsible::before {
+          content: "▶"; font-size: 8px; transition: transform 0.2s; display: inline-block; flex-shrink: 0;
+        }
+        .maiv-card-title.maiv-collapsible.maiv-expanded::before {
+          transform: rotate(90deg);
+        }
+        .maiv-collapsible-body {
+          max-height: 0; overflow: hidden; transition: max-height 0.3s ease;
+        }
+        .maiv-collapsible-body.maiv-expanded {
+          max-height: 2000px;
+        }
+        /* 認証カードの最小高さ（折りたたみ時もステータス行を維持） */
+        .maiv-auth-card { min-height: 70px; }
         .maiv-status-row { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
         .maiv-status-icon { font-size: 16px; }
 
@@ -1152,6 +1199,10 @@
         }
 
         .maiv-detail-text { font-size: 11px; color: var(--maiv-text-muted); margin-top: 4px; }
+        .maiv-expanded-detail { font-size: 10px; color: var(--maiv-text-muted); margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--maiv-card-title-border); }
+        .maiv-prop-row { display: flex; gap: 6px; padding: 1px 0; }
+        .maiv-prop-key { color: var(--maiv-text-faint); min-width: 80px; flex-shrink: 0; font-family: monospace; font-size: 10px; }
+        .maiv-prop-val { color: var(--maiv-text-secondary); word-break: break-all; font-family: monospace; font-size: 10px; }
         .maiv-policy-tag {
           display: inline-block; font-size: 10px; font-weight: bold;
           padding: 2px 6px; border-radius: 3px; margin-top: 4px;
@@ -1248,7 +1299,7 @@
       `;
 
       // --- 認証カード生成ヘルパー ---
-      const createAuthCard = (title, tooltip, data, detailHTML) => {
+      const createAuthCard = (title, tooltip, data, detailHTML, expandedHTML, cardId) => {
         let icon = "❓";
         let sClass = "status-none";
         const displayStatus = data.status.toUpperCase();
@@ -1258,14 +1309,23 @@
         else if (data.status === "softfail" || data.status === "neutral" || data.status === "none") { icon = "⚠️"; sClass = "status-none"; }
         else if (data.status === "temperror" || data.status === "permerror") { icon = "❌"; sClass = "status-fail"; }
 
+        // authserv-id: ジャッジしたサーバのドメイン
+        const authServLabel = authResults.authServId
+          ? `<span style="color:var(--maiv-text-faint); font-size:10px; margin-left:4px;">(${escapeHTML(authResults.authServId)})</span>`
+          : "";
+
+        const hasExpanded = expandedHTML && expandedHTML.trim();
         return `
-          <div class="maiv-card">
-            <div class="maiv-card-title" title="${escapeHTML(tooltip)}">${escapeHTML(title)}</div>
+          <div class="maiv-card maiv-auth-card">
+            <div class="maiv-card-title${hasExpanded ? ' maiv-collapsible' : ''}"${hasExpanded ? ` data-toggle="${cardId}"` : ''}
+                 title="${escapeHTML(tooltip)}">${escapeHTML(title)}</div>
             <div class="maiv-status-row">
               <span class="maiv-status-icon">${icon}</span>
               <span class="${sClass}">${escapeHTML(displayStatus)}</span>
+              ${authServLabel}
             </div>
             <div class="maiv-detail-text">${detailHTML}</div>
+            ${hasExpanded ? `<div class="maiv-collapsible-body" id="${cardId}"><div class="maiv-expanded-detail">${expandedHTML}</div></div>` : ''}
           </div>
         `;
       };
@@ -1291,46 +1351,55 @@
 
       // DKIM カード詳細: 集約ドメイン・個別署名結果・アライメントを表示
       const dkimDetailHTML = (() => {
-        const d = authResults.dkim.detail;
         const sigs = authResults.dkim.signatures || [];
-        const al = authResults.alignment;
-        const parts = [];
-        const sigsWithDomain = sigs.filter(s => s.domain);
+        const getOrgDomain = window.getOrganizationalDomain || ((d) => d);
+        const headerOrgDomain = envelope.headerOrgDomain;
+        const authServLabel = authResults.authServId
+          ? `<span style="color:var(--maiv-text-faint); font-size:10px; margin-left:4px;">(${escapeHTML(authResults.authServId)})</span>`
+          : "";
 
-        // 集約ドメイン表示
-        if (d.domains && d.domains.length > 0) {
-          parts.push(`${escapeHTML(msg("labelDomain"))} ${escapeHTML(d.domains.join(" / "))}`);
+        if (sigs.length === 0 || !sigs.some(s => s.domain)) {
+          const st = authResults.dkim.status;
+          const emptyIcon = (st === "fail" || st === "permerror" || st === "temperror") ? "❌" : "⚠️";
+          const emptyCls = (st === "fail" || st === "permerror" || st === "temperror") ? "status-fail" : "status-none";
+          return `
+            <div class="maiv-status-row">
+              <span class="maiv-status-icon">${emptyIcon}</span>
+              <span class="${emptyCls}">${escapeHTML(st.toUpperCase())}</span>
+              ${authServLabel}
+            </div>
+          `;
         }
 
-        // 署名が1つでセレクターが判明している場合はドメイン行の下にセレクターを表示
-        if (sigsWithDomain.length === 1 && sigsWithDomain[0].selector) {
-          parts.push(`<span style="color:var(--maiv-text-faint);">selector: ${escapeHTML(sigsWithDomain[0].selector)}</span>`);
-        }
+        let html = "";
+        for (let i = 0; i < sigs.length; i++) {
+          const sig = sigs[i];
+          if (!sig.domain) continue;
+          if (i > 0) html += `<div style="border-top:1px dashed var(--maiv-card-title-border); margin:6px 0;"></div>`;
 
-        // 複数署名がある場合、ドメインが判明している署名のみ個別にリスト表示する
-        if (sigsWithDomain.length > 1) {
-          let listHTML = '<div class="maiv-dkim-list">';
-          for (const sig of sigsWithDomain) {
-            const icon = sig.status === "pass" ? "✅" : (sig.status === "fail" ? "❌" : "⚠️");
-            const statusClass = sig.status === "pass" ? "status-pass" : (sig.status === "fail" ? "status-fail" : "status-none");
-            // セレクターが判明している場合は (s=selector) を併記
-            const selectorLabel = sig.selector ? ` <span style="color:var(--maiv-text-faint);">(s=${escapeHTML(sig.selector)})</span>` : '';
-            listHTML += `<div class="maiv-dkim-item">${icon} <span class="${statusClass}">${escapeHTML(sig.status.toUpperCase())}</span> ${escapeHTML(sig.domain)}${selectorLabel}</div>`;
+          const icon = sig.status === "pass" ? "✅" : (sig.status === "fail" ? "❌" : "⚠️");
+          const sClass = sig.status === "pass" ? "status-pass" : (sig.status === "fail" ? "status-fail" : "status-none");
+
+          // ステータス行（SPFと同じ maiv-status-row）
+          html += `<div class="maiv-status-row"><span class="maiv-status-icon">${icon}</span><span class="${sClass}">${escapeHTML(sig.status.toUpperCase())}</span>${authServLabel}</div>`;
+          // ドメイン・セレクタ・アライメントをSPFと同じ maiv-detail-text 内に配置
+          const parts = [];
+          parts.push(`${escapeHTML(msg("labelDomain"))} ${escapeHTML(sig.domain)}`);
+          if (sig.selector) {
+            parts.push(`${escapeHTML(msg("labelSelector"))} ${escapeHTML(sig.selector)}`);
           }
-          listHTML += '</div>';
-          parts.push(listHTML);
+          // アライメント（passした署名のみ）— SPFと同じくparts内に含めてmaiv-detail-textの11pxを適用
+          if (sig.status === "pass") {
+            const sigOrgDomain = getOrgDomain(sig.domain.toLowerCase());
+            const aligned = (sigOrgDomain === headerOrgDomain);
+            const alIcon = aligned ? "✅" : "❌";
+            const alCls = aligned ? "maiv-align-pass" : "maiv-align-fail";
+            const alLabel = aligned ? msg("alignedLabel") : msg("notAlignedLabel");
+            parts.push(`<div class="maiv-align-item" style="margin-top:4px;">${alIcon} <span class="${alCls}">${escapeHTML(msg("labelDkimAlign"))} ${escapeHTML(alLabel)}</span></div>`);
+          }
+          html += `<div class="maiv-detail-text">${parts.join("<br>")}</div>`;
         }
-
-        // DKIM アライメント: DKIM が pass の場合のみ表示
-        // permerror/fail 等のとき「不一致」を出すのは誤解を招くため非表示にする
-        if (al && authResults.dkim.status === "pass") {
-          const icon = al.dkimAligned ? "✅" : "❌";
-          const cls = al.dkimAligned ? "maiv-align-pass" : "maiv-align-fail";
-          const label = al.dkimAligned ? msg("alignedLabel") : msg("notAlignedLabel");
-          parts.push(`<div class="maiv-align-item" style="margin-top:4px;">${icon} <span class="${cls}">${escapeHTML(msg("labelDkimAlign"))} ${escapeHTML(label)}</span></div>`);
-        }
-
-        return parts.join("<br>");
+        return html;
       })();
 
       const dmarcDetailHTML = (() => {
@@ -1347,9 +1416,101 @@
       })();
 
       // 認証カード
-      const spfCard = createAuthCard(msg("cardTitleSpf"), msg("tooltipSpf"), authResults.spf, spfDetailHTML);
-      const dkimCard = createAuthCard(msg("cardTitleDkim"), msg("tooltipDkim"), authResults.dkim, dkimDetailHTML);
-      const dmarcCard = createAuthCard(msg("cardTitleDmarc"), msg("tooltipDmarc"), authResults.dmarc, dmarcDetailHTML);
+      // --- 展開時の全プロパティHTML生成 ---
+      // Authentication-Results 生セグメントから全 key=value ペアを抽出して表示
+      const renderPropRow = (key, val) => {
+        if (!val && val !== 0) return "";
+        return `<div class="maiv-prop-row"><span class="maiv-prop-key">${escapeHTML(key)}</span><span class="maiv-prop-val">${escapeHTML(String(val))}</span></div>`;
+      };
+
+      // 生セグメントから全プロパティを抽出するジェネリックパーサー
+      // "spf=pass (reason text) smtp.mailfrom=x smtp.helo=y" → [{key, val}, ...]
+      const parseSegmentProps = (segment) => {
+        if (!segment) return [];
+        const props = [];
+        // 括弧内のテキストを reason として先に抽出
+        const reasonMatch = segment.match(/\(([^)]+)\)/);
+        if (reasonMatch) props.push({ key: "reason", val: reasonMatch[1] });
+        // 括弧部分を除去してから key=value を抽出（括弧内の = による誤マッチを防止）
+        const cleaned = segment.replace(/\([^)]*\)/g, '');
+        // クォート値対応: key="value with = signs" or key=unquoted_value
+        const propRegex = /([a-zA-Z][a-zA-Z0-9._-]*)="([^"]*)"|([a-zA-Z][a-zA-Z0-9._-]*)=([^;\s"]+)/g;
+        let m;
+        while ((m = propRegex.exec(cleaned)) !== null) {
+          const key = m[1] || m[3];
+          const val = m[2] !== undefined ? m[2] : m[4];
+          if (/^(spf|dkim|dmarc|arc|bimi)$/i.test(key)) continue;
+          props.push({ key, val });
+        }
+        return props;
+      };
+
+      // SPF 展開: 生セグメントから全プロパティ
+      const spfExpandedHTML = (() => {
+        const props = parseSegmentProps(authResults.spf.detail.rawSegment);
+        return props.map(p => renderPropRow(p.key, p.val)).join("");
+      })();
+
+      // DKIM 展開: 各署名の生セグメントから全プロパティ（常にドメイン見出し付き）
+      const dkimExpandedHTML = (() => {
+        const sigs = authResults.dkim.signatures || [];
+        if (sigs.length === 0 || !sigs.some(s => s.domain)) return "";
+        let html = "";
+        for (const sig of sigs) {
+          html += `<div style="font-weight:bold; margin-top:4px; margin-bottom:2px; font-size:10px;">${escapeHTML(sig.domain || "unknown")} (${escapeHTML(sig.status)})</div>`;
+          const props = parseSegmentProps(sig.segment);
+          html += props.map(p => renderPropRow(p.key, p.val)).join("");
+        }
+        return html;
+      })();
+
+      // DMARC 展開: 括弧内のポリシーパラメータを個別抽出
+      const dmarcExpandedHTML = (() => {
+        const seg = authResults.dmarc.detail.rawSegment;
+        if (!seg) return "";
+        let html = "";
+        // 括弧内からポリシーパラメータを個別抽出
+        const parenMatch = seg.match(/\(([^)]+)\)/);
+        if (parenMatch) {
+          const inner = parenMatch[1];
+          const pMatch = inner.match(/(?:^|[\s])p=([^\s)]+)/i);
+          const spMatch = inner.match(/\bsp=([^\s)]+)/i);
+          const disMatch = inner.match(/\bdis=([^\s)]+)/i);
+          const pctMatch = inner.match(/\bpct=([^\s)]+)/i);
+          if (pMatch) html += renderPropRow("p", pMatch[1]);
+          if (spMatch) html += renderPropRow("sp", spMatch[1]);
+          if (disMatch) html += renderPropRow("dis", disMatch[1]);
+          if (pctMatch) html += renderPropRow("pct", pctMatch[1]);
+        }
+        // 括弧外の key=value（header.from 等）
+        const cleaned = seg.replace(/\([^)]*\)/g, '');
+        const propRegex = /([a-zA-Z][a-zA-Z0-9._-]*)="([^"]*)"|([a-zA-Z][a-zA-Z0-9._-]*)=([^;\s"]+)/g;
+        let m;
+        while ((m = propRegex.exec(cleaned)) !== null) {
+          const key = m[1] || m[3];
+          const val = m[2] !== undefined ? m[2] : m[4];
+          if (/^(dmarc)$/i.test(key)) continue;
+          html += renderPropRow(key, val);
+        }
+        return html;
+      })();
+
+      const spfCard = createAuthCard(msg("cardTitleSpf"), msg("tooltipSpf"), authResults.spf, spfDetailHTML, spfExpandedHTML, "maiv-spf-detail");
+
+      // DKIM カード: 署名ごとにステータス・ドメイン・セレクタ・アライメントを表示（集約行なし）
+      const dkimCard = (() => {
+        const hasExpanded = dkimExpandedHTML && dkimExpandedHTML.trim();
+        return `
+          <div class="maiv-card maiv-auth-card">
+            <div class="maiv-card-title${hasExpanded ? ' maiv-collapsible' : ''}"${hasExpanded ? ' data-toggle="maiv-dkim-detail"' : ''}
+                 title="${escapeHTML(msg("tooltipDkim"))}">${escapeHTML(msg("cardTitleDkim"))}</div>
+            ${dkimDetailHTML}
+            ${hasExpanded ? `<div class="maiv-collapsible-body" id="maiv-dkim-detail"><div class="maiv-expanded-detail">${dkimExpandedHTML}</div></div>` : ''}
+          </div>
+        `;
+      })();
+
+      const dmarcCard = createAuthCard(msg("cardTitleDmarc"), msg("tooltipDmarc"), authResults.dmarc, dmarcDetailHTML, dmarcExpandedHTML, "maiv-dmarc-detail");
 
       // --- アドレス＆アライメント表示 ---
       let alignmentWarningHTML = "";
@@ -1512,8 +1673,7 @@
           }
         }
 
-        // ドメイン一覧のソート・レンダリング共通ヘルパー
-        // deceptive: 偽装先ドメインSet（💀表示）、trackers: トラッキングピクセル配信元Set（🕵️表示）
+        // ドメイン一覧のレンダリングヘルパー（折りたたみなし、単純リスト）
         const renderDomainList = (title, domains, deceptive, trackers) => {
           if (!domains || domains.size === 0) return "";
           let items = "";
@@ -1534,7 +1694,6 @@
             } else {
               icon = "⚠️"; cls = "maiv-link-domain-mismatch";
             }
-            // トラッキングピクセル配信元には 🕵️ マーカーを付与
             const trackerMark = trackers && trackers.has(domain) ? " 🕵️" : "";
             items += `<div class="maiv-link-domain-item">${icon} <span class="${cls}">${escapeHTML(domain)}</span>${trackerMark} <span style="color:var(--maiv-text-faint);">(×${info.count})</span></div>`;
           }
@@ -1550,14 +1709,25 @@
         const trackers = linkSafety.trackingPixelDomains || new Set();
         const linkListHTML = renderDomainList(msg("linkDomainListTitle"), linkSafety.linkDomains, deceptive, null);
         const resourceListHTML = renderDomainList(msg("resourceDomainListTitle"), linkSafety.resourceDomains, null, trackers);
-        linkSafetyContentHTML = findingsHTML + linkListHTML + resourceListHTML;
+        const domainListsHTML = linkListHTML + resourceListHTML;
+        const hasDomainLists = domainListsHTML.trim().length > 0;
+
+        // findings（critical/suspicious）があればドメイン一覧もデフォルト展開
+        const expandDomains = hasFindings;
+        const expandedCls = expandDomains ? " maiv-expanded" : "";
+
+        linkSafetyContentHTML = findingsHTML +
+          (hasDomainLists ? `<div class="maiv-collapsible-body${expandedCls}" id="maiv-link-safety-detail">${domainListsHTML}</div>` : "");
       } else {
         linkSafetyContentHTML = `<div class="maiv-empty-state">${escapeHTML(msg("labelNone"))}</div>`;
       }
 
+      // ドメイン一覧がある場合はタイトルをトグル化、critical時はデフォルト展開
+      const hasExpandableLinkSafety = (hasLinkDomains || hasResourceDomains);
+      const linkSafetyExpandedCls = (hasExpandableLinkSafety && hasFindings) ? " maiv-expanded" : "";
       const linkSafetyHTML = `
         <div class="maiv-card">
-          <div class="maiv-card-title" title="${escapeHTML(msg("tooltipLinkSafety"))}">${escapeHTML(msg("cardTitleLinkSafety"))}</div>
+          <div class="maiv-card-title${hasExpandableLinkSafety ? ' maiv-collapsible' + linkSafetyExpandedCls : ''}"${hasExpandableLinkSafety ? ' data-toggle="maiv-link-safety-detail"' : ''} title="${escapeHTML(msg("tooltipLinkSafety"))}">${escapeHTML(msg("cardTitleLinkSafety"))}</div>
           ${linkSafetyContentHTML}
         </div>
       `;
@@ -1618,6 +1788,20 @@
       headerToggle.addEventListener('click', (e) => {
         if (e.target.closest('.maiv-link')) return;
         togglePanel();
+      });
+
+      // --- カード内折りたたみセクションの開閉 ---
+      // data-toggle 属性を持つ要素をクリックすると、対応するIDの折りたたみボディを開閉する
+      container.addEventListener('click', (e) => {
+        const toggler = e.target.closest('[data-toggle]');
+        if (!toggler) return;
+        // メインヘッダのクリックイベントと衝突しないよう、ヘッダ内のトグルは除外
+        if (toggler.closest('#maiv-header-toggle')) return;
+        const targetId = toggler.getAttribute('data-toggle');
+        const target = container.querySelector('#' + targetId);
+        if (!target) return;
+        toggler.classList.toggle('maiv-expanded');
+        target.classList.toggle('maiv-expanded');
       });
 
       // 「安全」以外の場合はアニメーション付き自動展開

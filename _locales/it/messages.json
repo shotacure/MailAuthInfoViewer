@@ -184,5 +184,8 @@
   },
   "verdictReasonTrackingPixel": {
     "message": "Pixel di tracciamento"
+  },
+  "labelSelector": {
+    "message": "selettore:"
   }
 }

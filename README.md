@@ -45,6 +45,8 @@ Deceptive link text detected — the displayed URL differs from the actual desti
     * **スマート自動折りたたみ:** 安全な認証済みメールではダッシュボードが自動で折りたたまれ、メール本文の閲覧スペースを広く保ちます。未認証やドメイン不一致を検知した「要確認」のメールの場合のみ、自動的にスライド展開して警告します。
 * **Manual Toggle:** You can expand or collapse the detail view at any time by clicking the header bar.
     * **手動開閉:** ヘッダーバーをクリックすることで、いつでも詳細ビューの展開・折りたたみを切り替えられます。
+* **Collapsible Detail Cards:** SPF, DKIM, and DMARC cards show status at a glance with expandable details on click. Link Safety Analysis shows warnings upfront with collapsible domain/resource lists (auto-expanded when phishing is detected).
+    * **折りたたみ式詳細カード:** SPF・DKIM・DMARCカードはクリックで詳細を展開。リンク安全性分析は警告を常時表示し、ドメイン/リソース一覧は折りたたみ（フィッシング検出時は自動展開）。
 * **Sender Identity & Alignment:** Instantly spot discrepancies between the Display Name, Header From, and Envelope From addresses side-by-side.
     * **送信者の身元とアライメント検証:** 「表示名」「ヘッダFrom」「エンベロープFrom」を並べて表示し、アドレスの不自然な乖離や偽装を瞬時に見抜きます。
 * **Display Name Spoofing Detection:** Detects when the display name contains an email address from a different domain than the actual sender — a common phishing trick to mislead recipients.
@@ -182,13 +184,13 @@ psl_data.js             Public Suffix List data + getOrganizationalDomain()
 messagedisplay.js       Main logic — 8 core functions:
 │
 ├─ parseEnvelope()          Address extraction, PSL-based alignment, mailing list, display name spoof & Reply-To mismatch detection
-├─ parseAuthResults()       Auth parsing with authserv-id filtering, multi-DKIM with selectors, Received-SPF fallback
+├─ parseAuthResults()       Auth parsing with authserv-id filtering & display, multi-DKIM with header.d/header.i fallback, per-signature alignment, Received-SPF fallback
 ├─ parseRoute()             Delivery route from Received headers with IP classification
 ├─ parseArcChain()          ARC chain parsing (RFC 8617)
 ├─ parseMessageBody()       MIME tree traversal to extract HTML/text body content
-├─ analyzeLinkSafety()      Phishing detection (deceptive text, dangerous schemes, forms, IP/IDN/shortener links, sole link & CTA analysis, tracking pixels, resource domains)
+├─ analyzeLinkSafety()      Phishing detection (deceptive text, dangerous schemes, forms, IP/IDN/shortener links, sole link & CTA analysis, tracking pixels, resource domains, awstrack.me resolution)
 ├─ determineSecurityStatus()  5-tier verdict (phishing > auth failed > auth pass warning > partial > auth pass) with auth-gated alignment & per-reason tags
-└─ buildUI()                Shadow DOM isolated, i18n'd, dark-mode-aware rendering with link safety card, resource domains & verdict reason tags
+└─ buildUI()                Shadow DOM isolated, i18n'd, dark-mode-aware rendering with collapsible auth cards (full RFC 8601 properties), per-signature DKIM display, collapsible link safety & verdict reason tags
 
 _locales/
 ├─ en/messages.json     English (default)
