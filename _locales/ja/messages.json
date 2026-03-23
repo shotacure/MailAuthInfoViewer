@@ -95,10 +95,10 @@
     "message": "DKIMアライメント:"
   },
   "alignedLabel": {
-    "message": "一致"
+    "message": "整合"
   },
   "notAlignedLabel": {
-    "message": "不一致"
+    "message": "非整合"
   },
   "alignOk": {
     "message": "✅ ドメイン一致（認証済み）"
@@ -186,5 +186,8 @@
   },
   "verdictReasonTrackingPixel": {
     "message": "トラッキングピクセル"
+  },
+  "labelSelector": {
+    "message": "セレクタ:"
   }
 }

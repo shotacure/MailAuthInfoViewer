@@ -184,5 +184,8 @@
   },
   "verdictReasonTrackingPixel": {
     "message": "追蹤像素"
+  },
+  "labelSelector": {
+    "message": "選擇器："
   }
 }

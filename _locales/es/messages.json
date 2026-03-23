@@ -184,5 +184,8 @@
   },
   "verdictReasonTrackingPixel": {
     "message": "Píxel de rastreo"
+  },
+  "labelSelector": {
+    "message": "selector:"
   }
 }

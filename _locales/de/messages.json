@@ -87,10 +87,10 @@
     "message": "DKIM-Abgleich:"
   },
   "alignedLabel": {
-    "message": "Abgeglichen"
+    "message": "Übereinstimmend"
   },
   "notAlignedLabel": {
-    "message": "Nicht abgeglichen"
+    "message": "Nicht übereinstimmend"
   },
   "alignOk": {
     "message": "✅ Domain abgeglichen (Authentifiziert)"
@@ -184,5 +184,8 @@
   },
   "verdictReasonTrackingPixel": {
     "message": "Tracking-Pixel"
+  },
+  "labelSelector": {
+    "message": "Selektor:"
   }
 }
