@@ -113,7 +113,7 @@ This add-on is designed for mail administrators and security-conscious users who
 * SPF pass, DKIM pass, **and** DMARC pass
 * At least one DMARC alignment (SPF or DKIM) with Header From — alignment only counts when the underlying auth method passed
 * No display name spoofing detected
-* No suspicious link indicators detected in email body (sole external link, external CTA, IP address links, IDN homographs, URL shorteners)
+* No suspicious link indicators detected in email body (all links pointing to external domains, external main CTA, IP address links, IDN homographs, URL shorteners)
 * Note: Envelope domain mismatch alone does NOT block green when DMARC pass with alignment is satisfied (supports legitimate third-party sending services like SendGrid)
 * Note: DMARC `p=none` does NOT block green (authentication itself succeeded), but the DMARC card highlights the weak policy in red for administrators
 * Note: Tracking pixels do NOT block green (ubiquitous in legitimate marketing emails), but are reported in the Link Safety Analysis card with 🕵️ markers
@@ -123,7 +123,7 @@ This add-on is designed for mail administrators and security-conscious users who
 * SPF pass、DKIM pass、**かつ** DMARC pass
 * SPFまたはDKIMの少なくとも一方がHeader Fromとアライメント（アライメントは対応する認証がpassの場合のみ成立）
 * 表示名なりすましが検知されていないこと
-* メール本文に不審なリンク指標が検知されていないこと（唯一のリンクが外部ドメイン、CTA外部ドメイン、IPアドレスリンク、IDNホモグラフ、短縮URL）
+* メール本文に不審なリンク指標が検知されていないこと（すべてのリンクが外部ドメイン、メインCTAが外部ドメイン、IPアドレスリンク、IDNホモグラフ、短縮URL）
 * 注: DMARCがpassかつアライメント成立時は、エンベロープドメイン不一致のみではグリーンを阻害しない（SendGrid等の正当な外部配信サービスに対応）
 * 注: DMARC `p=none` はグリーンを阻害しない（認証自体は成功）が、DMARCカード内でポリシーを赤色表示して管理者に改善を促す
 * 注: トラッキングピクセルはグリーンを阻害しない（正規のマーケティングメールにほぼ必ず含まれるため）が、リンク安全性分析カード内で🕵️マーカー付きで報告する
@@ -188,7 +188,7 @@ messagedisplay.js       Main logic — 8 core functions:
 ├─ parseRoute()             Delivery route from Received headers with IP classification
 ├─ parseArcChain()          ARC chain parsing (RFC 8617)
 ├─ parseMessageBody()       MIME tree traversal to extract HTML/text body content
-├─ analyzeLinkSafety()      Phishing detection (deceptive text, dangerous schemes, forms, IP/IDN/shortener links, sole link & CTA analysis, tracking pixels, resource domains, awstrack.me resolution)
+├─ analyzeLinkSafety()      Phishing detection (deceptive text, dangerous schemes, forms, IP/IDN/shortener links, all-external & CTA analysis, tracking pixels, resource domains, awstrack.me resolution)
 ├─ determineSecurityStatus()  5-tier verdict (phishing > auth failed > auth pass warning > partial > auth pass) with auth-gated alignment & per-reason tags
 └─ buildUI()                Shadow DOM isolated, i18n'd, dark-mode-aware rendering with collapsible auth cards (full RFC 8601 properties), per-signature DKIM display, collapsible link safety & verdict reason tags
 

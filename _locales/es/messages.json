@@ -167,9 +167,6 @@
   "badgeAuthPartial": {
     "message": "⚠️ PARCIAL"
   },
-  "linkSoleExternal": {
-    "message": "El único enlace apunta a un dominio externo"
-  },
   "linkCtaExternal": {
     "message": "El área de clic principal apunta a un dominio externo"
   },
@@ -187,5 +184,8 @@
   },
   "labelSelector": {
     "message": "selector:"
+  },
+  "linkAllExternal": {
+    "message": "Todos los enlaces apuntan a un dominio externo"
   }
 }

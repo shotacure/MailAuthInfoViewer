@@ -167,9 +167,6 @@
   "badgeAuthPartial": {
     "message": "⚠️ 부분 인증"
   },
-  "linkSoleExternal": {
-    "message": "유일한 링크가 외부 도메인을 가리킴"
-  },
   "linkCtaExternal": {
     "message": "메인 클릭 영역이 외부 도메인을 가리킴"
   },
@@ -187,5 +184,8 @@
   },
   "labelSelector": {
     "message": "셀렉터:"
+  },
+  "linkAllExternal": {
+    "message": "모든 링크가 외부 도메인을 가리킴"
   }
 }

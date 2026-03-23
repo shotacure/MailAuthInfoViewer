@@ -167,9 +167,6 @@
   "badgeAuthPartial": {
     "message": "⚠️ 部分驗證"
   },
-  "linkSoleExternal": {
-    "message": "唯一的連結指向外部網域"
-  },
   "linkCtaExternal": {
     "message": "主要點擊區域指向外部網域"
   },
@@ -187,5 +184,8 @@
   },
   "labelSelector": {
     "message": "選擇器："
+  },
+  "linkAllExternal": {
+    "message": "所有連結指向外部網域"
   }
 }

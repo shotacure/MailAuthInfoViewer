@@ -762,24 +762,25 @@
         }
       }
 
-      // ■ 唯一のリンク/URLが外部ドメイン → フィッシング疑い
-      // HTMLメール: <a> リンクが1つだけで外部ドメイン
-      // テキストメール: URLが1つだけで外部ドメイン
+      // ■ すべてのリンクが外部ドメイン → フィッシング疑い
+      // HTMLメール: 全 <a> リンクのドメインがHeader Fromと無関係
+      // テキストメール: 全URLのドメインがHeader Fromと無関係
       const isHtml = /<[a-z][\s\S]*>/i.test(bodyContent);
-      let hasSoleLinkWarning = false;
-      if (isHtml && linkInfos.length === 1 && !linkInfos[0].matchesFrom) {
-        findings.push({ level: "suspicious", type: "sole_link_external", detail: msg("linkSoleExternal") });
-        hasSoleLinkWarning = true;
-      } else if (!isHtml && textUrls.length === 1 && !textUrls[0].matchesFrom) {
-        findings.push({ level: "suspicious", type: "sole_link_external", detail: msg("linkSoleExternal") });
-        hasSoleLinkWarning = true;
+      let hasAllExternalWarning = false;
+      if (isHtml && linkInfos.length > 0 && !linkInfos.some(l => l.matchesFrom)) {
+        findings.push({ level: "suspicious", type: "all_links_external", detail: msg("linkAllExternal") });
+        hasAllExternalWarning = true;
+      } else if (!isHtml && textUrls.length > 0 && !textUrls.some(u => u.matchesFrom)) {
+        findings.push({ level: "suspicious", type: "all_links_external", detail: msg("linkAllExternal") });
+        hasAllExternalWarning = true;
       }
 
       // ■ 最大CTAリンクが外部ドメイン → フィッシング疑い
-      // 唯一のリンク警告が出ている場合は冗長なので省略
-      if (!hasSoleLinkWarning && linkInfos.length > 0) {
+      // メール内で最も目立つクリック領域（推定面積最大）のリンク先が送信者ドメインと異なる場合
+      // 全リンク外部警告が出ている場合は冗長なので省略
+      if (!hasAllExternalWarning && linkInfos.length > 0) {
         const largestCta = linkInfos.reduce((max, cur) => cur.estimatedArea > max.estimatedArea ? cur : max);
-        if (!largestCta.matchesFrom && largestCta.estimatedArea >= 1000) {
+        if (!largestCta.matchesFrom) {
           findings.push({ level: "suspicious", type: "cta_external", detail: msg("linkCtaExternal") });
         }
       }

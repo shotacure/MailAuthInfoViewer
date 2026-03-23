@@ -167,9 +167,6 @@
   "badgeAuthPartial": {
     "message": "⚠️ ЧАСТИЧНО"
   },
-  "linkSoleExternal": {
-    "message": "Единственная ссылка ведёт на внешний домен"
-  },
   "linkCtaExternal": {
     "message": "Основная кнопка ведёт на внешний домен"
   },
@@ -187,5 +184,8 @@
   },
   "labelSelector": {
     "message": "селектор:"
+  },
+  "linkAllExternal": {
+    "message": "Все ссылки ведут на внешний домен"
   }
 }

@@ -167,9 +167,6 @@
   "badgeAuthPartial": {
     "message": "⚠️ TEILWEISE"
   },
-  "linkSoleExternal": {
-    "message": "Einziger Link zeigt auf externe Domain"
-  },
   "linkCtaExternal": {
     "message": "Haupt-Klickbereich zeigt auf externe Domain"
   },
@@ -187,5 +184,8 @@
   },
   "labelSelector": {
     "message": "Selektor:"
+  },
+  "linkAllExternal": {
+    "message": "Alle Links zeigen auf externe Domain"
   }
 }

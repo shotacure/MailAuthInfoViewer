@@ -169,9 +169,6 @@
   "badgeAuthPartial": {
     "message": "⚠️ 部分認証"
   },
-  "linkSoleExternal": {
-    "message": "唯一のリンクが外部ドメイン"
-  },
   "linkCtaExternal": {
     "message": "メインのクリック領域が外部ドメイン"
   },
@@ -189,5 +186,8 @@
   },
   "labelSelector": {
     "message": "セレクタ:"
+  },
+  "linkAllExternal": {
+    "message": "すべてのリンクが外部ドメイン"
   }
 }

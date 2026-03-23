@@ -167,9 +167,6 @@
   "badgeAuthPartial": {
     "message": "⚠️ جزئي"
   },
-  "linkSoleExternal": {
-    "message": "الرابط الوحيد يشير إلى نطاق خارجي"
-  },
   "linkCtaExternal": {
     "message": "منطقة النقر الرئيسية تشير إلى نطاق خارجي"
   },
@@ -187,5 +184,8 @@
   },
   "labelSelector": {
     "message": "المُحدِّد:"
+  },
+  "linkAllExternal": {
+    "message": "جميع الروابط تشير إلى نطاق خارجي"
   }
 }

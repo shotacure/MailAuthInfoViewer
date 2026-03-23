@@ -169,9 +169,6 @@
   "badgeAuthPartial": {
     "message": "⚠️ PARTIAL"
   },
-  "linkSoleExternal": {
-    "message": "Only link points to external domain"
-  },
   "linkCtaExternal": {
     "message": "Main click area points to external domain"
   },
@@ -189,5 +186,8 @@
   },
   "labelSelector": {
     "message": "selector:"
+  },
+  "linkAllExternal": {
+    "message": "All links point to external domain"
   }
 }

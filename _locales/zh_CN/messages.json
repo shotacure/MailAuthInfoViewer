@@ -167,9 +167,6 @@
   "badgeAuthPartial": {
     "message": "⚠️ 部分验证"
   },
-  "linkSoleExternal": {
-    "message": "唯一的链接指向外部域名"
-  },
   "linkCtaExternal": {
     "message": "主要点击区域指向外部域名"
   },
@@ -187,5 +184,8 @@
   },
   "labelSelector": {
     "message": "选择器："
+  },
+  "linkAllExternal": {
+    "message": "所有链接指向外部域名"
   }
 }
