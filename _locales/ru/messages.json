@@ -177,7 +177,7 @@
     "message": "Домены ресурсов (изображения и т.д.):"
   },
   "badgePhishing": {
-    "message": "💀 ФИШИНГ"
+    "message": "💀 НЕСОВПАДЕНИЕ ССЫЛКИ"
   },
   "verdictReasonTrackingPixel": {
     "message": "Пиксель отслеживания"
@@ -187,5 +187,38 @@
   },
   "linkAllExternal": {
     "message": "Все ссылки ведут на внешний домен"
+  },
+  "trustDomainButton": {
+    "message": "Доверять"
+  },
+  "trustDomainConfirm": {
+    "message": "Добавить \"{domain}\" в доверенные?"
+  },
+  "trustDomainAdded": {
+    "message": "Добавлено"
+  },
+  "optionsTitle": {
+    "message": "Настройки"
+  },
+  "optionsWhitelistTitle": {
+    "message": "Доверенные домены"
+  },
+  "optionsWhitelistDesc": {
+    "message": "Эти домены не вызовут предупреждений."
+  },
+  "optionsAddDomain": {
+    "message": "Добавить"
+  },
+  "optionsRemove": {
+    "message": "Удалить"
+  },
+  "optionsNoEntries": {
+    "message": "Нет"
+  },
+  "optionsExport": {
+    "message": "Экспорт"
+  },
+  "optionsImport": {
+    "message": "Импорт"
   }
 }

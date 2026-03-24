@@ -177,7 +177,7 @@
     "message": "Domini delle risorse (immagini, ecc.):"
   },
   "badgePhishing": {
-    "message": "💀 PHISHING"
+    "message": "💀 LINK DISCORDANTE"
   },
   "verdictReasonTrackingPixel": {
     "message": "Pixel di tracciamento"
@@ -187,5 +187,38 @@
   },
   "linkAllExternal": {
     "message": "Tutti i link puntano a un dominio esterno"
+  },
+  "trustDomainButton": {
+    "message": "Fidati"
+  },
+  "trustDomainConfirm": {
+    "message": "Aggiungere \"{domain}\" ai domini fidati?"
+  },
+  "trustDomainAdded": {
+    "message": "Aggiunto"
+  },
+  "optionsTitle": {
+    "message": "Impostazioni"
+  },
+  "optionsWhitelistTitle": {
+    "message": "Domini fidati"
+  },
+  "optionsWhitelistDesc": {
+    "message": "Questi domini non attiveranno avvisi."
+  },
+  "optionsAddDomain": {
+    "message": "Aggiungi"
+  },
+  "optionsRemove": {
+    "message": "Rimuovi"
+  },
+  "optionsNoEntries": {
+    "message": "Nessuno"
+  },
+  "optionsExport": {
+    "message": "Esporta"
+  },
+  "optionsImport": {
+    "message": "Importa"
   }
 }

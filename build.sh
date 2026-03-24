@@ -29,6 +29,8 @@ cp manifest.json     "$STAGE_DIR/"
 cp background.js     "$STAGE_DIR/"
 cp psl_data.js       "$STAGE_DIR/"
 cp messagedisplay.js "$STAGE_DIR/"
+cp options.html      "$STAGE_DIR/"
+cp options.js        "$STAGE_DIR/"
 cp LICENSE           "$STAGE_DIR/"
 cp images/icon.svg   "${STAGE_DIR}/images/"
 

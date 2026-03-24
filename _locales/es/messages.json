@@ -177,7 +177,7 @@
     "message": "Dominios de recursos (imágenes, etc.):"
   },
   "badgePhishing": {
-    "message": "💀 PHISHING"
+    "message": "💀 ENLACE DISCREPANTE"
   },
   "verdictReasonTrackingPixel": {
     "message": "Píxel de rastreo"
@@ -187,5 +187,38 @@
   },
   "linkAllExternal": {
     "message": "Todos los enlaces apuntan a un dominio externo"
+  },
+  "trustDomainButton": {
+    "message": "Confiar"
+  },
+  "trustDomainConfirm": {
+    "message": "Agregar \"{domain}\" a dominios de confianza?"
+  },
+  "trustDomainAdded": {
+    "message": "Agregado"
+  },
+  "optionsTitle": {
+    "message": "Configuración"
+  },
+  "optionsWhitelistTitle": {
+    "message": "Dominios de confianza"
+  },
+  "optionsWhitelistDesc": {
+    "message": "Estos dominios no activarán alertas."
+  },
+  "optionsAddDomain": {
+    "message": "Agregar"
+  },
+  "optionsRemove": {
+    "message": "Eliminar"
+  },
+  "optionsNoEntries": {
+    "message": "Sin dominios"
+  },
+  "optionsExport": {
+    "message": "Exportar"
+  },
+  "optionsImport": {
+    "message": "Importar"
   }
 }

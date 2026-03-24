@@ -177,7 +177,7 @@
     "message": "리소스 도메인 (이미지 등):"
   },
   "badgePhishing": {
-    "message": "💀 피싱 감지"
+    "message": "💀 링크 불일치"
   },
   "verdictReasonTrackingPixel": {
     "message": "추적 픽셀"
@@ -187,5 +187,38 @@
   },
   "linkAllExternal": {
     "message": "모든 링크가 외부 도메인을 가리킴"
+  },
+  "trustDomainButton": {
+    "message": "신뢰"
+  },
+  "trustDomainConfirm": {
+    "message": "\"{domain}\"을(를) 신뢰 도메인에 추가?"
+  },
+  "trustDomainAdded": {
+    "message": "추가됨"
+  },
+  "optionsTitle": {
+    "message": "설정"
+  },
+  "optionsWhitelistTitle": {
+    "message": "신뢰 도메인"
+  },
+  "optionsWhitelistDesc": {
+    "message": "이 목록의 도메인은 경고를 트리거하지 않습니다."
+  },
+  "optionsAddDomain": {
+    "message": "추가"
+  },
+  "optionsRemove": {
+    "message": "삭제"
+  },
+  "optionsNoEntries": {
+    "message": "없음"
+  },
+  "optionsExport": {
+    "message": "내보내기"
+  },
+  "optionsImport": {
+    "message": "가져오기"
   }
 }

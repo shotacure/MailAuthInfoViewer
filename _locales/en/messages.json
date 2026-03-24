@@ -179,7 +179,7 @@
     "message": "Resource Domains (images, etc.):"
   },
   "badgePhishing": {
-    "message": "💀 PHISHING"
+    "message": "💀 LINK MISMATCH"
   },
   "verdictReasonTrackingPixel": {
     "message": "Tracking pixel"
@@ -189,5 +189,38 @@
   },
   "linkAllExternal": {
     "message": "All links point to external domain"
+  },
+  "trustDomainButton": {
+    "message": "Trust"
+  },
+  "trustDomainConfirm": {
+    "message": "Add \"{domain}\" to trusted domains?"
+  },
+  "trustDomainAdded": {
+    "message": "Added to trusted domains"
+  },
+  "optionsTitle": {
+    "message": "Mail Auth Info Viewer Settings"
+  },
+  "optionsWhitelistTitle": {
+    "message": "Trusted Link Domains"
+  },
+  "optionsWhitelistDesc": {
+    "message": "Domains in this list will not trigger link mismatch warnings when they appear as link destinations."
+  },
+  "optionsAddDomain": {
+    "message": "Add domain"
+  },
+  "optionsRemove": {
+    "message": "Remove"
+  },
+  "optionsNoEntries": {
+    "message": "No trusted domains"
+  },
+  "optionsExport": {
+    "message": "Export"
+  },
+  "optionsImport": {
+    "message": "Import"
   }
 }

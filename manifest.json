@@ -19,12 +19,17 @@
   },
   "permissions": [
     "messagesRead",
-    "messagesModify"
+    "messagesModify",
+    "storage"
   ],
   "background": {
     "scripts": [
       "background.js"
     ]
   },
-  "content_security_policy": "script-src 'self'; object-src 'self';"
+  "content_security_policy": "script-src 'self'; object-src 'self';",
+  "options_ui": {
+    "page": "options.html",
+    "browser_style": false
+  }
 }

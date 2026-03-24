@@ -61,6 +61,8 @@ Deceptive link text detected — the displayed URL differs from the actual desti
     * **リンクドメイン一覧:** メール本文に含まれるすべてのリンクドメインを一覧表示し、送信者の組織ドメインとの一致/不一致を色分けします。
 * **Reply-To Mismatch Detection:** Warns when the Reply-To address belongs to a different domain than the sender, a technique used to redirect replies to attackers.
     * **Reply-To不一致検知:** Reply-Toアドレスが送信者と異なるドメインの場合に警告します。返信を攻撃者に誘導するフィッシング手口です。
+* **Trusted Link Domains:** When link warnings are detected, a "Trust" button appears next to each external domain in the domain list. Whitelisted domains suppress link mismatch and external-link warnings. Manage trusted domains from the add-on settings page with text-based import/export.
+    * **信頼済みリンクドメイン:** リンク警告検出時にドメイン一覧の各外部ドメインに「信頼」ボタンを表示。ホワイトリスト登録済みドメインはリンク先相違や外部リンク警告を抑制。アドオン設定画面からテキスト形式のインポート/エクスポートで管理可能。
 * **Authentication Status:** Quickly check the pass/fail status of SPF, DKIM, and DMARC authentication with DMARC policy display.
     * **認証ステータス:** SPF、DKIM、DMARCの成否ステータスをDMARCポリシー表示と共に素早く確認できます。
 * **DMARC Alignment Indicators (RFC 7489):** SPF and DKIM alignment status shown within each authentication card. The security verdict requires DMARC pass and at least one alignment match for AUTH PASS.
@@ -102,7 +104,7 @@ This add-on is designed for mail administrators and security-conscious users who
 
 | Badge | Condition | 条件 |
 |-------|-----------|------|
-| 💀 **PHISHING** | Deceptive link text, dangerous URI schemes, or embedded HTML forms detected | リンク偽装・危険なURIスキーム・HTMLフォーム埋め込みを検出 |
+| 💀 **LINK MISMATCH** | Deceptive link text (displayed URL differs from actual destination), dangerous URI schemes, or embedded HTML forms detected. Trusted domains can be whitelisted. | リンク先相違（表示URLと実際のリンク先が不一致）・危険なURIスキーム・HTMLフォーム埋め込みを検出。信頼済みドメインはホワイトリスト登録可能。 |
 | ❌ **AUTH FAILED** | SPF, DKIM, or DMARC explicitly failed | SPF・DKIM・DMARCのいずれかが明示的にfail |
 | ⚠️ **AUTH PASS** | DMARC passed but other issues (alignment, spoofing, suspicious links) | DMARC passだがアライメント・なりすまし・不審リンク等の問題あり |
 | ⚠️ **PARTIAL** | Some auth passed but DMARC not passed | 一部認証passだがDMARC未通過 |
@@ -181,6 +183,7 @@ Both scripts read the version from `manifest.json`, stage the required files inc
 manifest.json           Extension manifest with i18n support
 background.js           Registers content scripts, handles message API
 psl_data.js             Public Suffix List data + getOrganizationalDomain()
+options.html + options.js  Trusted link domains management (add/remove/import/export)
 messagedisplay.js       Main logic — 8 core functions:
 │
 ├─ parseEnvelope()          Address extraction, PSL-based alignment, mailing list, display name spoof & Reply-To mismatch detection
@@ -188,7 +191,7 @@ messagedisplay.js       Main logic — 8 core functions:
 ├─ parseRoute()             Delivery route from Received headers with IP classification
 ├─ parseArcChain()          ARC chain parsing (RFC 8617)
 ├─ parseMessageBody()       MIME tree traversal to extract HTML/text body content
-├─ analyzeLinkSafety()      Phishing detection (deceptive text, dangerous schemes, forms, IP/IDN/shortener links, all-external & CTA analysis, tracking pixels, resource domains, awstrack.me resolution)
+├─ analyzeLinkSafety()      Phishing detection (deceptive text, dangerous schemes, forms, IP/IDN/shortener links, all-external & CTA analysis, tracking pixels, resource domains, trusted domain whitelist)
 ├─ determineSecurityStatus()  5-tier verdict (phishing > auth failed > auth pass warning > partial > auth pass) with auth-gated alignment & per-reason tags
 └─ buildUI()                Shadow DOM isolated, i18n'd, dark-mode-aware rendering with collapsible auth cards (full RFC 8601 properties), per-signature DKIM display, collapsible link safety & verdict reason tags
 

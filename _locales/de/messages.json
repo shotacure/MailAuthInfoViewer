@@ -177,7 +177,7 @@
     "message": "Ressourcen-Domains (Bilder usw.):"
   },
   "badgePhishing": {
-    "message": "💀 PHISHING"
+    "message": "💀 LINK-ABWEICHUNG"
   },
   "verdictReasonTrackingPixel": {
     "message": "Tracking-Pixel"
@@ -187,5 +187,38 @@
   },
   "linkAllExternal": {
     "message": "Alle Links zeigen auf externe Domain"
+  },
+  "trustDomainButton": {
+    "message": "Vertrauen"
+  },
+  "trustDomainConfirm": {
+    "message": "\"{domain}\" als vertrauenswuerdig hinzufuegen?"
+  },
+  "trustDomainAdded": {
+    "message": "Hinzugefuegt"
+  },
+  "optionsTitle": {
+    "message": "Einstellungen"
+  },
+  "optionsWhitelistTitle": {
+    "message": "Vertrauenswuerdige Domains"
+  },
+  "optionsWhitelistDesc": {
+    "message": "Domains in dieser Liste loesen keine Warnung aus."
+  },
+  "optionsAddDomain": {
+    "message": "Hinzufuegen"
+  },
+  "optionsRemove": {
+    "message": "Entfernen"
+  },
+  "optionsNoEntries": {
+    "message": "Keine Domains"
+  },
+  "optionsExport": {
+    "message": "Exportieren"
+  },
+  "optionsImport": {
+    "message": "Importieren"
   }
 }
