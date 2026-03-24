@@ -167,9 +167,6 @@
   "badgeAuthPartial": {
     "message": "⚠️ TEILWEISE"
   },
-  "linkSoleExternal": {
-    "message": "Einziger Link zeigt auf externe Domain"
-  },
   "linkCtaExternal": {
     "message": "Haupt-Klickbereich zeigt auf externe Domain"
   },
@@ -180,12 +177,48 @@
     "message": "Ressourcen-Domains (Bilder usw.):"
   },
   "badgePhishing": {
-    "message": "💀 PHISHING"
+    "message": "💀 LINK-ABWEICHUNG"
   },
   "verdictReasonTrackingPixel": {
     "message": "Tracking-Pixel"
   },
   "labelSelector": {
     "message": "Selektor:"
+  },
+  "linkAllExternal": {
+    "message": "Alle Links zeigen auf externe Domain"
+  },
+  "trustDomainButton": {
+    "message": "Vertrauen"
+  },
+  "trustDomainConfirm": {
+    "message": "\"{domain}\" als vertrauenswuerdig hinzufuegen?"
+  },
+  "trustDomainAdded": {
+    "message": "Hinzugefuegt"
+  },
+  "optionsTitle": {
+    "message": "Einstellungen"
+  },
+  "optionsWhitelistTitle": {
+    "message": "Vertrauenswuerdige Domains"
+  },
+  "optionsWhitelistDesc": {
+    "message": "Domains in dieser Liste loesen keine Warnung aus."
+  },
+  "optionsAddDomain": {
+    "message": "Hinzufuegen"
+  },
+  "optionsRemove": {
+    "message": "Entfernen"
+  },
+  "optionsNoEntries": {
+    "message": "Keine Domains"
+  },
+  "optionsExport": {
+    "message": "Exportieren"
+  },
+  "optionsImport": {
+    "message": "Importieren"
   }
 }

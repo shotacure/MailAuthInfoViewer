@@ -27,6 +27,8 @@ Copy-Item -Force "manifest.json"     $stageDir
 Copy-Item -Force "background.js"     $stageDir
 Copy-Item -Force "psl_data.js"       $stageDir
 Copy-Item -Force "messagedisplay.js" $stageDir
+Copy-Item -Force "options.html"      $stageDir
+Copy-Item -Force "options.js"        $stageDir
 Copy-Item -Force "LICENSE"           $stageDir
 Copy-Item -Force "images/icon.svg"  (Join-Path $stageDir "images")
 

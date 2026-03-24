@@ -167,9 +167,6 @@
   "badgeAuthPartial": {
     "message": "⚠️ جزئي"
   },
-  "linkSoleExternal": {
-    "message": "الرابط الوحيد يشير إلى نطاق خارجي"
-  },
   "linkCtaExternal": {
     "message": "منطقة النقر الرئيسية تشير إلى نطاق خارجي"
   },
@@ -180,12 +177,48 @@
     "message": "نطاقات الموارد (الصور وغيرها):"
   },
   "badgePhishing": {
-    "message": "💀 تصيد"
+    "message": "💀 عدم تطابق الرابط"
   },
   "verdictReasonTrackingPixel": {
     "message": "بكسل تتبع"
   },
   "labelSelector": {
     "message": "المُحدِّد:"
+  },
+  "linkAllExternal": {
+    "message": "جميع الروابط تشير إلى نطاق خارجي"
+  },
+  "trustDomainButton": {
+    "message": "ثقة"
+  },
+  "trustDomainConfirm": {
+    "message": "إضافة \"{domain}\" إلى النطاقات الموثوقة؟"
+  },
+  "trustDomainAdded": {
+    "message": "تمت الإضافة"
+  },
+  "optionsTitle": {
+    "message": "الإعدادات"
+  },
+  "optionsWhitelistTitle": {
+    "message": "النطاقات الموثوقة"
+  },
+  "optionsWhitelistDesc": {
+    "message": "لن تؤدي هذه النطاقات إلى تنبيهات."
+  },
+  "optionsAddDomain": {
+    "message": "إضافة"
+  },
+  "optionsRemove": {
+    "message": "إزالة"
+  },
+  "optionsNoEntries": {
+    "message": "لا توجد"
+  },
+  "optionsExport": {
+    "message": "تصدير"
+  },
+  "optionsImport": {
+    "message": "استيراد"
   }
 }

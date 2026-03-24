@@ -591,7 +591,7 @@
     //   [suspicious] IPアドレスリンク、IDNホモグラフ、URLショートナー
     //   [suspicious] 唯一のリンクが外部ドメイン、最大CTAが外部ドメイン、トラッキングピクセル
     //   [info] リンクドメイン一覧、リソースドメイン一覧
-    const analyzeLinkSafety = (bodyContent, headerOrgDomain) => {
+    const analyzeLinkSafety = (bodyContent, headerOrgDomain, trustedDomains) => {
       const findings = [];   // { level: "critical"|"suspicious"|"info", type: string, detail: string }
       const linkDomains = new Map(); // domain → { count, matchesFrom }
       const resourceDomains = new Map(); // domain → { count, matchesFrom } (画像等の外部リソース)
@@ -653,22 +653,6 @@
 
         if (!linkHost || linkHost === "dummy.invalid") continue;
 
-        // ■ AWS SES クリックトラッキング解決
-        // awstrack.me はAWS SESのクリックトラッキングドメインで、URLパスに実際のリンク先が埋め込まれている
-        // 形式: https://r.us-east-1.awstrack.me/L0/https://actual-destination.com/path/.../tracking-id
-        // 実際のリンク先を抽出し、そのドメインで安全性を評価する
-        if (linkHost.endsWith("awstrack.me")) {
-          const awsMatch = href.match(/awstrack\.me\/L0\/(https?:\/\/[^\/\s]+)/i);
-          if (awsMatch) {
-            try {
-              const realUrl = new URL(awsMatch[1]);
-              linkHost = realUrl.hostname.toLowerCase();
-            } catch {
-              // パース失敗時はawstrack.meのまま評価（フォールバック）
-            }
-          }
-        }
-
         // --- 項目1: リンクテキスト偽装検知 ---
         const linkText = (a.textContent || "").trim();
         const urlInText = linkText.match(/^https?:\/\/([^\/\s?#]+)/i);
@@ -677,12 +661,18 @@
           const displayOrgDomain = getOrgDomain(displayHost);
           const hrefOrgDomain = getOrgDomain(linkHost);
           if (displayOrgDomain !== hrefOrgDomain) {
-            findings.push({
-              level: "critical",
-              type: "deceptive_text",
-              detail: msg("linkDeceptiveText")
-            });
-            deceptiveDomains.add(hrefOrgDomain);
+            // 信頼済みドメインならスキップ
+            if (trustedDomains && trustedDomains.has(hrefOrgDomain)) {
+              // スキップ（ドメイン一覧には引き続き記録）
+            } else {
+              findings.push({
+                level: "critical",
+                type: "deceptive_text",
+                detail: msg("linkDeceptiveText"),
+                targetDomain: hrefOrgDomain
+              });
+              deceptiveDomains.add(hrefOrgDomain);
+            }
           }
         }
 
@@ -762,24 +752,26 @@
         }
       }
 
-      // ■ 唯一のリンク/URLが外部ドメイン → フィッシング疑い
-      // HTMLメール: <a> リンクが1つだけで外部ドメイン
-      // テキストメール: URLが1つだけで外部ドメイン
+      // ■ すべてのリンクが外部ドメイン → フィッシング疑い
+      // HTMLメール: 全 <a> リンクのドメインがHeader Fromと無関係（信頼済みドメインは除外）
+      // テキストメール: 全URLのドメインがHeader Fromと無関係（信頼済みドメインは除外）
       const isHtml = /<[a-z][\s\S]*>/i.test(bodyContent);
-      let hasSoleLinkWarning = false;
-      if (isHtml && linkInfos.length === 1 && !linkInfos[0].matchesFrom) {
-        findings.push({ level: "suspicious", type: "sole_link_external", detail: msg("linkSoleExternal") });
-        hasSoleLinkWarning = true;
-      } else if (!isHtml && textUrls.length === 1 && !textUrls[0].matchesFrom) {
-        findings.push({ level: "suspicious", type: "sole_link_external", detail: msg("linkSoleExternal") });
-        hasSoleLinkWarning = true;
+      const isSafeLink = (l) => l.matchesFrom || (trustedDomains && trustedDomains.has(l.orgDomain));
+      let hasAllExternalWarning = false;
+      if (isHtml && linkInfos.length > 0 && !linkInfos.some(isSafeLink)) {
+        findings.push({ level: "suspicious", type: "all_links_external", detail: msg("linkAllExternal") });
+        hasAllExternalWarning = true;
+      } else if (!isHtml && textUrls.length > 0 && !textUrls.some(isSafeLink)) {
+        findings.push({ level: "suspicious", type: "all_links_external", detail: msg("linkAllExternal") });
+        hasAllExternalWarning = true;
       }
 
       // ■ 最大CTAリンクが外部ドメイン → フィッシング疑い
-      // 唯一のリンク警告が出ている場合は冗長なので省略
-      if (!hasSoleLinkWarning && linkInfos.length > 0) {
+      // メール内で最も目立つクリック領域（推定面積最大）のリンク先が送信者ドメインと異なる場合
+      // 全リンク外部警告が出ている場合は冗長なので省略
+      if (!hasAllExternalWarning && linkInfos.length > 0) {
         const largestCta = linkInfos.reduce((max, cur) => cur.estimatedArea > max.estimatedArea ? cur : max);
-        if (!largestCta.matchesFrom && largestCta.estimatedArea >= 1000) {
+        if (!isSafeLink(largestCta)) {
           findings.push({ level: "suspicious", type: "cta_external", detail: msg("linkCtaExternal") });
         }
       }
@@ -951,7 +943,7 @@
     // =========================================================
     // 8. buildUI - UI構築 (HTML/CSS) — Shadow DOM・i18n・ダークモード完全対応
     // =========================================================
-    const buildUI = (envelope, authResults, routeHops, security, arcChain, linkSafety) => {
+    const buildUI = (envelope, authResults, routeHops, security, arcChain, linkSafety, trustedDomains) => {
 
       // --- スタイル定義 (CSS変数によるダークモード完全対応) ---
       const style = document.createElement('style');
@@ -1232,10 +1224,37 @@
           font-weight: bold; padding: 5px 8px; border-radius: 4px; font-size: 11px;
           margin-bottom: 4px;
         }
+        .maiv-trust-btn {
+          font-size: 10px; padding: 2px 8px; margin-left: 8px; border: 1px solid currentColor;
+          border-radius: 3px; background: transparent; color: inherit; cursor: pointer;
+          font-weight: normal; opacity: 0.8; vertical-align: middle;
+        }
+        .maiv-trust-btn:hover { opacity: 1; background: rgba(255,255,255,0.2); }
+
+        /* カスタム確認ダイアログ */
+        .maiv-confirm-overlay {
+          position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+          background: rgba(0,0,0,0.5); z-index: 99999;
+          display: flex; align-items: center; justify-content: center;
+        }
+        .maiv-confirm-box {
+          background: var(--maiv-card-bg); border: 1px solid var(--maiv-card-border);
+          border-radius: 8px; padding: 20px; max-width: 360px; width: 90%;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        .maiv-confirm-text { font-size: 13px; color: var(--maiv-text-strongest); margin-bottom: 16px; line-height: 1.5; }
+        .maiv-confirm-domain { font-weight: bold; color: #2196f3; }
+        .maiv-confirm-buttons { display: flex; gap: 8px; justify-content: flex-end; }
+        .maiv-confirm-buttons button {
+          padding: 6px 16px; border-radius: 4px; font-size: 12px; cursor: pointer; border: 1px solid var(--maiv-card-border);
+        }
+        .maiv-confirm-cancel { background: transparent; color: var(--maiv-text-secondary); }
+        .maiv-confirm-ok { background: #2196f3; color: #fff; border-color: #2196f3; }
         .maiv-link-domain-list { font-size: 11px; margin-top: 6px; }
         .maiv-link-domain-item { padding: 2px 0; display: flex; align-items: center; gap: 6px; }
         .maiv-link-domain-match { color: var(--maiv-pass); }
         .maiv-link-domain-mismatch { color: var(--maiv-align-warn-text); }
+        .maiv-link-domain-trusted { color: #2196f3; }
         /* リンクテキスト偽装の実際のリンク先ドメイン: 赤色太字で危険性を強調 */
         .maiv-link-domain-danger { color: var(--maiv-fail); font-weight: bold; }
 
@@ -1673,8 +1692,9 @@
           }
         }
 
-        // ドメイン一覧のレンダリングヘルパー（折りたたみなし、単純リスト）
-        const renderDomainList = (title, domains, deceptive, trackers) => {
+        // ドメイン一覧のレンダリングヘルパー
+        // showTrust: trueの場合、リンク先相違検出時に限り不一致ドメインに「信頼」ボタンを表示
+        const renderDomainList = (title, domains, deceptive, trackers, showTrust) => {
           if (!domains || domains.size === 0) return "";
           let items = "";
           const sorted = Array.from(domains.entries())
@@ -1687,15 +1707,22 @@
             });
           for (const [domain, info] of sorted) {
             let icon, cls;
+            const isTrusted = trustedDomains && trustedDomains.has(domain);
             if (deceptive && deceptive.has(domain)) {
               icon = "💀"; cls = "maiv-link-domain-danger";
             } else if (info.matchesFrom) {
               icon = "✅"; cls = "maiv-link-domain-match";
+            } else if (isTrusted) {
+              icon = "🛡️"; cls = "maiv-link-domain-trusted";
             } else {
               icon = "⚠️"; cls = "maiv-link-domain-mismatch";
             }
             const trackerMark = trackers && trackers.has(domain) ? " 🕵️" : "";
-            items += `<div class="maiv-link-domain-item">${icon} <span class="${cls}">${escapeHTML(domain)}</span>${trackerMark} <span style="color:var(--maiv-text-faint);">(×${info.count})</span></div>`;
+            // 「信頼」ボタン: リンク先相違(💀)検出時のみ、未信頼かつ不一致ドメインに表示
+            const trustBtn = (showTrust && hasFindings && !info.matchesFrom && !isTrusted)
+              ? ` <button class="maiv-trust-btn" data-domain="${escapeHTML(domain)}">${escapeHTML(msg("trustDomainButton"))}</button>`
+              : "";
+            items += `<div class="maiv-link-domain-item">${icon} <span class="${cls}">${escapeHTML(domain)}</span>${trackerMark} <span style="color:var(--maiv-text-faint);">(×${info.count})</span>${trustBtn}</div>`;
           }
           return `
             <div class="maiv-link-domain-list">
@@ -1707,8 +1734,8 @@
 
         const deceptive = linkSafety.deceptiveDomains || new Set();
         const trackers = linkSafety.trackingPixelDomains || new Set();
-        const linkListHTML = renderDomainList(msg("linkDomainListTitle"), linkSafety.linkDomains, deceptive, null);
-        const resourceListHTML = renderDomainList(msg("resourceDomainListTitle"), linkSafety.resourceDomains, null, trackers);
+        const linkListHTML = renderDomainList(msg("linkDomainListTitle"), linkSafety.linkDomains, deceptive, null, true);
+        const resourceListHTML = renderDomainList(msg("resourceDomainListTitle"), linkSafety.resourceDomains, null, trackers, false);
         const domainListsHTML = linkListHTML + resourceListHTML;
         const hasDomainLists = domainListsHTML.trim().length > 0;
 
@@ -1804,6 +1831,52 @@
         target.classList.toggle('maiv-expanded');
       });
 
+      // --- 「信頼」ボタン ---
+      container.addEventListener('click', async (e) => {
+        const btn = e.target.closest('.maiv-trust-btn');
+        if (!btn) return;
+        e.stopPropagation();
+        const domain = btn.getAttribute('data-domain');
+        if (!domain) return;
+
+        // Shadow DOM内カスタム確認ダイアログ
+        const confirmText = msg("trustDomainConfirm").replace("{domain}", domain);
+        const overlay = document.createElement("div");
+        overlay.className = "maiv-confirm-overlay";
+        overlay.innerHTML = `
+          <div class="maiv-confirm-box">
+            <div class="maiv-confirm-text">${escapeHTML(confirmText)}</div>
+            <div class="maiv-confirm-buttons">
+              <button class="maiv-confirm-cancel">Cancel</button>
+              <button class="maiv-confirm-ok">OK</button>
+            </div>
+          </div>
+        `;
+        container.appendChild(overlay);
+
+        const result = await new Promise(resolve => {
+          overlay.querySelector('.maiv-confirm-ok').addEventListener('click', () => resolve(true));
+          overlay.querySelector('.maiv-confirm-cancel').addEventListener('click', () => resolve(false));
+          overlay.addEventListener('click', (ev) => { if (ev.target === overlay) resolve(false); });
+        });
+        overlay.remove();
+        if (!result) return;
+
+        try {
+          const stored = await browser.storage.local.get("trustedDomains");
+          const list = stored.trustedDomains || [];
+          if (!list.includes(domain)) {
+            list.push(domain);
+            await browser.storage.local.set({ trustedDomains: list });
+          }
+          btn.textContent = msg("trustDomainAdded");
+          btn.disabled = true;
+          btn.style.opacity = "0.5";
+        } catch (err) {
+          console.error("MailAuthInfoViewer: Failed to save trusted domain", err);
+        }
+      });
+
       // 「安全」以外の場合はアニメーション付き自動展開
       if (security.shouldAutoExpand) {
         setTimeout(() => {
@@ -1824,15 +1897,24 @@
     const msgHeader = resp.messageHeader || {};
     const headers = fullMsg.headers || {};
 
+    // ■ 信頼済みドメインのホワイトリスト読み込み
+    let trustedDomains = new Set();
+    try {
+      const stored = await browser.storage.local.get("trustedDomains");
+      if (stored.trustedDomains && Array.isArray(stored.trustedDomains)) {
+        trustedDomains = new Set(stored.trustedDomains);
+      }
+    } catch { /* storage未対応環境ではスキップ */ }
+
     const envelope = parseEnvelope(fullMsg, headers, msgHeader);
     const authResults = parseAuthResults(headers, envelope);
     const routeHops = parseRoute(headers);
     const arcChain = parseArcChain(headers);
     const bodyContent = parseMessageBody(fullMsg);
-    const linkSafety = analyzeLinkSafety(bodyContent, envelope.headerOrgDomain);
+    const linkSafety = analyzeLinkSafety(bodyContent, envelope.headerOrgDomain, trustedDomains);
     const security = determineSecurityStatus(authResults, envelope.isDomainAligned, envelope.envelopeFrom, envelope.isDisplayNameSpoofed, linkSafety);
 
-    buildUI(envelope, authResults, routeHops, security, arcChain, linkSafety);
+    buildUI(envelope, authResults, routeHops, security, arcChain, linkSafety, trustedDomains);
 
   } catch (e) {
     console.error("MailAuthInfoViewer Error:", e);

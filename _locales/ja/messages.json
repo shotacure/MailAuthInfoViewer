@@ -169,9 +169,6 @@
   "badgeAuthPartial": {
     "message": "⚠️ 部分認証"
   },
-  "linkSoleExternal": {
-    "message": "唯一のリンクが外部ドメイン"
-  },
   "linkCtaExternal": {
     "message": "メインのクリック領域が外部ドメイン"
   },
@@ -182,12 +179,48 @@
     "message": "リソースドメイン一覧（画像等）:"
   },
   "badgePhishing": {
-    "message": "💀 フィッシング検出"
+    "message": "💀 リンク先相違"
   },
   "verdictReasonTrackingPixel": {
     "message": "トラッキングピクセル"
   },
   "labelSelector": {
     "message": "セレクタ:"
+  },
+  "linkAllExternal": {
+    "message": "すべてのリンクが外部ドメイン"
+  },
+  "trustDomainButton": {
+    "message": "信頼"
+  },
+  "trustDomainConfirm": {
+    "message": "「{domain}」を信頼済みドメインに追加しますか？"
+  },
+  "trustDomainAdded": {
+    "message": "信頼済みドメインに追加しました"
+  },
+  "optionsTitle": {
+    "message": "Mail Auth Info Viewer 設定"
+  },
+  "optionsWhitelistTitle": {
+    "message": "信頼済みリンクドメイン"
+  },
+  "optionsWhitelistDesc": {
+    "message": "このリストのドメインは、リンク先として検出されてもリンク先相違の警告を出しません。"
+  },
+  "optionsAddDomain": {
+    "message": "ドメイン追加"
+  },
+  "optionsRemove": {
+    "message": "削除"
+  },
+  "optionsNoEntries": {
+    "message": "信頼済みドメインはありません"
+  },
+  "optionsExport": {
+    "message": "エクスポート"
+  },
+  "optionsImport": {
+    "message": "インポート"
   }
 }

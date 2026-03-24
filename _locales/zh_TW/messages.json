@@ -167,9 +167,6 @@
   "badgeAuthPartial": {
     "message": "⚠️ 部分驗證"
   },
-  "linkSoleExternal": {
-    "message": "唯一的連結指向外部網域"
-  },
   "linkCtaExternal": {
     "message": "主要點擊區域指向外部網域"
   },
@@ -180,12 +177,48 @@
     "message": "資源網域一覽（圖片等）："
   },
   "badgePhishing": {
-    "message": "💀 釣魚偵測"
+    "message": "💀 連結不符"
   },
   "verdictReasonTrackingPixel": {
     "message": "追蹤像素"
   },
   "labelSelector": {
     "message": "選擇器："
+  },
+  "linkAllExternal": {
+    "message": "所有連結指向外部網域"
+  },
+  "trustDomainButton": {
+    "message": "信任"
+  },
+  "trustDomainConfirm": {
+    "message": "將「{domain}」加入信任網域？"
+  },
+  "trustDomainAdded": {
+    "message": "已加入"
+  },
+  "optionsTitle": {
+    "message": "設定"
+  },
+  "optionsWhitelistTitle": {
+    "message": "信任網域"
+  },
+  "optionsWhitelistDesc": {
+    "message": "此清單中的網域不會觸發警告。"
+  },
+  "optionsAddDomain": {
+    "message": "新增"
+  },
+  "optionsRemove": {
+    "message": "移除"
+  },
+  "optionsNoEntries": {
+    "message": "無"
+  },
+  "optionsExport": {
+    "message": "匯出"
+  },
+  "optionsImport": {
+    "message": "匯入"
   }
 }

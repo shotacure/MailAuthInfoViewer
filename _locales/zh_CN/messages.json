@@ -167,9 +167,6 @@
   "badgeAuthPartial": {
     "message": "⚠️ 部分验证"
   },
-  "linkSoleExternal": {
-    "message": "唯一的链接指向外部域名"
-  },
   "linkCtaExternal": {
     "message": "主要点击区域指向外部域名"
   },
@@ -180,12 +177,48 @@
     "message": "资源域名一览（图片等）："
   },
   "badgePhishing": {
-    "message": "💀 钓鱼检测"
+    "message": "💀 链接不符"
   },
   "verdictReasonTrackingPixel": {
     "message": "跟踪像素"
   },
   "labelSelector": {
     "message": "选择器："
+  },
+  "linkAllExternal": {
+    "message": "所有链接指向外部域名"
+  },
+  "trustDomainButton": {
+    "message": "信任"
+  },
+  "trustDomainConfirm": {
+    "message": "将「{domain}」加入信任域名？"
+  },
+  "trustDomainAdded": {
+    "message": "已加入"
+  },
+  "optionsTitle": {
+    "message": "设置"
+  },
+  "optionsWhitelistTitle": {
+    "message": "信任域名"
+  },
+  "optionsWhitelistDesc": {
+    "message": "此列表中的域名不会触发警告。"
+  },
+  "optionsAddDomain": {
+    "message": "添加"
+  },
+  "optionsRemove": {
+    "message": "删除"
+  },
+  "optionsNoEntries": {
+    "message": "无"
+  },
+  "optionsExport": {
+    "message": "导出"
+  },
+  "optionsImport": {
+    "message": "导入"
   }
 }

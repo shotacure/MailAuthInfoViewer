@@ -167,9 +167,6 @@
   "badgeAuthPartial": {
     "message": "⚠️ ЧАСТИЧНО"
   },
-  "linkSoleExternal": {
-    "message": "Единственная ссылка ведёт на внешний домен"
-  },
   "linkCtaExternal": {
     "message": "Основная кнопка ведёт на внешний домен"
   },
@@ -180,12 +177,48 @@
     "message": "Домены ресурсов (изображения и т.д.):"
   },
   "badgePhishing": {
-    "message": "💀 ФИШИНГ"
+    "message": "💀 НЕСОВПАДЕНИЕ ССЫЛКИ"
   },
   "verdictReasonTrackingPixel": {
     "message": "Пиксель отслеживания"
   },
   "labelSelector": {
     "message": "селектор:"
+  },
+  "linkAllExternal": {
+    "message": "Все ссылки ведут на внешний домен"
+  },
+  "trustDomainButton": {
+    "message": "Доверять"
+  },
+  "trustDomainConfirm": {
+    "message": "Добавить \"{domain}\" в доверенные?"
+  },
+  "trustDomainAdded": {
+    "message": "Добавлено"
+  },
+  "optionsTitle": {
+    "message": "Настройки"
+  },
+  "optionsWhitelistTitle": {
+    "message": "Доверенные домены"
+  },
+  "optionsWhitelistDesc": {
+    "message": "Эти домены не вызовут предупреждений."
+  },
+  "optionsAddDomain": {
+    "message": "Добавить"
+  },
+  "optionsRemove": {
+    "message": "Удалить"
+  },
+  "optionsNoEntries": {
+    "message": "Нет"
+  },
+  "optionsExport": {
+    "message": "Экспорт"
+  },
+  "optionsImport": {
+    "message": "Импорт"
   }
 }
