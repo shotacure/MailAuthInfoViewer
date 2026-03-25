@@ -936,7 +936,7 @@
         verdictReasons,
         badgeClass,
         badgeText,
-        shouldAutoExpand: badgeClass !== "secure"
+        shouldAutoExpand: false
       };
     };
 
@@ -973,8 +973,6 @@
           --maiv-highlight-border: #ccc;
           --maiv-route-border: #eee;
           --maiv-route-origin-bg: #f0f8ff;
-          --maiv-link-color: #666;
-          --maiv-link-hover: #2196f3;
           --maiv-shadow: rgba(0,0,0,0.05);
           --maiv-pass: #2e7d32;
           --maiv-fail: #d32f2f;
@@ -1017,8 +1015,6 @@
             --maiv-highlight-border: #666;
             --maiv-route-border: #555;
             --maiv-route-origin-bg: #1a2a3a;
-            --maiv-link-color: #aaa;
-            --maiv-link-hover: #64b5f6;
             --maiv-shadow: rgba(0,0,0,0.3);
             --maiv-pass: #66bb6a;
             --maiv-fail: #ef5350;
@@ -1116,9 +1112,6 @@
 
         .maiv-toggle-icon { margin-left: 15px; margin-right: 15px; color: var(--maiv-text-faint); transition: transform 0.3s; display: inline-block; }
         .maiv-toggle-icon.expanded { transform: rotate(180deg); }
-
-        .maiv-link { text-decoration: none; color: var(--maiv-link-color); transition: color 0.2s; }
-        .maiv-link:hover { color: var(--maiv-link-hover); }
 
         .maiv-body-wrapper { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
         .maiv-body-wrapper.expanded { max-height: 3000px; transition: max-height 0.5s ease-in; }
@@ -1313,7 +1306,6 @@
           ${verdictReasonHTML}
           <span style="flex-grow:1;"></span>
           <span class="maiv-toggle-icon" id="maiv-toggle-icon" aria-hidden="true">▼</span>
-          <a href="https://github.com/shotacure/MailAuthInfoViewer" class="maiv-link" target="_blank"><small>Mail Auth Info Viewer</small></a>
         </div>
       `;
 
@@ -1811,9 +1803,8 @@
         headerToggle.setAttribute('aria-expanded', isExpanded);
       };
 
-      // マウスクリックによる開閉（リンクをクリックした場合は除外）
-      headerToggle.addEventListener('click', (e) => {
-        if (e.target.closest('.maiv-link')) return;
+      // マウスクリックによる開閉
+      headerToggle.addEventListener('click', () => {
         togglePanel();
       });
 
@@ -1839,24 +1830,39 @@
         const domain = btn.getAttribute('data-domain');
         if (!domain) return;
 
-        // Shadow DOM内カスタム確認ダイアログ
+        // Shadow DOM内カスタム確認ダイアログ（DOM APIで構築）
         const confirmText = msg("trustDomainConfirm").replace("{domain}", domain);
         const overlay = document.createElement("div");
         overlay.className = "maiv-confirm-overlay";
-        overlay.innerHTML = `
-          <div class="maiv-confirm-box">
-            <div class="maiv-confirm-text">${escapeHTML(confirmText)}</div>
-            <div class="maiv-confirm-buttons">
-              <button class="maiv-confirm-cancel">Cancel</button>
-              <button class="maiv-confirm-ok">OK</button>
-            </div>
-          </div>
-        `;
+
+        const box = document.createElement("div");
+        box.className = "maiv-confirm-box";
+
+        const textEl = document.createElement("div");
+        textEl.className = "maiv-confirm-text";
+        textEl.textContent = confirmText;
+
+        const buttons = document.createElement("div");
+        buttons.className = "maiv-confirm-buttons";
+
+        const cancelBtn = document.createElement("button");
+        cancelBtn.className = "maiv-confirm-cancel";
+        cancelBtn.textContent = "Cancel";
+
+        const okBtn = document.createElement("button");
+        okBtn.className = "maiv-confirm-ok";
+        okBtn.textContent = "OK";
+
+        buttons.appendChild(cancelBtn);
+        buttons.appendChild(okBtn);
+        box.appendChild(textEl);
+        box.appendChild(buttons);
+        overlay.appendChild(box);
         container.appendChild(overlay);
 
         const result = await new Promise(resolve => {
-          overlay.querySelector('.maiv-confirm-ok').addEventListener('click', () => resolve(true));
-          overlay.querySelector('.maiv-confirm-cancel').addEventListener('click', () => resolve(false));
+          okBtn.addEventListener('click', () => resolve(true));
+          cancelBtn.addEventListener('click', () => resolve(false));
           overlay.addEventListener('click', (ev) => { if (ev.target === overlay) resolve(false); });
         });
         overlay.remove();
