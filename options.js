@@ -28,17 +28,35 @@ const renderList = async () => {
   const domains = stored.trustedDomains || [];
   domains.sort();
 
+  // 既存の子要素をすべて除去してから再構築する
+  domainList.replaceChildren();
+
   if (domains.length === 0) {
-    domainList.innerHTML = `<div class="empty">${msg("optionsNoEntries")}</div>`;
+    // エントリなし: 空状態メッセージを表示
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.textContent = msg("optionsNoEntries");
+    domainList.appendChild(empty);
     return;
   }
 
-  domainList.innerHTML = domains.map(d =>
-    `<div class="domain-item">
-      <span>${d}</span>
-      <button class="danger" data-remove="${d}">${msg("optionsRemove")}</button>
-    </div>`
-  ).join("");
+  // 各ドメインの行を DOM API で構築
+  for (const d of domains) {
+    const item = document.createElement("div");
+    item.className = "domain-item";
+
+    const span = document.createElement("span");
+    span.textContent = d;
+
+    const btn = document.createElement("button");
+    btn.className = "danger";
+    btn.setAttribute("data-remove", d);
+    btn.textContent = msg("optionsRemove");
+
+    item.appendChild(span);
+    item.appendChild(btn);
+    domainList.appendChild(item);
+  }
 };
 
 // ドメイン追加
