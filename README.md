@@ -30,10 +30,10 @@ SPF, DKIM, or DMARC has explicitly failed. The red badge with individual verdict
 SPF・DKIM・DMARCのいずれかが明確に失敗しています。赤いバッジに個別の判定理由タグが表示され、何が問題かが一目瞭然です。
 ![Auth Failed Mail](images/ss_unverified.png)
 
-### 💀 Phishing Detected (フィッシング検出)
-Deceptive link text detected — the displayed URL differs from the actual destination. The flashing phishing badge is the highest severity level, overriding all other verdicts.
-リンクテキスト偽装を検出 — 表示URLと実際のリンク先が異なります。点滅するフィッシングバッジは最高レベルの深刻度で、他のすべての判定を上書きします。
-![Phishing Mail](images/ss_phishing.png)
+### 💀 Link Mismatch Detected (リンク偽装検出)
+Deceptive link text detected — the displayed URL differs from the actual destination. The flashing LINK MISMATCH badge is the highest severity level, overriding all other verdicts.
+リンクテキスト偽装を検出 — 表示URLと実際のリンク先が異なります。点滅するLINK MISMATCHバッジは最高レベルの深刻度で、他のすべての判定を上書きします。
+![Link Mismatch Mail](images/ss_link_mismatch.png)
 
 ---
 
