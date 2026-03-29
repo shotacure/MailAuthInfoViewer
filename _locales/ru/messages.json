@@ -159,10 +159,10 @@
     "message": "Подозрительная ссылка"
   },
   "verdictReasonSpfAlign": {
-    "message": "Сбой выравнивания SPF"
+    "message": "SPF не совпадает"
   },
   "verdictReasonDkimAlign": {
-    "message": "Сбой выравнивания DKIM"
+    "message": "DKIM не совпадает"
   },
   "badgeAuthPartial": {
     "message": "⚠️ ЧАСТИЧНО"

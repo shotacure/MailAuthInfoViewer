@@ -385,7 +385,7 @@
       // DMARCはSPFアライメントとDKIMアライメントを別々に評価する（RFC 7489）。
       // SPFドメイン(smtp.mailfrom)とDKIM署名ドメイン(header.d)を
       // それぞれヘッダFromの組織ドメインと比較する。
-      const evaluateAlignment = (spfDetail, dkimDetail, headerOrgDomain, spfStatus, dkimStatus) => {
+      const evaluateAlignment = (spfDetail, dkimSignatures, headerOrgDomain, spfStatus, dkimStatus) => {
         const getOrgDomain = window.getOrganizationalDomain || ((d) => d);
 
         // SPF アライメント: smtp.mailfrom のドメインと Header From の組織ドメインを比較
@@ -396,12 +396,15 @@
           spfAligned = (spfOrgDomain === headerOrgDomain);
         }
 
-        // DKIM アライメント: いずれかの DKIM 署名ドメインと Header From の組織ドメインが一致すればOK
-        // DKIM が pass でない場合（permerror, fail 等）、アライメント成立とはみなさない
+        // DKIM アライメント: pass した署名のドメインのみを対象に評価する。
+        // fail した署名のドメインが Header From と一致していてもアライメント成立とはみなさない。
+        // （例: pass=trusted.com, fail=attacker.com の場合、attacker.com は無視する）
         let dkimAligned = false;
         if (dkimStatus === "pass") {
-          const dkimDomains = dkimDetail.domains || [];
-          for (const d of dkimDomains) {
+          const passedDomains = (dkimSignatures || [])
+            .filter(sig => sig.status === "pass" && sig.domain)
+            .map(sig => sig.domain);
+          for (const d of passedDomains) {
             const dkimOrgDomain = getOrgDomain(d.toLowerCase());
             if (dkimOrgDomain === headerOrgDomain) {
               dkimAligned = true;
@@ -447,8 +450,8 @@
         }
       }
 
-      // SPF/DKIM アライメントの個別評価結果
-      const alignment = evaluateAlignment(spfDetail, dkimDetail, envelope.headerOrgDomain, spfStatus, dkimResult.aggregated);
+      // SPF/DKIM アライメントの個別評価結果（pass した署名のドメインのみで判定）
+      const alignment = evaluateAlignment(spfDetail, dkimResult.results, envelope.headerOrgDomain, spfStatus, dkimResult.aggregated);
 
       return {
         authServId: trustedRegular.length > 0
@@ -1170,6 +1173,10 @@
         .status-fail { color: var(--maiv-fail); font-weight: bold; }
         .status-none { color: var(--maiv-none); }
 
+        /* SPF/DKIMカード内のアライメントラベル色分け */
+        .maiv-align-pass { color: var(--maiv-pass); }
+        .maiv-align-fail { color: var(--maiv-fail); }
+
         .align-ok { color: var(--maiv-align-ok-text); font-weight: bold; font-size: 11px; margin-top: 6px; }
         .align-ng { background-color: var(--maiv-align-ng-bg); color: var(--maiv-align-ng-text); font-weight: bold; padding: 6px; border-radius: 4px; font-size: 12px; margin-top: 6px; display: block; }
         .align-warn { background-color: var(--maiv-align-warn-bg); color: var(--maiv-align-warn-text); font-weight: bold; padding: 6px; border-radius: 4px; font-size: 12px; margin-top: 6px; display: block; }
@@ -1596,8 +1603,7 @@
             else { delayStr = `${diffSec}s`; delayClass = "maiv-delay-danger"; }
           }
 
-          // from/by のホスト名を表示用に整形
-          const fromDisplay = hop.from || "";
+          // by ホスト名を表示用に整形
           const byDisplay = hop.by ? ` <span class="maiv-route-by">→ ${escapeHTML(hop.by)}</span>` : "";
 
           // IPアドレスタイプ (内部/外部) をアイコンとツールチップで表示

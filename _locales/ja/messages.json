@@ -161,10 +161,10 @@
     "message": "不審なリンク"
   },
   "verdictReasonSpfAlign": {
-    "message": "SPFアライメント不成立"
+    "message": "SPFアライメント非整合"
   },
   "verdictReasonDkimAlign": {
-    "message": "DKIMアライメント不成立"
+    "message": "DKIMアライメント非整合"
   },
   "badgeAuthPartial": {
     "message": "⚠️ 部分認証"

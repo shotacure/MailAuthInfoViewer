@@ -159,10 +159,10 @@
     "message": "رابط مشبوه"
   },
   "verdictReasonSpfAlign": {
-    "message": "فشل محاذاة SPF"
+    "message": "SPF غير متوافق"
   },
   "verdictReasonDkimAlign": {
-    "message": "فشل محاذاة DKIM"
+    "message": "DKIM غير متوافق"
   },
   "badgeAuthPartial": {
     "message": "⚠️ جزئي"

@@ -65,8 +65,8 @@ Deceptive link text detected — the displayed URL differs from the actual desti
     * **信頼済みリンクドメイン:** リンク警告検出時にドメイン一覧の各外部ドメインに「信頼」ボタンを表示。ホワイトリスト登録済みドメインはリンク先相違や外部リンク警告を抑制。アドオン設定画面からテキスト形式のインポート/エクスポートで管理可能。
 * **Authentication Status:** Quickly check the pass/fail status of SPF, DKIM, and DMARC authentication with DMARC policy display.
     * **認証ステータス:** SPF、DKIM、DMARCの成否ステータスをDMARCポリシー表示と共に素早く確認できます。
-* **DMARC Alignment Indicators (RFC 7489):** SPF and DKIM alignment status shown within each authentication card. The security verdict requires DMARC pass and at least one alignment match for AUTH PASS.
-    * **DMARCアライメント表示 (RFC 7489):** SPFとDKIMのアライメント状態を各認証カード内に表示。セキュリティ判定にはDMARC passと少なくとも一方のアライメント一致が必要です。
+* **DMARC Alignment Indicators (RFC 7489):** SPF and DKIM alignment status shown within each authentication card. Alignment is evaluated only for signatures that passed authentication — failed signatures are excluded from alignment consideration. The security verdict requires DMARC pass and at least one alignment match for AUTH PASS.
+    * **DMARCアライメント表示 (RFC 7489):** SPFとDKIMのアライメント状態を各認証カード内に表示。アライメント評価は認証に成功した署名のみが対象で、失敗した署名はアライメント判定から除外されます。セキュリティ判定にはDMARC passと少なくとも一方のアライメント一致が必要です。
 * **Individual DKIM Signatures:** When multiple DKIM signatures exist, each is displayed individually with its pass/fail status, signing domain, and DKIM selector (`s=`), with deduplication across headers.
     * **個別DKIM署名表示:** 複数のDKIM署名がある場合、各署名のpass/fail状態・署名ドメイン・DKIMセレクター (`s=`) を個別に表示。ヘッダ間の重複は自動排除します。
 * **ARC Chain Visualization (RFC 8617):** Displays the Authenticated Received Chain with verification status, signing domain, and authentication summary for each forwarding hop.

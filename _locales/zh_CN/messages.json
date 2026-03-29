@@ -159,10 +159,10 @@
     "message": "可疑链接"
   },
   "verdictReasonSpfAlign": {
-    "message": "SPF 对齐失败"
+    "message": "SPF 不一致"
   },
   "verdictReasonDkimAlign": {
-    "message": "DKIM 对齐失败"
+    "message": "DKIM 不一致"
   },
   "badgeAuthPartial": {
     "message": "⚠️ 部分验证"
