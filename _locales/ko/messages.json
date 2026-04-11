@@ -220,5 +220,14 @@
   },
   "optionsImport": {
     "message": "가져오기"
+  },
+  "verdictReasonUntrusted": {
+    "message": "신뢰할 수 없는 링크 도메인"
+  },
+  "linkAllExternalUntrusted": {
+    "message": "모든 링크가 신뢰할 수 없는 외부 도메인을 가리킵니다"
+  },
+  "linkCtaExternalUntrusted": {
+    "message": "주요 클릭 영역이 신뢰할 수 없는 외부 도메인을 가리킵니다"
   }
 }

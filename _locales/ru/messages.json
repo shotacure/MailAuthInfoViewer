@@ -220,5 +220,14 @@
   },
   "optionsImport": {
     "message": "Импорт"
+  },
+  "verdictReasonUntrusted": {
+    "message": "Недоверенный домен ссылки"
+  },
+  "linkAllExternalUntrusted": {
+    "message": "Все ссылки указывают на недоверенный внешний домен"
+  },
+  "linkCtaExternalUntrusted": {
+    "message": "Основная область клика указывает на недоверенный внешний домен"
   }
 }

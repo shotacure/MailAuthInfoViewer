@@ -220,5 +220,14 @@
   },
   "optionsImport": {
     "message": "Importa"
+  },
+  "verdictReasonUntrusted": {
+    "message": "Dominio del link non attendibile"
+  },
+  "linkAllExternalUntrusted": {
+    "message": "Tutti i link puntano a un dominio esterno non attendibile"
+  },
+  "linkCtaExternalUntrusted": {
+    "message": "L'area di clic principale punta a un dominio esterno non attendibile"
   }
 }
