@@ -220,5 +220,14 @@
   },
   "optionsImport": {
     "message": "匯入"
+  },
+  "verdictReasonUntrusted": {
+    "message": "未信任的連結網域"
+  },
+  "linkAllExternalUntrusted": {
+    "message": "所有連結都指向未信任的外部網域"
+  },
+  "linkCtaExternalUntrusted": {
+    "message": "主要點擊區域指向未信任的外部網域"
   }
 }

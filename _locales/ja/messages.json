@@ -222,5 +222,14 @@
   },
   "optionsImport": {
     "message": "インポート"
+  },
+  "verdictReasonUntrusted": {
+    "message": "未信頼のリンクドメイン"
+  },
+  "linkAllExternalUntrusted": {
+    "message": "すべてのリンクが未信頼の外部ドメインを指しています"
+  },
+  "linkCtaExternalUntrusted": {
+    "message": "メインのクリック領域が未信頼の外部ドメインを指しています"
   }
 }

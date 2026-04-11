@@ -220,5 +220,14 @@
   },
   "optionsImport": {
     "message": "Importer"
+  },
+  "verdictReasonUntrusted": {
+    "message": "Domaine de lien non approuvé"
+  },
+  "linkAllExternalUntrusted": {
+    "message": "Tous les liens pointent vers un domaine externe non approuvé"
+  },
+  "linkCtaExternalUntrusted": {
+    "message": "La zone de clic principale pointe vers un domaine externe non approuvé"
   }
 }

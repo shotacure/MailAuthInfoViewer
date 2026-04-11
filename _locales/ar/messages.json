@@ -220,5 +220,14 @@
   },
   "optionsImport": {
     "message": "استيراد"
+  },
+  "verdictReasonUntrusted": {
+    "message": "نطاق رابط غير موثوق"
+  },
+  "linkAllExternalUntrusted": {
+    "message": "جميع الروابط تشير إلى نطاق خارجي غير موثوق"
+  },
+  "linkCtaExternalUntrusted": {
+    "message": "منطقة النقر الرئيسية تشير إلى نطاق خارجي غير موثوق"
   }
 }

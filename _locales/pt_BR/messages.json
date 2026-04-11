@@ -220,5 +220,14 @@
   },
   "optionsImport": {
     "message": "Importar"
+  },
+  "verdictReasonUntrusted": {
+    "message": "Domínio de link não confiável"
+  },
+  "linkAllExternalUntrusted": {
+    "message": "Todos os links apontam para um domínio externo não confiável"
+  },
+  "linkCtaExternalUntrusted": {
+    "message": "A área principal de clique aponta para um domínio externo não confiável"
   }
 }

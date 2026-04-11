@@ -588,17 +588,26 @@
     // =========================================================
     // 6. analyzeLinkSafety - メール本文のリンク安全性分析
     // =========================================================
-    // メール本文のHTML/テキストを解析し、フィッシングの特徴を検出する。
-    // 検出項目:
-    //   [critical] リンクテキスト偽装、javascript:/data: URI、HTMLフォーム埋め込み
+    // メール本文のHTML/テキストを解析し、フィッシングの特徴や未信頼ドメイン、
+    // プライバシー上の注意点を検出する。
+    // findings の level は深刻度と解決手段で4段階に分類される:
+    //   [critical]  リンクテキスト偽装、javascript:/data: URI、HTMLフォーム埋め込み
+    //               → 明確なフィッシングの兆候。ホワイトリスト対象外。
     //   [suspicious] IPアドレスリンク、IDNホモグラフ、URLショートナー
-    //   [suspicious] 唯一のリンクが外部ドメイン、最大CTAが外部ドメイン、トラッキングピクセル
-    //   [info] リンクドメイン一覧、リソースドメイン一覧
+    //               → リンク先そのものが怪しい書式。ホワイトリスト対象外。
+    //   [untrusted]  全リンク外部ドメイン、最大CTAが外部ドメイン
+    //               → ドメインが未知なだけ。信頼リスト追加で解消する。
+    //   [privacy]    トラッキングピクセル
+    //               → プライバシー上の注意喚起。フィッシングではない。
+    //   [info]       リンクドメイン一覧、リソースドメイン一覧
     const analyzeLinkSafety = (bodyContent, headerOrgDomain, trustedDomains) => {
-      const findings = [];   // { level: "critical"|"suspicious"|"info", type: string, detail: string }
+      const findings = [];   // { level: "critical"|"suspicious"|"untrusted"|"privacy"|"info", type, detail }
       const linkDomains = new Map(); // domain → { count, matchesFrom }
       const resourceDomains = new Map(); // domain → { count, matchesFrom } (画像等の外部リソース)
       const deceptiveDomains = new Set(); // リンクテキスト偽装の実際のリンク先組織ドメイン
+      // untrusted レベルの findings から参照される、未信頼かつ Header From と不一致の外部リンクドメイン集合
+      // findings 行からワンクリック信頼を行う際の対象ドメイン解決に使用する
+      const externalLinkDomains = new Set();
 
       // フィッシングで多用される URL ショートナーサービスのドメインリスト
       const URL_SHORTENERS = [
@@ -608,7 +617,7 @@
         "bc.vc", "yourls.org"
       ];
 
-      if (!bodyContent) return { findings, linkDomains, resourceDomains, deceptiveDomains, trackingPixelDomains: new Set() };
+      if (!bodyContent) return { findings, linkDomains, resourceDomains, deceptiveDomains, trackingPixelDomains: new Set(), externalLinkDomains };
 
       // DOMParser で本文HTMLをパースし、リンク・フォーム・画像を解析する
       const parser = new DOMParser();
@@ -629,6 +638,12 @@
       // 各リンクの推定表示面積も記録し、最大CTAの判定に使う
       const anchors = doc.querySelectorAll("a[href]");
       const linkInfos = []; // { orgDomain, matchesFrom, estimatedArea }
+
+      // 重複の集約用: 同じ type のドメイン/IPを集めてから1つの finding にまとめる
+      // これにより同種の警告が大量に並ぶ肥大化を防ぐ
+      const ipAddressLinks = new Set();
+      const idnHomographLinks = new Set();
+      const urlShortenerLinks = new Set();
 
       for (const a of anchors) {
         const href = (a.getAttribute("href") || "").trim();
@@ -680,31 +695,20 @@
         }
 
         // --- 項目4: IPアドレス直指定リンク検知 ---
+        // 同一ホストの重複は集約する
         if (isIPv4Like(linkHost) || isIPv6Like(linkHost) || linkHost.startsWith("[")) {
-          findings.push({
-            level: "suspicious",
-            type: "ip_address_link",
-            detail: msg("linkIpAddress") + ` (${escapeHTML(linkHost)})`
-          });
+          ipAddressLinks.add(linkHost);
         }
 
         // --- 項目5: IDNホモグラフ攻撃検知 ---
         if (linkHost.includes("xn--")) {
-          findings.push({
-            level: "suspicious",
-            type: "idn_homograph",
-            detail: msg("linkIdnHomograph") + ` (${escapeHTML(linkHost)})`
-          });
+          idnHomographLinks.add(linkHost);
         }
 
         // --- 項目6: URLショートナー検知 ---
         const linkOrgDomain = getOrgDomain(linkHost);
         if (URL_SHORTENERS.some(s => linkHost === s || linkHost.endsWith("." + s))) {
-          findings.push({
-            level: "suspicious",
-            type: "url_shortener",
-            detail: msg("linkShortener") + ` (${escapeHTML(linkHost)})`
-          });
+          urlShortenerLinks.add(linkHost);
         }
 
         // --- 項目7: リンクドメイン一覧収集 ---
@@ -734,6 +738,38 @@
         linkInfos.push({ orgDomain: linkOrgDomain, matchesFrom, estimatedArea });
       }
 
+      // 重複集約された ip/idn/shortener の findings を生成
+      // 同種が複数ある場合は detail 末尾に "(host1, host2, +N more)" 形式で集約表示する
+      // 表示上の最大件数は 3 までとし、超過分は "+N more" でまとめる
+      const formatAggregated = (set) => {
+        const arr = Array.from(set);
+        if (arr.length === 0) return "";
+        const shown = arr.slice(0, 3).map(escapeHTML).join(", ");
+        const extra = arr.length > 3 ? `, +${arr.length - 3} more` : "";
+        return `(${shown}${extra})`;
+      };
+      if (ipAddressLinks.size > 0) {
+        findings.push({
+          level: "suspicious",
+          type: "ip_address_link",
+          detail: msg("linkIpAddress") + " " + formatAggregated(ipAddressLinks)
+        });
+      }
+      if (idnHomographLinks.size > 0) {
+        findings.push({
+          level: "suspicious",
+          type: "idn_homograph",
+          detail: msg("linkIdnHomograph") + " " + formatAggregated(idnHomographLinks)
+        });
+      }
+      if (urlShortenerLinks.size > 0) {
+        findings.push({
+          level: "suspicious",
+          type: "url_shortener",
+          detail: msg("linkShortener") + " " + formatAggregated(urlShortenerLinks)
+        });
+      }
+
       // ■ テキスト状態のURL検出
       const textContent = doc.body ? doc.body.textContent : "";
       const textUrlRegex = /https?:\/\/([^\s"'<>)\]]+)/gi;
@@ -755,27 +791,41 @@
         }
       }
 
-      // ■ すべてのリンクが外部ドメイン → フィッシング疑い
+      // ■ すべてのリンクが外部ドメイン → 未信頼レベル
       // HTMLメール: 全 <a> リンクのドメインがHeader Fromと無関係（信頼済みドメインは除外）
       // テキストメール: 全URLのドメインがHeader Fromと無関係（信頼済みドメインは除外）
+      // untrusted レベルはユーザーが信頼リストに追加すれば解消するため、
+      // 攻撃の兆候を示す "suspicious" とは区別して扱う。
       const isHtml = /<[a-z][\s\S]*>/i.test(bodyContent);
       const isSafeLink = (l) => l.matchesFrom || (trustedDomains && trustedDomains.has(l.orgDomain));
       let hasAllExternalWarning = false;
       if (isHtml && linkInfos.length > 0 && !linkInfos.some(isSafeLink)) {
-        findings.push({ level: "suspicious", type: "all_links_external", detail: msg("linkAllExternal") });
+        findings.push({ level: "untrusted", type: "all_links_external", detail: msg("linkAllExternalUntrusted") });
         hasAllExternalWarning = true;
+        // 対象の外部ドメインを externalLinkDomains に収集
+        for (const l of linkInfos) {
+          if (!l.matchesFrom && !(trustedDomains && trustedDomains.has(l.orgDomain))) {
+            externalLinkDomains.add(l.orgDomain);
+          }
+        }
       } else if (!isHtml && textUrls.length > 0 && !textUrls.some(isSafeLink)) {
-        findings.push({ level: "suspicious", type: "all_links_external", detail: msg("linkAllExternal") });
+        findings.push({ level: "untrusted", type: "all_links_external", detail: msg("linkAllExternalUntrusted") });
         hasAllExternalWarning = true;
+        for (const l of textUrls) {
+          if (!l.matchesFrom && !(trustedDomains && trustedDomains.has(l.orgDomain))) {
+            externalLinkDomains.add(l.orgDomain);
+          }
+        }
       }
 
-      // ■ 最大CTAリンクが外部ドメイン → フィッシング疑い
+      // ■ 最大CTAリンクが外部ドメイン → 未信頼レベル
       // メール内で最も目立つクリック領域（推定面積最大）のリンク先が送信者ドメインと異なる場合
       // 全リンク外部警告が出ている場合は冗長なので省略
       if (!hasAllExternalWarning && linkInfos.length > 0) {
         const largestCta = linkInfos.reduce((max, cur) => cur.estimatedArea > max.estimatedArea ? cur : max);
         if (!isSafeLink(largestCta)) {
-          findings.push({ level: "suspicious", type: "cta_external", detail: msg("linkCtaExternal") });
+          findings.push({ level: "untrusted", type: "cta_external", detail: msg("linkCtaExternalUntrusted") });
+          externalLinkDomains.add(largestCta.orgDomain);
         }
       }
 
@@ -821,10 +871,11 @@
         }
       }
 
-      // トラッキングピクセルが検出された場合は警告
+      // トラッキングピクセルが検出された場合は privacy レベルとして情報提供
+      // プライバシー上の注意喚起であり、フィッシング指標ではない。グリーン判定は阻害しない。
       if (trackingPixelCount > 0) {
         findings.push({
-          level: "suspicious",
+          level: "privacy",
           type: "tracking_pixel",
           detail: msg("linkTrackingPixel") + ` (×${trackingPixelCount})`
         });
@@ -841,7 +892,7 @@
         }
       }
 
-      return { findings: uniqueFindings, linkDomains, resourceDomains, deceptiveDomains, trackingPixelDomains };
+      return { findings: uniqueFindings, linkDomains, resourceDomains, deceptiveDomains, trackingPixelDomains, externalLinkDomains };
     };
 
     // =========================================================
@@ -850,7 +901,8 @@
     // 認証結果・アライメント・フィッシング指標を総合し、バッジ色と判定理由を決定する。
     // グリーン条件:
     //   SPF pass, DKIM pass, DMARC pass (policy ≠ none),
-    //   DMARCアライメント成立, 表示名なりすましなし, フィッシング指標なし
+    //   DMARCアライメント成立, 表示名なりすましなし,
+    //   critical/suspicious/untrusted のいずれのリンク指標もなし
     // エンベロープドメイン不一致: DMARC pass かつアライメント成立時はグリーンを阻害しない
     const determineSecurityStatus = (authResults, isDomainAligned, envelopeFrom, isDisplayNameSpoofed, linkSafety) => {
       const isSpfOk = authResults.spf.status === "pass";
@@ -873,11 +925,17 @@
       const al = authResults.alignment || {};
       const isDmarcAligned = !!(al.spfAligned || al.dkimAligned);
 
-      // ■ フィッシング指標の集約
+      // ■ リンク系指標の集約 (4レベル)
+      // critical:   確度の高いフィッシング指標。専用バッジへ昇格。
+      // suspicious: ドメインや書式そのものが怪しいが、ホワイトリスト対象外のため
+      //             警告として扱う（グリーン阻害）。
+      // untrusted:  未信頼外部ドメインなだけで、信頼リスト追加で解消する。
+      //             思想に従いユーザーが信頼表明するまでグリーンにはしない（阻害あり）。
+      // privacy:    トラッキングピクセル等のプライバシー注意。グリーン阻害なし。
       const hasCriticalPhishing = linkSafety?.findings?.some(f => f.level === "critical") || false;
-      // トラッキングピクセルはグリーン判定を阻害しない（情報提供のみ）
-      // 正規の企業メールにほぼ必ず含まれるため、阻害すると常態化してオオカミ少年になる
-      const hasSuspiciousLink = linkSafety?.findings?.some(f => f.level === "suspicious" && f.type !== "tracking_pixel") || false;
+      const hasSuspiciousLink = linkSafety?.findings?.some(f => f.level === "suspicious") || false;
+      const hasUntrustedLink = linkSafety?.findings?.some(f => f.level === "untrusted") || false;
+      // privacy レベル（トラッキングピクセル等）は判定に影響しない
 
       // ■ 判定理由の収集: グリーンでない全理由を記録
       // 認証系は実ステータスを含め、アライメントはpassかつ不成立の場合のみ記録
@@ -890,7 +948,8 @@
 
       const isSecure = isSpfOk && isDkimOk && isDmarcOk &&
                        domainCheckOk && isDmarcAligned &&
-                       !isDisplayNameSpoofed && !hasCriticalPhishing && !hasSuspiciousLink;
+                       !isDisplayNameSpoofed && !hasCriticalPhishing &&
+                       !hasSuspiciousLink && !hasUntrustedLink;
 
       // 認証系: pass 以外なら実際のステータスを記録 (例: "SPF: softfail")
       if (!isSpfOk) verdictReasons.push(`SPF: ${authResults.spf.status}`);
@@ -902,8 +961,9 @@
       if (!domainCheckOk) verdictReasons.push("domain_not_aligned");
       if (isDisplayNameSpoofed) verdictReasons.push("display_name_spoofed");
       // phishing_critical はバッジ自体が「💀 フィッシング検出」になるため判定理由には含めない
-      // トラッキングピクセルは判定理由タグに出さない（リンク安全性カード内で情報提供）
+      // privacy（トラッキングピクセル）は判定理由タグに出さず、リンク安全性カード内で情報提供
       if (hasSuspiciousLink) verdictReasons.push("phishing_suspicious");
+      if (hasUntrustedLink) verdictReasons.push("link_untrusted");
 
       let badgeClass = "warning";
       let badgeText = msg("badgeUnverified");
@@ -936,6 +996,7 @@
         isDmarcAligned,
         hasCriticalPhishing,
         hasSuspiciousLink,
+        hasUntrustedLink,
         verdictReasons,
         badgeClass,
         badgeText,
@@ -997,6 +1058,12 @@
           --maiv-mismatch-color: #e65100;
           --maiv-mailing-list-bg: #e3f2fd;
           --maiv-mailing-list-text: #1565c0;
+          /* 未信頼ドメイン（untrusted）: 既存 warn 系を流用 */
+          --maiv-untrusted-bg: #fff8e1;
+          --maiv-untrusted-text: #b27300;
+          /* プライバシー注意（privacy）: 控えめな青灰色系（情報提供ニュアンス） */
+          --maiv-privacy-bg: #eceff1;
+          --maiv-privacy-text: #455a64;
         }
 
         /* === ダークモード === */
@@ -1039,6 +1106,11 @@
             --maiv-mismatch-color: #ffb74d;
             --maiv-mailing-list-bg: #1a2a3a;
             --maiv-mailing-list-text: #64b5f6;
+            /* 未信頼・プライバシーのダークモード対応 */
+            --maiv-untrusted-bg: #3a2e00;
+            --maiv-untrusted-text: #ffd54f;
+            --maiv-privacy-bg: #2a3238;
+            --maiv-privacy-text: #b0bec5;
           }
         }
 
@@ -1112,6 +1184,10 @@
         .maiv-verdict-reason.reason-danger {
           background-color: var(--maiv-align-ng-bg); color: var(--maiv-align-ng-text);
         }
+        /* 未信頼リンクの判定理由タグ: 警告より一段控えめな配色 */
+        .maiv-verdict-reason.reason-untrusted {
+          background-color: var(--maiv-untrusted-bg); color: var(--maiv-untrusted-text);
+        }
 
         .maiv-toggle-icon { margin-left: 15px; margin-right: 15px; color: var(--maiv-text-faint); transition: transform 0.3s; display: inline-block; }
         .maiv-toggle-icon.expanded { transform: rotate(180deg); }
@@ -1162,7 +1238,7 @@
         .maiv-route-hop { color: var(--maiv-text-secondary); }
         .maiv-route-by { color: var(--maiv-text-faint); font-size: 0.9em; font-weight: normal; }
         .maiv-route-time { text-align: right; color: var(--maiv-text-faint); white-space: nowrap; }
-        .maiv-route-delay { width: 60px; text-align: right; font-weight: bold; font-size: 0.9em; }
+        .maiv-route-delay { width: 60px; text-align: right; font-weight: bold; font-family: monospace; font-size: 0.9em; }
         .maiv-delay-none { color: var(--maiv-border); }
         .maiv-delay-origin { color: var(--maiv-text-strongest); }
         .maiv-delay-normal { color: var(--maiv-delay-normal); }
@@ -1213,7 +1289,7 @@
         /* IPタイプ表示: 送達経路上の内部/外部ネットワーク判定 */
         .maiv-ip-tag { font-size: 10px; margin-left: 4px; }
 
-        /* LINK SAFETY カード: フィッシング検知結果表示 */
+        /* LINK SAFETY カード: フィッシング検知結果表示（4段階の severity） */
         .maiv-finding-critical {
           background-color: var(--maiv-align-ng-bg); color: var(--maiv-align-ng-text);
           font-weight: bold; padding: 5px 8px; border-radius: 4px; font-size: 11px;
@@ -1222,6 +1298,19 @@
         .maiv-finding-suspicious {
           background-color: var(--maiv-align-warn-bg); color: var(--maiv-align-warn-text);
           font-weight: bold; padding: 5px 8px; border-radius: 4px; font-size: 11px;
+          margin-bottom: 4px;
+        }
+        /* 未信頼ドメイン: 警告より一段控えめな配色で、ユーザーが信頼表明すれば解消することを示唆 */
+        .maiv-finding-untrusted {
+          background-color: var(--maiv-untrusted-bg); color: var(--maiv-untrusted-text);
+          font-weight: bold; padding: 5px 8px; border-radius: 4px; font-size: 11px;
+          margin-bottom: 4px;
+          display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+        }
+        /* プライバシー注意: 青灰色系の情報提供ニュアンス */
+        .maiv-finding-privacy {
+          background-color: var(--maiv-privacy-bg); color: var(--maiv-privacy-text);
+          font-weight: normal; padding: 5px 8px; border-radius: 4px; font-size: 11px;
           margin-bottom: 4px;
         }
         .maiv-trust-btn {
@@ -1285,7 +1374,8 @@
           "dkim_align_fail": msg("verdictReasonDkimAlign"),
           "domain_not_aligned": msg("verdictReasonDomainMismatch"),
           "display_name_spoofed": msg("verdictReasonSpoofing"),
-          "phishing_suspicious": msg("verdictReasonSuspicious")
+          "phishing_suspicious": msg("verdictReasonSuspicious"),
+          "link_untrusted": msg("verdictReasonUntrusted")
         };
         const defaultReasonClass = (security.badgeClass === "danger" || security.badgeClass === "phishing") ? "reason-danger" : "reason-warning";
         // 認証ステータスの深刻度別色分け
@@ -1298,6 +1388,9 @@
             // 認証系タグ: ステータスに応じて色を変える
             const status = r.split(":")[1].trim().toLowerCase();
             tagClass = softStatuses.has(status) ? "reason-warning" : "reason-danger";
+          } else if (r === "link_untrusted") {
+            // 未信頼リンクタグ: 警告より一段控えめな専用色
+            tagClass = "reason-untrusted";
           }
           return `<span class="maiv-verdict-reason ${tagClass}">${escapeHTML(label)}</span>`;
         }).join("");
@@ -1683,15 +1776,39 @@
       if (hasFindings || hasLinkDomains || hasResourceDomains) {
         let findingsHTML = "";
         if (hasFindings) {
+          // レベル別のCSSクラスとアイコン
+          // critical=🚨(赤) / suspicious=⚠️(橙) / untrusted=⚠️(黄/控えめ) / privacy=🕵️(青灰)
+          const levelCls = {
+            "critical": "maiv-finding-critical",
+            "suspicious": "maiv-finding-suspicious",
+            "untrusted": "maiv-finding-untrusted",
+            "privacy": "maiv-finding-privacy"
+          };
+          const levelIcon = {
+            "critical": "🚨",
+            "suspicious": "⚠️",
+            "untrusted": "⚠️",
+            "privacy": "🕵️"
+          };
+          // 未信頼な外部リンクドメインが1つだけの場合、その findings 行から直接Trustできるようにする。
+          // 複数ある場合はユーザーが意図せず一括信頼するリスクがあるため、下のドメイン一覧から個別操作を促す。
+          const externalSet = linkSafety.externalLinkDomains || new Set();
+          const untrustedSingleDomain = (externalSet.size === 1) ? Array.from(externalSet)[0] : null;
           for (const f of linkSafety.findings) {
-            const cls = f.level === "critical" ? "maiv-finding-critical" : "maiv-finding-suspicious";
-            const icon = f.level === "critical" ? "🚨" : "⚠️";
-            findingsHTML += `<div class="${cls}">${icon} ${escapeHTML(f.detail)}</div>`;
+            const cls = levelCls[f.level] || "maiv-finding-suspicious";
+            const icon = levelIcon[f.level] || "⚠️";
+            // untrusted レベルの行に、対象が1ドメインに特定できる場合のみワンクリック Trust ボタンを添える
+            let inlineTrust = "";
+            if (f.level === "untrusted" && untrustedSingleDomain &&
+                !(trustedDomains && trustedDomains.has(untrustedSingleDomain))) {
+              inlineTrust = ` <button class="maiv-trust-btn" data-domain="${escapeHTML(untrustedSingleDomain)}">${escapeHTML(msg("trustDomainButton"))} ${escapeHTML(untrustedSingleDomain)}</button>`;
+            }
+            findingsHTML += `<div class="${cls}">${icon} ${escapeHTML(f.detail)}${inlineTrust}</div>`;
           }
         }
 
         // ドメイン一覧のレンダリングヘルパー
-        // showTrust: trueの場合、リンク先相違検出時に限り不一致ドメインに「信頼」ボタンを表示
+        // showTrust: trueの場合、未信頼かつHeader From不一致のドメインに「信頼」ボタンを表示
         const renderDomainList = (title, domains, deceptive, trackers, showTrust) => {
           if (!domains || domains.size === 0) return "";
           let items = "";
@@ -1716,7 +1833,7 @@
               icon = "⚠️"; cls = "maiv-link-domain-mismatch";
             }
             const trackerMark = trackers && trackers.has(domain) ? " 🕵️" : "";
-            // 「信頼」ボタン: リンク先相違(💀)検出時のみ、未信頼かつ不一致ドメインに表示
+            // 「信頼」ボタン: 任意のリンク警告(critical/suspicious/untrusted)検出時、未信頼かつ不一致ドメインに表示
             const trustBtn = (showTrust && hasFindings && !info.matchesFrom && !isTrusted)
               ? ` <button class="maiv-trust-btn" data-domain="${escapeHTML(domain)}">${escapeHTML(msg("trustDomainButton"))}</button>`
               : "";
@@ -1737,7 +1854,7 @@
         const domainListsHTML = linkListHTML + resourceListHTML;
         const hasDomainLists = domainListsHTML.trim().length > 0;
 
-        // findings（critical/suspicious）があればドメイン一覧もデフォルト展開
+        // findings があればドメイン一覧もデフォルト展開
         const expandDomains = hasFindings;
         const expandedCls = expandDomains ? " maiv-expanded" : "";
 
@@ -1747,7 +1864,7 @@
         linkSafetyContentHTML = `<div class="maiv-empty-state">${escapeHTML(msg("labelNone"))}</div>`;
       }
 
-      // ドメイン一覧がある場合はタイトルをトグル化、critical時はデフォルト展開
+      // ドメイン一覧がある場合はタイトルをトグル化、findings時はデフォルト展開
       const hasExpandableLinkSafety = (hasLinkDomains || hasResourceDomains);
       const linkSafetyExpandedCls = (hasExpandableLinkSafety && hasFindings) ? " maiv-expanded" : "";
       const linkSafetyHTML = `
@@ -1829,6 +1946,7 @@
       });
 
       // --- 「信頼」ボタン ---
+      // findings 行のインラインTrust、ドメイン一覧内のTrust、どちらも同じハンドラで処理する
       container.addEventListener('click', async (e) => {
         const btn = e.target.closest('.maiv-trust-btn');
         if (!btn) return;

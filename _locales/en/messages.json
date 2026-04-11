@@ -222,5 +222,14 @@
   },
   "optionsImport": {
     "message": "Import"
+  },
+  "verdictReasonUntrusted": {
+    "message": "Untrusted link domain"
+  },
+  "linkAllExternalUntrusted": {
+    "message": "All links point to an untrusted external domain"
+  },
+  "linkCtaExternalUntrusted": {
+    "message": "Main click area points to an untrusted external domain"
   }
 }

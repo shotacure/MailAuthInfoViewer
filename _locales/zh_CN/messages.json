@@ -220,5 +220,14 @@
   },
   "optionsImport": {
     "message": "导入"
+  },
+  "verdictReasonUntrusted": {
+    "message": "未信任的链接域名"
+  },
+  "linkAllExternalUntrusted": {
+    "message": "所有链接都指向未信任的外部域名"
+  },
+  "linkCtaExternalUntrusted": {
+    "message": "主要点击区域指向未信任的外部域名"
   }
 }
