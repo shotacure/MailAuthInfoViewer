@@ -15,3 +15,5 @@ Thumbs.db
 # temporary
 *.tmp
 *.log
+
+repomix-output.xml
