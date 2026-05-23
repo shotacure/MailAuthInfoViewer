@@ -196,6 +196,41 @@
       // 信頼できるヘッダのみを採用する。攻撃者が注入した偽の認証結果を排除するため。
       // ARC-Authentication-Results は独自のチェイン検証機構を持つため、フィルタリング対象外。
 
+      // ■ コメント括弧を考慮したセミコロン分割ヘルパー
+      // RFC 8601 では Authentication-Results 中の "(...)" はコメントであり、
+      // 括弧内に含まれるセミコロンは構文上のセパレータではない。
+      // 例: dkim=pass (2048-bit key; unprotected) header.d=example.com
+      //   このようなコメント付き結果を素朴に ';' で分割すると、
+      //   "dkim=pass (2048-bit key" と " unprotected) header.d=..." に
+      //   分断され、header.d 等の属性が後続セグメントに紛れ込んで
+      //   ドメイン抽出やアライメント評価が誤った結果になる。
+      // そのため括弧の対応をネストで追いつつトップレベルのセミコロンだけで
+      // 分割する専用関数を用いる。
+      const splitOnTopLevelSemicolons = (str) => {
+        if (!str) return [];
+        const result = [];
+        let depth = 0;
+        let current = "";
+        for (let i = 0; i < str.length; i++) {
+          const ch = str[i];
+          if (ch === '(') {
+            depth++;
+            current += ch;
+          } else if (ch === ')') {
+            if (depth > 0) depth--;
+            current += ch;
+          } else if (ch === ';' && depth === 0) {
+            result.push(current);
+            current = "";
+          } else {
+            current += ch;
+          }
+        }
+        // 最後のセグメント（末尾セミコロンがない場合の残り）も含める
+        result.push(current);
+        return result;
+      };
+
       const getLastReceivedBy = () => {
         const received = headers["received"] || [];
         if (received.length === 0) return "";
@@ -209,7 +244,8 @@
 
         const trusted = authResultHeaders.filter(h => {
           // authserv-id はヘッダの先頭（最初のセミコロンの前）に記載される
-          const authServId = h.split(';')[0].trim().toLowerCase();
+          // コメント括弧内のセミコロンを誤って境界と認識しないようヘルパーを利用する
+          const authServId = splitOnTopLevelSemicolons(h)[0].trim().toLowerCase();
           // 完全一致、またはサブドメイン関係を許容
           return authServId === trustedHost ||
                  authServId.endsWith("." + trustedHost) ||
@@ -229,10 +265,11 @@
       const authHeaders = [...trustedRegular, ...arcAuth];
 
       // セミコロンで区切ってメソッド単位に分割し、認証タイプのステータスを抽出
+      // 分割は splitOnTopLevelSemicolons を用い、コメント括弧内のセミコロンを保護する
       const parseAuthStatus = (type) => {
         const regex = new RegExp(`\\b${type}\\s*=\\s*([a-zA-Z0-9]+)`, "i");
         for (const h of authHeaders) {
-          const methods = h.split(';').slice(1);
+          const methods = splitOnTopLevelSemicolons(h).slice(1);
           for (const m of methods) {
             const match = m.match(regex);
             if (match) return match[1].toLowerCase();
@@ -250,7 +287,10 @@
         const seen = new Set();
 
         for (const h of authHeaders) {
-          const methods = h.split(';').slice(1);
+          // コメント括弧 "(2048-bit key; unprotected)" 等に含まれるセミコロンを
+          // 境界として扱わないため splitOnTopLevelSemicolons を使う。
+          // これにより header.d= 等の属性がセグメントから漏れない。
+          const methods = splitOnTopLevelSemicolons(h).slice(1);
           for (const m of methods) {
             const statusMatch = m.match(/\bdkim\s*=\s*([a-zA-Z0-9]+)/i);
             if (statusMatch) {
@@ -305,7 +345,7 @@
           let rawSegment = "";
 
           for (const h of authHeaders) {
-            const methods = h.split(';').slice(1);
+            const methods = splitOnTopLevelSemicolons(h).slice(1);
             for (const m of methods) {
               if (!/\bspf\s*=/i.test(m)) continue;
               rawSegment = m.trim();
@@ -339,7 +379,7 @@
           const domains = new Set();
 
           for (const h of authHeaders) {
-            const methods = h.split(';').slice(1);
+            const methods = splitOnTopLevelSemicolons(h).slice(1);
             for (const m of methods) {
               if (!/\bdkim\s*=/i.test(m)) continue;
 
@@ -362,7 +402,7 @@
           let rawSegment = "";
 
           for (const h of authHeaders) {
-            const methods = h.split(';').slice(1);
+            const methods = splitOnTopLevelSemicolons(h).slice(1);
             for (const m of methods) {
               if (!/\bdmarc\s*=/i.test(m)) continue;
               rawSegment = m.trim();
@@ -455,7 +495,7 @@
 
       return {
         authServId: trustedRegular.length > 0
-          ? trustedRegular[0].split(';')[0].trim()
+          ? splitOnTopLevelSemicolons(trustedRegular[0])[0].trim()
           : lastReceivedBy,
         spf: { status: spfStatus, detail: spfDetail },
         dkim: { status: dkimResult.aggregated, detail: dkimDetail, signatures: dkimResult.results },
