@@ -67,6 +67,31 @@
     };
 
     // =========================================================
+    // 既知の電子メール匿名化・転送（リレー）サービスのドメイン
+    // =========================================================
+    // これらのサービスはユーザーの実アドレスを隠蔽するため、
+    // 元送信者の身元を「表示名」に保持しつつ、別ドメインの匿名アドレスから配信する。
+    // 例: From: "original@sender.com [via Relay]" <random@mozmail.com>
+    // 表示名と実アドレスのドメインが意図的に異なるため、なりすまし検知の対象外とする。
+    const EMAIL_RELAY_DOMAINS = new Set([
+      "mozmail.com",              // Firefox Relay
+      "relay.firefox.com",        // Firefox Relay (legacy)
+      "duck.com",                 // DuckDuckGo Email Protection
+      "privaterelay.appleid.com", // Apple Hide My Email
+      "simplelogin.com",          // SimpleLogin
+      "simplelogin.fr",
+      "simplelogin.co",
+      "slmail.me",
+      "aleeas.com",
+      "anonaddy.com",             // AnonAddy / addy.io
+      "anonaddy.me",
+      "addy.io",
+      "forwardemail.net",         // Forward Email
+      "33mail.com",               // 33Mail
+      "spamgourmet.com",          // SpamGourmet
+    ]);
+
+    // =========================================================
     // 1. parseEnvelope - エンベロープ情報・アドレスアライメント・メーリングリスト検知
     // =========================================================
     const parseEnvelope = (fullMsg, headers, msgHeader) => {
@@ -131,13 +156,20 @@
         (headers["list-unsubscribe"] && headers["list-unsubscribe"].length > 0)
       );
 
+      // ■ メール匿名化/転送サービス経由かを判定
+      // Firefox Relay 等のリレーサービスは、元送信者の身元を表示名に残しつつ、
+      // 配信は別ドメインの匿名アドレスから行う。表示名と実アドレスの
+      // ドメイン不一致が「正規の挙動」となるため、なりすまし検知を抑制する必要がある。
+      const isEmailRelay = EMAIL_RELAY_DOMAINS.has(headerOrgDomain);
+
       // ■ 表示名なりすまし検知
       // 攻撃者が表示名にメールアドレスを埋め込み、受信者を欺く手口を検知する。
       // 例: From: "support@amazon.co.jp" <evil@attacker.com>
       // 表示名内のアドレスのドメインと実際のHeader Fromドメインを組織ドメインレベルで比較し、
       // 不一致の場合はなりすましの疑いとして警告フラグを立てる。
+      // 実アドレスが既知のメールリレーサービスのドメインの場合は、転送パターンとして警告対象外。
       let isDisplayNameSpoofed = false;
-      if (headerFromName) {
+      if (headerFromName && !isEmailRelay) {
         // 表示名から @ を含む文字列（メールアドレス候補）を抽出
         const emailInName = headerFromName.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/);
         if (emailInName) {
@@ -152,10 +184,11 @@
       // ■ Reply-To ドメイン不一致検知
       // Reply-To が Header From と異なる組織ドメインの場合、
       // フィッシングで返信先を攻撃者に誘導する手口の可能性がある
+      // ※ メールリレーサービス経由の場合、Reply-To に元送信者を設定するのが通常のため除外
       let isReplyToMismatch = false;
       let replyToAddress = "";
       const replyToRaw = headers["reply-to"]?.[0] || "";
-      if (replyToRaw) {
+      if (replyToRaw && !isEmailRelay) {
         const replyToMatch = replyToRaw.match(/<([^>]+)>/);
         replyToAddress = replyToMatch ? replyToMatch[1].trim() : replyToRaw.replace(/^<|>$/g, "").trim();
         if (replyToAddress.includes('@')) {
@@ -996,8 +1029,12 @@
       if (!isDkimOk) verdictReasons.push(`DKIM: ${authResults.dkim.status}`);
       if (!isDmarcOk) verdictReasons.push(`DMARC: ${authResults.dmarc.status}`);
       // アライメント: 認証が pass しているのにアライメント不成立の場合のみ表示
-      if (isSpfOk && !al.spfAligned) verdictReasons.push("spf_align_fail");
-      if (isDkimOk && !al.dkimAligned) verdictReasons.push("dkim_align_fail");
+      // ただし DMARC pass かつ DMARC アライメント成立（SPF/DKIMの片方が成立）の場合は、
+      // もう片方の個別アライメント失敗は DMARC 上問題ないため非表示にする。
+      // 例: Sailthru等のバルク配信で d=service.com、SPF が brand.com で aligned のケース。
+      const dmarcOverallOk = isDmarcOk && isDmarcAligned;
+      if (!dmarcOverallOk && isSpfOk && !al.spfAligned) verdictReasons.push("spf_align_fail");
+      if (!dmarcOverallOk && isDkimOk && !al.dkimAligned) verdictReasons.push("dkim_align_fail");
       if (!domainCheckOk) verdictReasons.push("domain_not_aligned");
       if (isDisplayNameSpoofed) verdictReasons.push("display_name_spoofed");
       // phishing_critical はバッジ自体が「💀 フィッシング検出」になるため判定理由には含めない
