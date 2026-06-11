@@ -40,8 +40,50 @@
   "cardTitleRoute": {
     "message": "送達経路（送信元 → 受信先）"
   },
+  "cardTitleAttachments": {
+    "message": "添付ファイル"
+  },
   "cardTitleLinkSafety": {
     "message": "リンク安全性分析"
+  },
+  "attachmentExecutable": {
+    "message": "実行形式またはスクリプトファイルを検出"
+  },
+  "attachmentDoubleExt": {
+    "message": "二重拡張子を検出（例: invoice.pdf.exe）"
+  },
+  "attachmentHtml": {
+    "message": "HTML添付を検出（フィッシング配送手段の可能性）"
+  },
+  "attachmentArchive": {
+    "message": "アーカイブ添付を検出（内容を検査できません）"
+  },
+  "attachmentSummary": {
+    "message": "合計添付ファイル数："
+  },
+  "dkimWeakKeyLength": {
+    "message": "DKIM鍵長が2048ビット未満です"
+  },
+  "dkimWeakAlgorithm": {
+    "message": "非推奨の署名アルゴリズムです"
+  },
+  "dkimLimitedScope": {
+    "message": "署名が本文の一部のみを保護しています"
+  },
+  "dmarcWeakSubpolicy": {
+    "message": "サブドメインポリシーがnoneです（サブドメインが無防備）"
+  },
+  "dmarcLimitedPct": {
+    "message": "ポリシーが一部のメールにのみ適用されています"
+  },
+  "tlsUnencrypted": {
+    "message": "このホップではTLS暗号化の記録がありません"
+  },
+  "tlsUnknown": {
+    "message": "TLS情報がありません"
+  },
+  "tooltipAttachments": {
+    "message": "添付ファイル名を解析し、実行形式・二重拡張子・HTMLファイル・アーカイブなどの潜在的に危険な形式を検出します。"
   },
   "tooltipSpf": {
     "message": "Sender Policy Framework: 送信サーバーがドメインのDNSレコードで許可されているかを検証します。"
@@ -231,5 +273,14 @@
   },
   "linkCtaExternalUntrusted": {
     "message": "メインのクリック領域が未信頼の外部ドメインを指しています"
+  },
+  "copyButton": {
+    "message": "コピー"
+  },
+  "copiedSuccess": {
+    "message": "コピーしました！"
+  },
+  "copiedFailed": {
+    "message": "失敗"
   }
 }

@@ -38,6 +38,48 @@
   "cardTitleRoute": {
     "message": "مسار التسليم (المرسل ← المستلم)"
   },
+  "cardTitleAttachments": {
+    "message": "المرفقات"
+  },
+  "attachmentExecutable": {
+    "message": "تم اكتشاف ملف قابل للتنفيذ أو نص برمجي"
+  },
+  "attachmentDoubleExt": {
+    "message": "تم اكتشاف امتداد مزدوج"
+  },
+  "attachmentHtml": {
+    "message": "تم اكتشاف مرفق HTML (متجه هجوم محتمل)"
+  },
+  "attachmentArchive": {
+    "message": "تم اكتشاف مرفق أرشيف (لا يمكن فحص المحتوى)"
+  },
+  "attachmentSummary": {
+    "message": "إجمالي المرفقات:"
+  },
+  "dkimWeakKeyLength": {
+    "message": "مفتاح DKIM ضعيف (أقل من 2048 بت)"
+  },
+  "dkimWeakAlgorithm": {
+    "message": "خوارزمية توقيع قديمة وغير موصى بها"
+  },
+  "dkimLimitedScope": {
+    "message": "التوقيع يغطي جزءًا فقط من نص الرسالة"
+  },
+  "dmarcWeakSubpolicy": {
+    "message": "سياسة النطاقات الفرعية هي none (النطاقات الفرعية غير محمية)"
+  },
+  "dmarcLimitedPct": {
+    "message": "السياسة مطبقة على جزء فقط من الرسائل"
+  },
+  "tlsUnencrypted": {
+    "message": "لا يوجد تشفير TLS مسجل لهذه الوصلة"
+  },
+  "tlsUnknown": {
+    "message": "لا تتوفر معلومات TLS"
+  },
+  "tooltipAttachments": {
+    "message": "يفحص أسماء الملفات المرفقة للكشف عن الأنواع الخطرة المحتملة مثل الملفات القابلة للتنفيذ والامتدادات المزدوجة وملفات HTML والأرشيفات."
+  },
   "tooltipSpf": {
     "message": "إطار سياسة المرسل: يتحقق مما إذا كان خادم الإرسال مصرحاً به في سجلات DNS للنطاق."
   },
@@ -204,7 +246,7 @@
     "message": "النطاقات الموثوقة"
   },
   "optionsWhitelistDesc": {
-    "message": "لن تؤدي هذه النطاقات إلى تنبيهات."
+    "message": "لن تؤدي النطاقات في هذه القائمة إلى تنبيهات عدم تطابق الروابط عندما تظهر كوجهات روابط."
   },
   "optionsAddDomain": {
     "message": "إضافة"
@@ -229,5 +271,14 @@
   },
   "linkCtaExternalUntrusted": {
     "message": "منطقة النقر الرئيسية تشير إلى نطاق خارجي غير موثوق"
+  },
+  "copyButton": {
+    "message": "نسخ"
+  },
+  "copiedSuccess": {
+    "message": "تم النسخ!"
+  },
+  "copiedFailed": {
+    "message": "فشل"
   }
 }

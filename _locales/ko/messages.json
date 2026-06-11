@@ -38,6 +38,48 @@
   "cardTitleRoute": {
     "message": "전달 경로 (발신자 → 수신자)"
   },
+  "cardTitleAttachments": {
+    "message": "첨부파일"
+  },
+  "attachmentExecutable": {
+    "message": "실행 파일 또는 스크립트 감지됨"
+  },
+  "attachmentDoubleExt": {
+    "message": "이중 확장자 감지됨"
+  },
+  "attachmentHtml": {
+    "message": "HTML 첨부 감지됨 (피싱 공격 벡터의 가능성)"
+  },
+  "attachmentArchive": {
+    "message": "압축 파일 첨부 감지됨 (내용을 검사할 수 없음)"
+  },
+  "attachmentSummary": {
+    "message": "총 첨부파일:"
+  },
+  "dkimWeakKeyLength": {
+    "message": "DKIM 키 길이가 약함 (2048비트 미만)"
+  },
+  "dkimWeakAlgorithm": {
+    "message": "더 이상 사용되지 않는 서명 알고리즘"
+  },
+  "dkimLimitedScope": {
+    "message": "서명이 본문의 일부만 보호합니다"
+  },
+  "dmarcWeakSubpolicy": {
+    "message": "하위 도메인 정책이 none입니다 (하위 도메인 무방비)"
+  },
+  "dmarcLimitedPct": {
+    "message": "정책이 일부 메일에만 적용됩니다"
+  },
+  "tlsUnencrypted": {
+    "message": "이 홉에 TLS 암호화 기록이 없습니다"
+  },
+  "tlsUnknown": {
+    "message": "TLS 정보 없음"
+  },
+  "tooltipAttachments": {
+    "message": "첨부파일 이름을 분석하여 실행 파일, 이중 확장자, HTML 파일, 압축 파일 등 잠재적으로 위험한 유형을 감지합니다."
+  },
   "tooltipSpf": {
     "message": "Sender Policy Framework: 발신 서버가 도메인의 DNS 레코드에 의해 허가되었는지 확인합니다."
   },
@@ -204,7 +246,7 @@
     "message": "신뢰 도메인"
   },
   "optionsWhitelistDesc": {
-    "message": "이 목록의 도메인은 경고를 트리거하지 않습니다."
+    "message": "이 목록의 도메인은 링크 대상으로 나타날 때 링크 불일치 경고를 트리거하지 않습니다."
   },
   "optionsAddDomain": {
     "message": "추가"
@@ -229,5 +271,14 @@
   },
   "linkCtaExternalUntrusted": {
     "message": "주요 클릭 영역이 신뢰할 수 없는 외부 도메인을 가리킵니다"
+  },
+  "copyButton": {
+    "message": "복사"
+  },
+  "copiedSuccess": {
+    "message": "복사됨!"
+  },
+  "copiedFailed": {
+    "message": "실패"
   }
 }

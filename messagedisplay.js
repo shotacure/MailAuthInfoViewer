@@ -119,11 +119,13 @@
       let headerFromName = "";
       let headerFromAddress = "";
 
-      // "Display Name <user@domain.com>" の形式をパース
-      const fromMatch = headerFromRaw.match(/(.*?)<([^>]+)>/);
-      if (fromMatch) {
-        headerFromName = fromMatch[1].replace(/"/g, '').trim();
-        headerFromAddress = fromMatch[2].trim();
+      // "Display Name <user@domain.com>" の形式をパース（末尾の <...> を採用）
+      // 複数の角括弧がある場合は最後のものが正規アドレスと判断する
+      const matches = Array.from(headerFromRaw.matchAll(/<([^>]+)>/g));
+      if (matches.length > 0) {
+        const lastMatch = matches[matches.length - 1];
+        headerFromAddress = lastMatch[1].trim();
+        headerFromName = headerFromRaw.substring(0, lastMatch.index).trim().replace(/"/g, '').trim();
       } else {
         headerFromAddress = headerFromRaw.replace(/^<|>$/g, "").trim();
       }
@@ -285,17 +287,19 @@
                  trustedHost.endsWith("." + authServId);
         });
 
-        // マッチするものがなければフォールバック（全て信頼）
-        return trusted.length > 0 ? trusted : authResultHeaders;
+        // マッチするものがなければ空配列を返す（判定に使わない）
+        // 不一致時にすべてのA-Rを信頼するのはセキュリティ上の危険
+        return trusted;
       };
 
       const lastReceivedBy = getLastReceivedBy();
       const regularAuth = headers["authentication-results"] || [];
-      const arcAuth = headers["arc-authentication-results"] || [];
 
       // 通常の Authentication-Results のみ authserv-id でフィルタリング
+      // ARC-Authentication-Results は暗号学的検証なしでは偽造可能なため、
+      // 本判定からは除外し、ARC カード表示（parseArcChain）のみで利用する
       const trustedRegular = filterByAuthServId(regularAuth, lastReceivedBy);
-      const authHeaders = [...trustedRegular, ...arcAuth];
+      const authHeaders = trustedRegular;
 
       // セミコロンで区切ってメソッド単位に分割し、認証タイプのステータスを抽出
       // 分割は splitOnTopLevelSemicolons を用い、コメント括弧内のセミコロンを保護する
@@ -526,6 +530,79 @@
       // SPF/DKIM アライメントの個別評価結果（pass した署名のドメインのみで判定）
       const alignment = evaluateAlignment(spfDetail, dkimResult.results, envelope.headerOrgDomain, spfStatus, dkimResult.aggregated);
 
+      // ■ 認証強度の弱さ検出
+      // 認証が pass していても、送信側の努力で解決できる設定上の弱さがあれば
+      // 警告対象とする（設計思想: グリーン＝何もしなくて安全）。
+      // ただしバッジ判定には影響させず、各カード内の警告表示のみに使う
+      // （DMARC p=none の赤色表示と同じ位置づけ）。
+      const detectStrengthWarnings = () => {
+        const dkimWarnings = [];
+        const dmarcWarnings = [];
+
+        // --- DKIM-Signature ヘッダの署名タグ検査 ---
+        // a=rsa-sha1: 衝突攻撃が現実的な非推奨アルゴリズム（RFC 8301 で禁止）
+        // l= タグ:    本文の先頭 N バイトのみ署名するため、署名検証を保ったまま
+        //             本文末尾へのコンテンツ追記を許してしまう既知の弱点
+        const dkimSigHeaders = headers["dkim-signature"] || [];
+        const seenWeakAlgo = new Set();
+        const seenLimitedScope = new Set();
+        for (const sigHeader of dkimSigHeaders) {
+          const dMatch = sigHeader.match(/(?:^|[;\s])d=([^;\s]+)/i);
+          const sigDomain = dMatch ? dMatch[1].trim() : "";
+
+          const aMatch = sigHeader.match(/(?:^|[;\s])a=([a-zA-Z0-9-]+)/i);
+          if (aMatch && aMatch[1].toLowerCase() === "rsa-sha1" && !seenWeakAlgo.has(sigDomain)) {
+            seenWeakAlgo.add(sigDomain);
+            dkimWarnings.push({ type: "weak_algorithm", domain: sigDomain, value: "rsa-sha1" });
+          }
+
+          const lMatch = sigHeader.match(/(?:^|[;\s])l=(\d+)/i);
+          if (lMatch && !seenLimitedScope.has(sigDomain)) {
+            seenLimitedScope.add(sigDomain);
+            dkimWarnings.push({ type: "limited_scope", domain: sigDomain, value: `l=${lMatch[1]}` });
+          }
+        }
+
+        // --- DKIM 鍵長検査 ---
+        // 鍵長は DKIM-Signature には現れないが、受信側 MTA が
+        // Authentication-Results のコメントに "(1024-bit key; ...)" の形で
+        // 記録することがある（Gmail 等）。記録がある場合のみ判定する。
+        // 注意: Ed25519 署名（RFC 8463）は 256 ビットでも安全なため、
+        // 512 ビット未満の表記や ed25519 の言及がある場合は RSA とみなさず警告しない
+        const seenWeakKey = new Set();
+        for (const sig of dkimResult.results) {
+          const segment = sig.segment || "";
+          if (/ed25519/i.test(segment)) continue;
+          const bitsMatch = segment.match(/(\d{3,5})-bit/i);
+          if (bitsMatch) {
+            const bits = parseInt(bitsMatch[1], 10);
+            if (bits >= 512 && bits < 2048 && !seenWeakKey.has(sig.domain)) {
+              seenWeakKey.add(sig.domain);
+              dkimWarnings.push({ type: "weak_key", domain: sig.domain, value: `${bits}-bit` });
+            }
+          }
+        }
+
+        // --- DMARC ポリシーパラメータ検査 ---
+        // sp= / pct= は DNS 由来の値だが、受信側 MTA が A-R のコメントに
+        // "(p=REJECT sp=NONE dis=NONE)" の形で記録した場合のみ判定可能。
+        const dmarcSegment = dmarcDetail.rawSegment || "";
+        // sp=none: 本ドメインのポリシーが強くてもサブドメインが無防備になる穴。
+        // p=none の場合は既存のポリシー赤色表示が同じ問題を示すため重複警告しない
+        const spMatch = dmarcSegment.match(/\bsp=([a-zA-Z]+)/i);
+        if (spMatch && spMatch[1].toLowerCase() === "none" && dmarcDetail.policy && dmarcDetail.policy !== "none") {
+          dmarcWarnings.push({ type: "weak_sp", value: "sp=none" });
+        }
+        // pct<100: ポリシーが一部のメールにしか適用されない部分施行状態
+        const pctMatch = dmarcSegment.match(/\bpct=(\d+)/i);
+        if (pctMatch && parseInt(pctMatch[1], 10) < 100) {
+          dmarcWarnings.push({ type: "limited_pct", value: `pct=${pctMatch[1]}` });
+        }
+
+        return { dkim: dkimWarnings, dmarc: dmarcWarnings };
+      };
+      const strength = detectStrengthWarnings();
+
       return {
         authServId: trustedRegular.length > 0
           ? splitOnTopLevelSemicolons(trustedRegular[0])[0].trim()
@@ -533,7 +610,8 @@
         spf: { status: spfStatus, detail: spfDetail },
         dkim: { status: dkimResult.aggregated, detail: dkimDetail, signatures: dkimResult.results },
         dmarc: { status: dmarcStatus, detail: dmarcDetail },
-        alignment
+        alignment,
+        strength
       };
     };
 
@@ -544,6 +622,46 @@
       // Receivedヘッダは「新しい順(受信側→送信元)」で記録されるため、
       // reverse()を用いて「時系列順(送信元→受信側)」に並び替えて処理する
       const rawReceived = headers["received"] || [];
+
+      // ■ ホップごとの TLS / 暗号化状態の抽出
+      // Received ヘッダの記載は受信側 MTA が書くため改ざんは可能だが、
+      // 送達経路自体と同じ信頼レベルの参考情報として可視化する。
+      // 対応フォーマット例:
+      //   Gmail / Microsoft: "(version=TLS1_3 cipher=TLS_AES_128_GCM_SHA256 ...)"
+      //   Postfix:           "(using TLSv1.3 with cipher TLS_AES_256_GCM_SHA384 ...)"
+      //   プロトコル名:       "with ESMTPS" / "with ESMTPSA"（TLSあり）、
+      //                      "with SMTP" / "with ESMTP"（TLSの記録なし）
+      const parseTlsInfo = (line) => {
+        // バージョン表記の正規化: "TLS1_3" / "TLSv1.3" / "TLS 1.3" → "TLS 1.3"
+        const normalizeVersion = (v) => {
+          const m = v.match(/(\d+)[._](\d+)/);
+          return m ? `TLS ${m[1]}.${m[2]}` : `TLS ${v}`;
+        };
+
+        let version = "";
+        const versionMatch = line.match(/\bversion=TLS[v_ ]?([\d._]+)/i) ||
+                             line.match(/\busing\s+TLSv?([\d.]+)/i) ||
+                             line.match(/\bTLSv?(1[._][0-3])\b/);
+        if (versionMatch) version = normalizeVersion(versionMatch[1]);
+
+        let cipher = "";
+        const cipherMatch = line.match(/\bcipher[= ]([A-Za-z0-9_-]+)/i);
+        if (cipherMatch) cipher = cipherMatch[1];
+
+        // with 句のプロトコル名から暗号化有無を推定
+        const withMatch = line.match(/\bwith\s+([A-Za-z]+)/);
+        const proto = withMatch ? withMatch[1].toUpperCase() : "";
+        const tlsProto = /^(ESMTPS|ESMTPSA|SMTPS|UTF8SMTPS|UTF8SMTPSA)$/.test(proto);
+        const plainProto = /^(SMTP|ESMTP|ESMTPA|UTF8SMTP|UTF8SMTPA)$/.test(proto);
+
+        // encrypted: true=TLS記録あり / false=平文プロトコル表記でTLS記録なし /
+        //            null=判定材料なし（内部配送・with句なし等）
+        let encrypted = null;
+        if (version || tlsProto) encrypted = true;
+        else if (plainProto) encrypted = false;
+
+        return { encrypted, version, cipher };
+      };
 
       return rawReceived.slice().reverse().map(line => {
         const fromMatch = line.match(/\bfrom\s+(.+?)(?=\s+by\s+|;|$)/i);
@@ -561,6 +679,7 @@
           date: date,
           ip: ip,
           isInternal: isInternal,
+          tls: parseTlsInfo(line),
           raw: line
         };
       }).filter(hop => hop.from || hop.by);
@@ -659,6 +778,107 @@
     };
 
     // =========================================================
+    // 5-2. parseAttachments - 添付ファイル危険性分析
+    // =========================================================
+    // メールの MIME パーツを走査し、添付ファイルの拡張子・形式から危険度を判定する。
+    // 判定はファイル名（MIME メタデータ）のみで行い、本文データのダウンロードや
+    // 内容スキャンは行わない（ローカル完結・プライバシー優先の設計）。
+    // findings の level は深刻度で2段階に分類される:
+    //   [critical]  実行形式（.exe, .dll, .msi 等）、偽装二重拡張子
+    //               （例: invoice.pdf.exe — Windows が最終拡張子を隠すと
+    //               「invoice.pdf」に見える）、HTML ファイル
+    //               → 即座の実行リスク。明確に危険。
+    //   [suspicious] アーカイブ（.zip, .7z, .rar 等）
+    //               → ファイル名からは内容を検査できず、実行形式や
+    //               パスワード付き危険物を含む可能性。警告対象。
+    const parseAttachments = (fullMsg) => {
+      const findings = [];
+      const attachments = [];
+      const criticalExts = new Set([
+        "exe", "dll", "sys", "msi", "scr", "com", "bat", "cmd",
+        "ps1", "psd1", "psm1", "vbs", "js", "jar", "app", "dmg", "apk"
+      ]);
+      const suspiciousExts = new Set(["zip", "7z", "rar", "tar", "gz"]);
+      const htmlExts = new Set(["html", "htm"]);
+
+      const walkParts = (parts) => {
+        if (!parts) return;
+        for (const part of parts) {
+          const contentType = (part.contentType || "").toLowerCase();
+          const filename = part.filename || "";
+          const contentDisposition = (part.contentDisposition || "").toLowerCase();
+
+          // 添付ファイル判定: Content-Disposition が attachment か filename が存在
+          if ((contentDisposition === "attachment" || filename.trim()) && filename.trim()) {
+            attachments.push({ filename, contentType });
+
+            // 危険度判定は「実際に実行されうる最終拡張子」を基準に行う。
+            // 中間拡張子だけを根拠に critical 判定はしない
+            // （例: jquery.js.zip の実体は zip であり、js として実行されることはない）。
+            const lastDotIdx = filename.lastIndexOf(".");
+            if (lastDotIdx > 0) {
+              const ext = filename.substring(lastDotIdx + 1).toLowerCase().trim();
+
+              if (criticalExts.has(ext)) {
+                // 最終拡張子が実行形式。手前にも拡張子風のトークンがあれば
+                // 「invoice.pdf.exe」型の偽装二重拡張子として、より具体的に報告する
+                const beforeExt = filename.substring(0, lastDotIdx);
+                const beforeLastDotIdx = beforeExt.lastIndexOf(".");
+                const innerToken = beforeLastDotIdx > 0
+                  ? beforeExt.substring(beforeLastDotIdx + 1).toLowerCase().trim()
+                  : "";
+                const isDoubleExt = /^[a-z0-9]{1,5}$/.test(innerToken);
+                findings.push({
+                  level: "critical",
+                  type: isDoubleExt ? "double_extension" : "executable",
+                  detail: filename
+                });
+              }
+              // HTML ファイル: ローカルで開かせるフィッシング誘導の常套手段
+              else if (htmlExts.has(ext)) {
+                findings.push({
+                  level: "critical",
+                  type: "html",
+                  detail: filename
+                });
+              }
+              // アーカイブ: ファイル名からは内容を検査できないため注意喚起
+              else if (suspiciousExts.has(ext)) {
+                findings.push({
+                  level: "suspicious",
+                  type: "archive",
+                  detail: filename
+                });
+              }
+            }
+          }
+
+          // multipart/* の子パーツを再帰走査
+          if (part.parts) walkParts(part.parts);
+        }
+      };
+
+      walkParts(fullMsg.parts);
+
+      // 添付ファイルサマリー構築
+      const uniqueFormats = new Set();
+      for (const att of attachments) {
+        const lastDotIdx = att.filename.lastIndexOf(".");
+        if (lastDotIdx > 0) {
+          const ext = att.filename.substring(lastDotIdx + 1).toLowerCase().trim();
+          uniqueFormats.add(ext);
+        }
+      }
+
+      const attachmentSummary = {
+        totalCount: attachments.length,
+        formats: Array.from(uniqueFormats).sort()
+      };
+
+      return { findings, attachmentSummary };
+    };
+
+    // =========================================================
     // 6. analyzeLinkSafety - メール本文のリンク安全性分析
     // =========================================================
     // メール本文のHTML/テキストを解析し、フィッシングの特徴や未信頼ドメイン、
@@ -752,18 +972,15 @@
           const displayOrgDomain = getOrgDomain(displayHost);
           const hrefOrgDomain = getOrgDomain(linkHost);
           if (displayOrgDomain !== hrefOrgDomain) {
-            // 信頼済みドメインならスキップ
-            if (trustedDomains && trustedDomains.has(hrefOrgDomain)) {
-              // スキップ（ドメイン一覧には引き続き記録）
-            } else {
-              findings.push({
-                level: "critical",
-                type: "deceptive_text",
-                detail: msg("linkDeceptiveText"),
-                targetDomain: hrefOrgDomain
-              });
-              deceptiveDomains.add(hrefOrgDomain);
-            }
+            // リンクテキスト偽装（critical）は信頼リスト対象外
+            // ドメイン信頼性とは無関係に、表示テキストと実リンク先が異なる場合は必ず警告
+            findings.push({
+              level: "critical",
+              type: "deceptive_text",
+              detail: msg("linkDeceptiveText"),
+              targetDomain: hrefOrgDomain
+            });
+            deceptiveDomains.add(hrefOrgDomain);
           }
         }
 
@@ -1084,7 +1301,7 @@
     // =========================================================
     // 8. buildUI - UI構築 (HTML/CSS) — Shadow DOM・i18n・ダークモード完全対応
     // =========================================================
-    const buildUI = (envelope, authResults, routeHops, security, arcChain, linkSafety, trustedDomains) => {
+    const buildUI = (envelope, authResults, routeHops, security, arcChain, attachmentFindings, linkSafety, trustedDomains) => {
 
       // --- スタイル定義 (CSS変数によるダークモード完全対応) ---
       const style = document.createElement('style');
@@ -1269,6 +1486,18 @@
         .maiv-toggle-icon { margin-left: 15px; margin-right: 15px; color: var(--maiv-text-faint); transition: transform 0.3s; display: inline-block; }
         .maiv-toggle-icon.expanded { transform: rotate(180deg); }
 
+        /* コピーボタン */
+        .maiv-copy-btn {
+          padding: 4px 8px; font-size: 11px; border-radius: 3px;
+          background: transparent; border: 1px solid var(--maiv-text-faint);
+          color: var(--maiv-text-secondary); cursor: pointer;
+          margin-right: 8px; white-space: nowrap; transition: all 0.2s;
+        }
+        .maiv-copy-btn:hover {
+          background: var(--maiv-highlight-bg); color: var(--maiv-text-strong);
+          border-color: var(--maiv-text-secondary);
+        }
+
         .maiv-body-wrapper { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
         .maiv-body-wrapper.expanded { max-height: 3000px; transition: max-height 0.5s ease-in; }
         .maiv-body-inner { padding-top: 10px; }
@@ -1276,7 +1505,9 @@
 
         /* 上段: アドレス(2) / SPF(1) / DKIM(1) / DMARC(1) */
         .maiv-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 10px; }
-        /* 下段: 送達経路(2) / ARCチェーン(2) / リンク安全性(1) */
+        /* 下段: 送達経路(2) / ARCチェーン(2) / 添付ファイル(1)。
+           リンク安全性カードはドメイン一覧が横に長くなるため、
+           グリッドに入れずフル幅で配置する（.maiv-body-content の flex 直下） */
         .maiv-grid-bottom { display: grid; grid-template-columns: 2fr 2fr 1fr; gap: 10px; }
         /* データなしカードの空状態表示 */
         .maiv-empty-state { color: var(--maiv-text-faint); font-size: 11px; font-style: italic; padding: 8px 0; }
@@ -1316,6 +1547,7 @@
         .maiv-route-by { color: var(--maiv-text-faint); font-size: 0.9em; font-weight: normal; }
         .maiv-route-time { text-align: right; color: var(--maiv-text-faint); white-space: nowrap; }
         .maiv-route-delay { width: 60px; text-align: right; font-weight: bold; font-family: monospace; font-size: 0.9em; }
+        .maiv-route-tls { text-align: right; white-space: nowrap; padding-left: 6px; }
         .maiv-delay-none { color: var(--maiv-border); }
         .maiv-delay-origin { color: var(--maiv-text-strongest); }
         .maiv-delay-normal { color: var(--maiv-delay-normal); }
@@ -1356,6 +1588,10 @@
         .maiv-policy-quarantine { background-color: var(--maiv-policy-quarantine-bg); color: var(--maiv-policy-quarantine-text); }
         .maiv-policy-none { background-color: var(--maiv-policy-none-bg); color: var(--maiv-policy-none-text); }
 
+        /* 認証強度警告: 認証 pass でも送信側の設定変更で解決できる弱さの表示
+           （DMARC p=none の赤色ポリシー表示と同じ「改善促し」の位置づけ） */
+        .maiv-strength-warn { color: var(--maiv-delay-warning); font-size: 10px; margin-top: 4px; }
+
         /* ARC チェーン表示 */
         .maiv-arc-table { width: 100%; border-collapse: collapse; font-size: 11px; }
         .maiv-arc-table td { padding: 3px 6px; border-bottom: 1px solid var(--maiv-route-border); }
@@ -1365,6 +1601,35 @@
 
         /* IPタイプ表示: 送達経路上の内部/外部ネットワーク判定 */
         .maiv-ip-tag { font-size: 10px; margin-left: 4px; }
+
+        /* TLS表示: 送達経路上のホップ間暗号化状態（Received ヘッダ記載ベース） */
+        .maiv-tls-tag { font-size: 10px; font-family: monospace; white-space: nowrap; }
+        .maiv-tls-secure { color: var(--maiv-pass); }
+        .maiv-tls-warn { color: var(--maiv-delay-warning); font-weight: bold; }
+        .maiv-tls-danger { color: var(--maiv-fail); font-weight: bold; }
+        .maiv-tls-unknown { color: var(--maiv-text-faint); }
+
+        /* ATTACHMENTS カード: 危険な添付ファイル警告表示 */
+        .maiv-attachment-critical {
+          background-color: var(--maiv-align-ng-bg); color: var(--maiv-align-ng-text);
+          font-weight: bold; padding: 5px 8px; border-radius: 4px; font-size: 11px;
+          margin-bottom: 4px;
+        }
+        .maiv-attachment-suspicious {
+          background-color: var(--maiv-align-warn-bg); color: var(--maiv-align-warn-text);
+          font-weight: bold; padding: 5px 8px; border-radius: 4px; font-size: 11px;
+          margin-bottom: 4px;
+        }
+        .maiv-attachment-list {
+          font-size: 11px; margin-top: 6px; color: var(--maiv-text-secondary);
+        }
+        .maiv-attachment-item {
+          padding: 2px 0; display: flex; align-items: center; gap: 6px;
+        }
+        .maiv-attachment-summary {
+          font-size: 10px; color: var(--maiv-text-muted); margin-top: 4px;
+          padding-top: 4px; border-top: 1px dashed var(--maiv-card-title-border);
+        }
 
         /* LINK SAFETY カード: フィッシング検知結果表示（4段階の severity） */
         .maiv-finding-critical {
@@ -1426,6 +1691,144 @@
 
       `;
 
+      // --- レポートテキスト生成補助関数 ---
+      // 画面に表示している解析結果を、チケットシステムやメールに貼り付けやすい
+      // プレーンテキストレポートへ整形する。クリップボード経由で外部ツールに
+      // 渡ることを想定し、記号は ASCII 主体（警告マークは [!]）とする。
+      const generateReportText = () => {
+        const lines = [];
+
+        lines.push("=== Mail Auth Info Viewer Report ===");
+        lines.push("");
+
+        // 総合判定: バッジ文言と判定理由タグ
+        lines.push(`VERDICT: ${security.badgeText}`);
+        if (security.verdictReasons.length > 0) {
+          lines.push(`Reasons: ${security.verdictReasons.join(", ")}`);
+        }
+        lines.push("");
+
+        // 認証結果セクション
+        lines.push("AUTHENTICATION RESULTS");
+        lines.push("----------------------");
+        const spfDomain = authResults.spf.detail.domain || "-";
+        const spfIp = authResults.spf.detail.ip ? `, ip: ${authResults.spf.detail.ip}` : "";
+        lines.push(`SPF:   ${authResults.spf.status.toUpperCase()} (domain: ${spfDomain}${spfIp})`);
+
+        // DKIM: 複数署名がある場合は署名ごとに「ドメイン=結果 (s=セレクタ)」で列挙
+        const sigs = authResults.dkim.signatures || [];
+        const dkimSummary = sigs.length > 0
+          ? sigs.map(sig => `${sig.domain || "?"}=${sig.status}${sig.selector ? ` (s=${sig.selector})` : ""}`).join(", ")
+          : "-";
+        lines.push(`DKIM:  ${authResults.dkim.status.toUpperCase()} (${dkimSummary})`);
+
+        const dmarcPolicy = authResults.dmarc.detail.policy || "-";
+        lines.push(`DMARC: ${authResults.dmarc.status.toUpperCase()} (policy: ${dmarcPolicy})`);
+        if (authResults.authServId) {
+          lines.push(`Authserv-Id: ${authResults.authServId}`);
+        }
+        lines.push("");
+
+        // アライメントセクション
+        lines.push("ALIGNMENT");
+        lines.push("---------");
+        const al = authResults.alignment || {};
+        lines.push(`SPF aligned:  ${al.spfAligned ? "yes" : "no"}`);
+        lines.push(`DKIM aligned: ${al.dkimAligned ? "yes" : "no"}`);
+        lines.push("");
+
+        // 認証強度の弱さ（検出時のみセクションを出力）
+        const strength = authResults.strength || { dkim: [], dmarc: [] };
+        if (strength.dkim.length > 0 || strength.dmarc.length > 0) {
+          lines.push("STRENGTH WARNINGS");
+          lines.push("-----------------");
+          for (const w of strength.dkim) {
+            lines.push(`[!] DKIM ${w.type}: ${w.value}${w.domain ? ` (${w.domain})` : ""}`);
+          }
+          for (const w of strength.dmarc) {
+            lines.push(`[!] DMARC ${w.type}: ${w.value}`);
+          }
+          lines.push("");
+        }
+
+        // 送信者情報セクション
+        lines.push("SENDER IDENTITY");
+        lines.push("---------------");
+        if (envelope.headerFromName) {
+          lines.push(`Display Name:  ${envelope.headerFromName}`);
+        }
+        lines.push(`Header From:   ${envelope.headerFromAddress}`);
+        lines.push(`Envelope From: ${envelope.envelopeFrom}`);
+        if (envelope.isDisplayNameSpoofed) {
+          lines.push("[!] Display name contains an email address from a different domain");
+        }
+        if (envelope.isReplyToMismatch) {
+          lines.push(`[!] Reply-To differs from sender: ${envelope.replyToAddress}`);
+        }
+        lines.push("");
+
+        // 送達経路セクション（hop 構造: {from, by, date, ip, isInternal, tls}）
+        lines.push("DELIVERY ROUTE");
+        lines.push("--------------");
+        if (routeHops.length > 0) {
+          for (let i = 0; i < routeHops.length; i++) {
+            const hop = routeHops[i];
+            const label = (i === 0) ? "ORIGIN" : `HOP ${i + 1}`;
+            const host = hop.from || hop.by || "(unknown)";
+            const ipInfo = hop.ip ? ` [${hop.ip}]` : "";
+            lines.push(`${label}: ${host}${ipInfo}`);
+            if (hop.by && hop.from) lines.push(`  by:   ${hop.by}`);
+            if (hop.date) lines.push(`  time: ${hop.date.toISOString()}`);
+            if (hop.tls) {
+              if (hop.tls.version) {
+                lines.push(`  tls:  ${hop.tls.version}${hop.tls.cipher ? ` (${hop.tls.cipher})` : ""}`);
+              } else if (hop.tls.encrypted === true) {
+                lines.push("  tls:  encrypted (version unknown)");
+              } else if (hop.tls.encrypted === false) {
+                lines.push("  tls:  not recorded (plaintext protocol)");
+              }
+            }
+          }
+        } else {
+          lines.push("(no route information)");
+        }
+        lines.push("");
+
+        // リンク安全性セクション（findings 構造: {level, type, detail, targetDomain?}）
+        lines.push("LINK SAFETY");
+        lines.push("-----------");
+        const lsFindings = (linkSafety && linkSafety.findings) || [];
+        if (lsFindings.length > 0) {
+          for (const f of lsFindings) {
+            const domainInfo = f.targetDomain ? ` -> ${f.targetDomain}` : "";
+            lines.push(`[${f.level.toUpperCase()}] ${f.detail}${domainInfo}`);
+          }
+        } else {
+          lines.push("(no link findings)");
+        }
+        lines.push("");
+
+        // 添付ファイルセクション（構造: {findings: [{level, type, detail}], attachmentSummary}）
+        lines.push("ATTACHMENTS");
+        lines.push("-----------");
+        for (const f of attachmentFindings.findings) {
+          lines.push(`[${f.level.toUpperCase()}] ${f.type}: ${f.detail}`);
+        }
+        const attSummary = attachmentFindings.attachmentSummary;
+        if (attSummary.totalCount > 0) {
+          const formats = attSummary.formats.length > 0 ? ` (${attSummary.formats.join(", ")})` : "";
+          lines.push(`Total: ${attSummary.totalCount}${formats}`);
+        } else {
+          lines.push("(none)");
+        }
+        lines.push("");
+
+        // 生成日時（ISO 8601 — タイムゾーン差異による誤読を防ぐ）
+        lines.push(`Generated: ${new Date().toISOString()}`);
+
+        return lines.join("\n");
+      };
+
       // --- コンテナ作成 ---
       const container = document.createElement("div");
       container.className = "maiv-container";
@@ -1482,6 +1885,7 @@
           ${mailingListTag}
           ${verdictReasonHTML}
           <span style="flex-grow:1;"></span>
+          <button class="maiv-copy-btn" id="maiv-copy-btn" title="${escapeHTML(msg("copyButton"))}" type="button">📋 ${escapeHTML(msg("copyButton"))}</button>
           <span class="maiv-toggle-icon" id="maiv-toggle-icon" aria-hidden="true">▼</span>
         </div>
       `;
@@ -1546,6 +1950,21 @@
           ? `<span style="color:var(--maiv-text-faint); font-size:10px; margin-left:4px;">(${escapeHTML(authResults.authServId)})</span>`
           : "";
 
+        // 認証強度の弱さ警告（鍵長・アルゴリズム・署名範囲）。
+        // 署名結果の有無に関わらず DKIM-Signature ヘッダから検出されるため、
+        // 早期 return 経路を含むすべての表示パスの末尾に付加する
+        const strengthTypeMsg = {
+          "weak_key": msg("dkimWeakKeyLength"),
+          "weak_algorithm": msg("dkimWeakAlgorithm"),
+          "limited_scope": msg("dkimLimitedScope")
+        };
+        let strengthHTML = "";
+        for (const w of (authResults.strength ? authResults.strength.dkim : [])) {
+          const label = strengthTypeMsg[w.type] || w.type;
+          const domainInfo = w.domain ? ` — ${w.domain}` : "";
+          strengthHTML += `<div class="maiv-strength-warn">⚠️ ${escapeHTML(label)} (${escapeHTML(w.value)}${escapeHTML(domainInfo)})</div>`;
+        }
+
         if (sigs.length === 0 || !sigs.some(s => s.domain)) {
           const st = authResults.dkim.status;
           const emptyIcon = (st === "fail" || st === "permerror" || st === "temperror") ? "❌" : "⚠️";
@@ -1556,6 +1975,7 @@
               <span class="${emptyCls}">${escapeHTML(st.toUpperCase())}</span>
               ${authServLabel}
             </div>
+            ${strengthHTML}
           `;
         }
 
@@ -1587,7 +2007,7 @@
           }
           html += `<div class="maiv-detail-text">${parts.join("<br>")}</div>`;
         }
-        return html;
+        return html + strengthHTML;
       })();
 
       const dmarcDetailHTML = (() => {
@@ -1599,6 +2019,16 @@
           if (d.policy === "reject") policyClass = "maiv-policy-reject";
           else if (d.policy === "quarantine") policyClass = "maiv-policy-quarantine";
           parts.push(`<span class="maiv-policy-tag ${policyClass}">${escapeHTML(msg("labelPolicy"))} ${escapeHTML(d.policy)}</span>`);
+        }
+        // 認証強度の弱さ警告（sp=none / pct<100）。
+        // ポリシー本体が強くても部分的にしか効いていない状態を管理者に示す
+        const dmarcStrengthMsg = {
+          "weak_sp": msg("dmarcWeakSubpolicy"),
+          "limited_pct": msg("dmarcLimitedPct")
+        };
+        for (const w of (authResults.strength ? authResults.strength.dmarc : [])) {
+          const label = dmarcStrengthMsg[w.type] || w.type;
+          parts.push(`<div class="maiv-strength-warn">⚠️ ${escapeHTML(label)} (${escapeHTML(w.value)})</div>`);
         }
         return parts.join("<br>");
       })();
@@ -1783,6 +2213,29 @@
             ipTag = `<span class="maiv-ip-tag" title="${escapeHTML(hop.ip)}">${ipIcon}</span>`;
           }
 
+          // TLS / 暗号化状態セル（このホップの Received ヘッダ記載に基づく）
+          // ・バージョン記載あり → 🔒 + バージョン番号（TLS 1.0/1.1 は ⚠️ で旧版警告）
+          // ・ESMTPS 等のプロトコル名のみ → 🔒（バージョン不明）
+          // ・SMTP/ESMTP 等の平文プロトコル表記 → 🔓（暗号化の記録なし）
+          // ・with 句なし（ローカル配送等） → 無印（判定材料がないだけで警告ではない）
+          let tlsCell = "";
+          const tls = hop.tls;
+          if (tls && tls.version) {
+            const verNum = tls.version.replace(/^TLS\s*/i, "");
+            const isLegacy = /^1\.[01]$/.test(verNum);
+            const tlsCls = isLegacy ? "maiv-tls-warn" : "maiv-tls-secure";
+            const tlsIcon = isLegacy ? "⚠️" : "🔒";
+            const tipParts = [tls.version];
+            if (tls.cipher) tipParts.push(tls.cipher);
+            tlsCell = `<span class="maiv-tls-tag ${tlsCls}" title="${escapeHTML(tipParts.join(" / "))}">${tlsIcon} ${escapeHTML(verNum)}</span>`;
+          } else if (tls && tls.encrypted === true) {
+            tlsCell = `<span class="maiv-tls-tag maiv-tls-secure" title="TLS">🔒</span>`;
+          } else if (tls && tls.encrypted === false) {
+            tlsCell = `<span class="maiv-tls-tag maiv-tls-danger" title="${escapeHTML(msg("tlsUnencrypted"))}">🔓</span>`;
+          } else {
+            tlsCell = `<span class="maiv-tls-tag maiv-tls-unknown" title="${escapeHTML(msg("tlsUnknown"))}">−</span>`;
+          }
+
           const rowClass = isFirst ? "maiv-route-origin" : "maiv-route-hop";
           const timeDisplay = hop.date ? hop.date.toLocaleTimeString() : "";
           const label = isFirst ? `${msg("labelOrigin")} 🚀` : `#${i + 1}`;
@@ -1791,6 +2244,7 @@
             <tr class="${rowClass}">
               <td class="maiv-route-delay"><span class="${delayClass}">${delayStr}</span></td>
               <td>${escapeHTML(label)} ${ipTag}${byDisplay}</td>
+              <td class="maiv-route-tls">${tlsCell}</td>
               <td class="maiv-route-time">${escapeHTML(timeDisplay)}</td>
             </tr>
           `;
@@ -1802,6 +2256,7 @@
             <tr class="maiv-route-hop">
               <td class="maiv-route-delay"><span class="maiv-delay-none">📬</span></td>
               <td>${escapeHTML(msg("labelEnvelopeTo"))}: ${escapeHTML(envelope.envelopeTo)}</td>
+              <td class="maiv-route-tls"></td>
               <td class="maiv-route-time"></td>
             </tr>
           `;
@@ -1841,6 +2296,53 @@
         <div class="maiv-card">
           <div class="maiv-card-title" title="${escapeHTML(msg("tooltipArc"))}">${escapeHTML(msg("cardTitleArc"))}</div>
           ${arcContentHTML}
+        </div>
+      `;
+
+      // --- ATTACHMENTS カード: 危険な添付ファイル警告（常時カード表示） ---
+      let attachmentContentHTML = "";
+      if (attachmentFindings.findings && attachmentFindings.findings.length > 0) {
+        let findingsHTML = "";
+        const levelCls = {
+          "critical": "maiv-attachment-critical",
+          "suspicious": "maiv-attachment-suspicious"
+        };
+        const levelIcon = {
+          "critical": "🚨",
+          "suspicious": "⚠️"
+        };
+        const typeMsg = {
+          "executable": msg("attachmentExecutable"),
+          "html": msg("attachmentHtml"),
+          "double_extension": msg("attachmentDoubleExt"),
+          "archive": msg("attachmentArchive")
+        };
+
+        for (const f of attachmentFindings.findings) {
+          const cls = levelCls[f.level] || "maiv-attachment-suspicious";
+          const icon = levelIcon[f.level] || "⚠️";
+          const typeLabel = typeMsg[f.type] || f.type;
+          const filenameEscaped = escapeHTML(f.detail);
+          findingsHTML += `<div class="${cls}">${icon} ${escapeHTML(typeLabel)}: <code style="font-family:monospace; font-size:10px;">${filenameEscaped}</code></div>`;
+        }
+
+        // サマリー（ファイル数・拡張子種別）。
+        // 件数は数値のみで表記し、単位語のハードコードによる英文混入を避ける
+        const summary = attachmentFindings.attachmentSummary;
+        let summaryText = `${msg("attachmentSummary")} ${summary.totalCount}`;
+        if (summary.formats.length > 0) {
+          summaryText += ` (${summary.formats.join(", ")})`;
+        }
+
+        attachmentContentHTML = findingsHTML + `<div class="maiv-attachment-summary">${escapeHTML(summaryText)}</div>`;
+      } else {
+        attachmentContentHTML = `<div class="maiv-empty-state">${escapeHTML(msg("labelNone"))}</div>`;
+      }
+
+      const attachmentHTML = `
+        <div class="maiv-card">
+          <div class="maiv-card-title" title="${escapeHTML(msg("tooltipAttachments"))}">${escapeHTML(msg("cardTitleAttachments"))}</div>
+          ${attachmentContentHTML}
         </div>
       `;
 
@@ -1966,8 +2468,9 @@
               <div class="maiv-grid-bottom">
                 ${routeHTML}
                 ${arcHTML}
-                ${linkSafetyHTML}
+                ${attachmentHTML}
               </div>
+              ${linkSafetyHTML}
             </div>
           </div>
         </div>
@@ -2003,10 +2506,35 @@
         headerToggle.setAttribute('aria-expanded', isExpanded);
       };
 
-      // マウスクリックによる開閉
-      headerToggle.addEventListener('click', () => {
+      // マウスクリックによる開閉（コピーボタンクリックは除外）
+      headerToggle.addEventListener('click', (e) => {
+        if (e.target.closest('.maiv-copy-btn')) return;
         togglePanel();
       });
+
+      // --- コピーボタンハンドラー ---
+      const copyBtn = container.querySelector('#maiv-copy-btn');
+      if (copyBtn) {
+        copyBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          try {
+            const reportText = generateReportText();
+            await navigator.clipboard.writeText(reportText);
+            // 成功時: テキスト変更
+            copyBtn.textContent = `✅ ${msg("copiedSuccess")}`;
+            setTimeout(() => {
+              copyBtn.textContent = `📋 ${msg("copyButton")}`;
+            }, 2000);
+          } catch (err) {
+            // 失敗時: エラー表示
+            console.error("MailAuthInfoViewer: Failed to copy to clipboard", err);
+            copyBtn.textContent = `❌ ${msg("copiedFailed")}`;
+            setTimeout(() => {
+              copyBtn.textContent = `📋 ${msg("copyButton")}`;
+            }, 2000);
+          }
+        });
+      }
 
       // --- カード内折りたたみセクションの開閉 ---
       // data-toggle 属性を持つ要素をクリックすると、対応するIDの折りたたみボディを開閉する
@@ -2118,10 +2646,11 @@
     const routeHops = parseRoute(headers);
     const arcChain = parseArcChain(headers);
     const bodyContent = parseMessageBody(fullMsg);
+    const attachmentFindings = parseAttachments(fullMsg);
     const linkSafety = analyzeLinkSafety(bodyContent, envelope.headerOrgDomain, trustedDomains);
     const security = determineSecurityStatus(authResults, envelope.isDomainAligned, envelope.envelopeFrom, envelope.isDisplayNameSpoofed, linkSafety);
 
-    buildUI(envelope, authResults, routeHops, security, arcChain, linkSafety, trustedDomains);
+    buildUI(envelope, authResults, routeHops, security, arcChain, attachmentFindings, linkSafety, trustedDomains);
 
   } catch (e) {
     console.error("MailAuthInfoViewer Error:", e);

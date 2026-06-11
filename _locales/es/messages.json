@@ -38,6 +38,48 @@
   "cardTitleRoute": {
     "message": "RUTA DE ENTREGA (Remitente → Destinatario)"
   },
+  "cardTitleAttachments": {
+    "message": "ARCHIVOS ADJUNTOS"
+  },
+  "attachmentExecutable": {
+    "message": "Archivo ejecutable o script detectado"
+  },
+  "attachmentDoubleExt": {
+    "message": "Extensión doble detectada"
+  },
+  "attachmentHtml": {
+    "message": "Archivo adjunto HTML detectado (vector de phishing potencial)"
+  },
+  "attachmentArchive": {
+    "message": "Archivo compactado adjunto detectado (contenido no inspeccionable)"
+  },
+  "attachmentSummary": {
+    "message": "Archivos adjuntos totales:"
+  },
+  "dkimWeakKeyLength": {
+    "message": "Clave DKIM débil (menos de 2048 bits)"
+  },
+  "dkimWeakAlgorithm": {
+    "message": "Algoritmo de firma obsoleto"
+  },
+  "dkimLimitedScope": {
+    "message": "La firma cubre solo una parte del cuerpo del mensaje"
+  },
+  "dmarcWeakSubpolicy": {
+    "message": "La política de subdominios es none (subdominios sin protección)"
+  },
+  "dmarcLimitedPct": {
+    "message": "La política se aplica solo a una parte de los correos"
+  },
+  "tlsUnencrypted": {
+    "message": "Sin cifrado TLS registrado para este salto"
+  },
+  "tlsUnknown": {
+    "message": "Sin información TLS disponible"
+  },
+  "tooltipAttachments": {
+    "message": "Analiza los nombres de los archivos adjuntos para detectar tipos potencialmente peligrosos como ejecutables, extensiones dobles, archivos HTML y archivos compactados."
+  },
   "tooltipSpf": {
     "message": "Sender Policy Framework: Verifica si el servidor de envío está autorizado por los registros DNS del dominio."
   },
@@ -204,7 +246,7 @@
     "message": "Dominios de confianza"
   },
   "optionsWhitelistDesc": {
-    "message": "Estos dominios no activarán alertas."
+    "message": "Los dominios en esta lista no activarán advertencias de falta de coincidencia de enlace cuando aparezcan como destinos de enlace."
   },
   "optionsAddDomain": {
     "message": "Agregar"
@@ -229,5 +271,14 @@
   },
   "linkCtaExternalUntrusted": {
     "message": "El área de clic principal apunta a un dominio externo no confiable"
+  },
+  "copyButton": {
+    "message": "Copiar"
+  },
+  "copiedSuccess": {
+    "message": "¡Copiado!"
+  },
+  "copiedFailed": {
+    "message": "Falló"
   }
 }
