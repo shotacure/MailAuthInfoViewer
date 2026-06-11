@@ -778,121 +778,6 @@
     };
 
     // =========================================================
-    // 5-2. parseAttachments - 添付ファイル危険性分析
-    // =========================================================
-    // メールの MIME パーツを走査し、添付ファイルの拡張子・形式から危険度を判定する。
-    // 判定はファイル名（MIME メタデータ）のみで行い、本文データのダウンロードや
-    // 内容スキャンは行わない（ローカル完結・プライバシー優先の設計）。
-    // findings の level は深刻度で2段階に分類される:
-    //   [critical]  実行形式（.exe, .dll, .msi 等）、偽装二重拡張子
-    //               （例: invoice.pdf.exe — Windows が最終拡張子を隠すと
-    //               「invoice.pdf」に見える）、HTML ファイル
-    //               → 即座の実行リスク。明確に危険。
-    //   [suspicious] アーカイブ（.zip, .7z, .rar 等）
-    //               → ファイル名からは内容を検査できず、実行形式や
-    //               パスワード付き危険物を含む可能性。警告対象。
-    const parseAttachments = (fullMsg) => {
-      const findings = [];
-      const attachments = [];
-      const criticalExts = new Set([
-        "exe", "dll", "sys", "msi", "scr", "com", "bat", "cmd",
-        "ps1", "psd1", "psm1", "vbs", "js", "jar", "app", "dmg", "apk"
-      ]);
-      const suspiciousExts = new Set(["zip", "7z", "rar", "tar", "gz"]);
-      const htmlExts = new Set(["html", "htm"]);
-
-      const walkParts = (parts) => {
-        if (!parts) return;
-        for (const part of parts) {
-          const contentType = (part.contentType || "").toLowerCase();
-
-          // Thunderbird messages.getFull() の MessagePart は、ファイル名を
-          // name プロパティで返す（filename というプロパティは存在しない）。
-          // Content-Disposition もパート直下のプロパティではなく、パート自身の
-          // headers オブジェクト（小文字キー・値は配列）に格納される。
-          let filename = (part.name || "").trim();
-          const dispositionRaw = (part.headers && part.headers["content-disposition"])
-            ? String(part.headers["content-disposition"][0] || "")
-            : "";
-          // name が空でも Content-Disposition の filename*= / filename= から補完を試みる
-          if (!filename && dispositionRaw) {
-            const fnMatch = dispositionRaw.match(/filename\*\s*=\s*(?:UTF-8''|utf-8'')?"?([^";\r\n]+)"?/i) ||
-                            dispositionRaw.match(/filename\s*=\s*"?([^";\r\n]+)"?/i);
-            if (fnMatch) filename = fnMatch[1].trim();
-          }
-
-          // 添付ファイル判定: ファイル名を持つパートを添付とみなす
-          // （インライン画像等もファイル名があれば対象 — 危険形式の見落とし防止を優先）
-          if (filename) {
-            attachments.push({ filename, contentType });
-
-            // 危険度判定は「実際に実行されうる最終拡張子」を基準に行う。
-            // 中間拡張子だけを根拠に critical 判定はしない
-            // （例: jquery.js.zip の実体は zip であり、js として実行されることはない）。
-            const lastDotIdx = filename.lastIndexOf(".");
-            if (lastDotIdx > 0) {
-              const ext = filename.substring(lastDotIdx + 1).toLowerCase().trim();
-
-              if (criticalExts.has(ext)) {
-                // 最終拡張子が実行形式。手前にも拡張子風のトークンがあれば
-                // 「invoice.pdf.exe」型の偽装二重拡張子として、より具体的に報告する
-                const beforeExt = filename.substring(0, lastDotIdx);
-                const beforeLastDotIdx = beforeExt.lastIndexOf(".");
-                const innerToken = beforeLastDotIdx > 0
-                  ? beforeExt.substring(beforeLastDotIdx + 1).toLowerCase().trim()
-                  : "";
-                const isDoubleExt = /^[a-z0-9]{1,5}$/.test(innerToken);
-                findings.push({
-                  level: "critical",
-                  type: isDoubleExt ? "double_extension" : "executable",
-                  detail: filename
-                });
-              }
-              // HTML ファイル: ローカルで開かせるフィッシング誘導の常套手段
-              else if (htmlExts.has(ext)) {
-                findings.push({
-                  level: "critical",
-                  type: "html",
-                  detail: filename
-                });
-              }
-              // アーカイブ: ファイル名からは内容を検査できないため注意喚起
-              else if (suspiciousExts.has(ext)) {
-                findings.push({
-                  level: "suspicious",
-                  type: "archive",
-                  detail: filename
-                });
-              }
-            }
-          }
-
-          // multipart/* の子パーツを再帰走査
-          if (part.parts) walkParts(part.parts);
-        }
-      };
-
-      walkParts(fullMsg.parts);
-
-      // 添付ファイルサマリー構築
-      const uniqueFormats = new Set();
-      for (const att of attachments) {
-        const lastDotIdx = att.filename.lastIndexOf(".");
-        if (lastDotIdx > 0) {
-          const ext = att.filename.substring(lastDotIdx + 1).toLowerCase().trim();
-          uniqueFormats.add(ext);
-        }
-      }
-
-      const attachmentSummary = {
-        totalCount: attachments.length,
-        formats: Array.from(uniqueFormats).sort()
-      };
-
-      return { findings, attachmentSummary };
-    };
-
-    // =========================================================
     // 6. analyzeLinkSafety - メール本文のリンク安全性分析
     // =========================================================
     // メール本文のHTML/テキストを解析し、フィッシングの特徴や未信頼ドメイン、
@@ -1315,7 +1200,7 @@
     // =========================================================
     // 8. buildUI - UI構築 (HTML/CSS) — Shadow DOM・i18n・ダークモード完全対応
     // =========================================================
-    const buildUI = (envelope, authResults, routeHops, security, arcChain, attachmentFindings, linkSafety, trustedDomains) => {
+    const buildUI = (envelope, authResults, routeHops, security, arcChain, linkSafety, trustedDomains) => {
 
       // --- スタイル定義 (CSS変数によるダークモード完全対応) ---
       const style = document.createElement('style');
@@ -1519,9 +1404,7 @@
 
         /* 上段: アドレス(2) / SPF(1) / DKIM(1) / DMARC(1) */
         .maiv-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 10px; }
-        /* 下段: 送達経路(2) / ARCチェーン(2) / 添付ファイル(1)。
-           リンク安全性カードはドメイン一覧が横に長くなるため、
-           グリッドに入れずフル幅で配置する（.maiv-body-content の flex 直下） */
+        /* 下段: 送達経路(2) / ARCチェーン(2) / リンク安全性(1) */
         .maiv-grid-bottom { display: grid; grid-template-columns: 2fr 2fr 1fr; gap: 10px; }
         /* データなしカードの空状態表示 */
         .maiv-empty-state { color: var(--maiv-text-faint); font-size: 11px; font-style: italic; padding: 8px 0; }
@@ -1622,28 +1505,6 @@
         .maiv-tls-warn { color: var(--maiv-delay-warning); font-weight: bold; }
         .maiv-tls-danger { color: var(--maiv-fail); font-weight: bold; }
         .maiv-tls-unknown { color: var(--maiv-text-faint); }
-
-        /* ATTACHMENTS カード: 危険な添付ファイル警告表示 */
-        .maiv-attachment-critical {
-          background-color: var(--maiv-align-ng-bg); color: var(--maiv-align-ng-text);
-          font-weight: bold; padding: 5px 8px; border-radius: 4px; font-size: 11px;
-          margin-bottom: 4px;
-        }
-        .maiv-attachment-suspicious {
-          background-color: var(--maiv-align-warn-bg); color: var(--maiv-align-warn-text);
-          font-weight: bold; padding: 5px 8px; border-radius: 4px; font-size: 11px;
-          margin-bottom: 4px;
-        }
-        .maiv-attachment-list {
-          font-size: 11px; margin-top: 6px; color: var(--maiv-text-secondary);
-        }
-        .maiv-attachment-item {
-          padding: 2px 0; display: flex; align-items: center; gap: 6px;
-        }
-        .maiv-attachment-summary {
-          font-size: 10px; color: var(--maiv-text-muted); margin-top: 4px;
-          padding-top: 4px; border-top: 1px dashed var(--maiv-card-title-border);
-        }
 
         /* LINK SAFETY カード: フィッシング検知結果表示（4段階の severity） */
         .maiv-finding-critical {
@@ -1819,21 +1680,6 @@
           }
         } else {
           lines.push("(no link findings)");
-        }
-        lines.push("");
-
-        // 添付ファイルセクション（構造: {findings: [{level, type, detail}], attachmentSummary}）
-        lines.push("ATTACHMENTS");
-        lines.push("-----------");
-        for (const f of attachmentFindings.findings) {
-          lines.push(`[${f.level.toUpperCase()}] ${f.type}: ${f.detail}`);
-        }
-        const attSummary = attachmentFindings.attachmentSummary;
-        if (attSummary.totalCount > 0) {
-          const formats = attSummary.formats.length > 0 ? ` (${attSummary.formats.join(", ")})` : "";
-          lines.push(`Total: ${attSummary.totalCount}${formats}`);
-        } else {
-          lines.push("(none)");
         }
         lines.push("");
 
@@ -2341,53 +2187,6 @@
         </div>
       `;
 
-      // --- ATTACHMENTS カード: 危険な添付ファイル警告（常時カード表示） ---
-      let attachmentContentHTML = "";
-      if (attachmentFindings.findings && attachmentFindings.findings.length > 0) {
-        let findingsHTML = "";
-        const levelCls = {
-          "critical": "maiv-attachment-critical",
-          "suspicious": "maiv-attachment-suspicious"
-        };
-        const levelIcon = {
-          "critical": "🚨",
-          "suspicious": "⚠️"
-        };
-        const typeMsg = {
-          "executable": msg("attachmentExecutable"),
-          "html": msg("attachmentHtml"),
-          "double_extension": msg("attachmentDoubleExt"),
-          "archive": msg("attachmentArchive")
-        };
-
-        for (const f of attachmentFindings.findings) {
-          const cls = levelCls[f.level] || "maiv-attachment-suspicious";
-          const icon = levelIcon[f.level] || "⚠️";
-          const typeLabel = typeMsg[f.type] || f.type;
-          const filenameEscaped = escapeHTML(f.detail);
-          findingsHTML += `<div class="${cls}">${icon} ${escapeHTML(typeLabel)}: <code style="font-family:monospace; font-size:10px;">${filenameEscaped}</code></div>`;
-        }
-
-        // サマリー（ファイル数・拡張子種別）。
-        // 件数は数値のみで表記し、単位語のハードコードによる英文混入を避ける
-        const summary = attachmentFindings.attachmentSummary;
-        let summaryText = `${msg("attachmentSummary")} ${summary.totalCount}`;
-        if (summary.formats.length > 0) {
-          summaryText += ` (${summary.formats.join(", ")})`;
-        }
-
-        attachmentContentHTML = findingsHTML + `<div class="maiv-attachment-summary">${escapeHTML(summaryText)}</div>`;
-      } else {
-        attachmentContentHTML = `<div class="maiv-empty-state">${escapeHTML(msg("labelNone"))}</div>`;
-      }
-
-      const attachmentHTML = `
-        <div class="maiv-card">
-          <div class="maiv-card-title" title="${escapeHTML(msg("tooltipAttachments"))}">${escapeHTML(msg("cardTitleAttachments"))}</div>
-          ${attachmentContentHTML}
-        </div>
-      `;
-
       // --- LINK SAFETY カード: フィッシング検知結果・リンクドメイン・リソースドメイン一覧（常時表示） ---
       const hasFindings = linkSafety && linkSafety.findings && linkSafety.findings.length > 0;
       const hasLinkDomains = linkSafety && linkSafety.linkDomains && linkSafety.linkDomains.size > 0;
@@ -2510,9 +2309,8 @@
               <div class="maiv-grid-bottom">
                 ${routeHTML}
                 ${arcHTML}
-                ${attachmentHTML}
+                ${linkSafetyHTML}
               </div>
-              ${linkSafetyHTML}
             </div>
           </div>
         </div>
@@ -2685,11 +2483,10 @@
     const routeHops = parseRoute(headers);
     const arcChain = parseArcChain(headers);
     const bodyContent = parseMessageBody(fullMsg);
-    const attachmentFindings = parseAttachments(fullMsg);
     const linkSafety = analyzeLinkSafety(bodyContent, envelope.headerOrgDomain, trustedDomains);
     const security = determineSecurityStatus(authResults, envelope.isDomainAligned, envelope.envelopeFrom, envelope.isDisplayNameSpoofed, linkSafety);
 
-    buildUI(envelope, authResults, routeHops, security, arcChain, attachmentFindings, linkSafety, trustedDomains);
+    buildUI(envelope, authResults, routeHops, security, arcChain, linkSafety, trustedDomains);
 
   } catch (e) {
     console.error("MailAuthInfoViewer Error:", e);

@@ -38,24 +38,6 @@
   "cardTitleRoute": {
     "message": "МАРШРУТ ДОСТАВКИ (Отправитель → Получатель)"
   },
-  "cardTitleAttachments": {
-    "message": "ВЛОЖЕНИЯ"
-  },
-  "attachmentExecutable": {
-    "message": "Обнаружен исполняемый файл или скрипт"
-  },
-  "attachmentDoubleExt": {
-    "message": "Обнаружено двойное расширение файла"
-  },
-  "attachmentHtml": {
-    "message": "Обнаружено вложение HTML (потенциальный вектор фишинга)"
-  },
-  "attachmentArchive": {
-    "message": "Обнаружено вложение-архив (содержимое нельзя проверить)"
-  },
-  "attachmentSummary": {
-    "message": "Всего вложений:"
-  },
   "dkimWeakKeyLength": {
     "message": "Слабый ключ DKIM (менее 2048 бит)"
   },
@@ -76,9 +58,6 @@
   },
   "tlsUnknown": {
     "message": "Нет информации о TLS"
-  },
-  "tooltipAttachments": {
-    "message": "Анализирует имена вложений для обнаружения потенциально опасных типов: исполняемых файлов, двойных расширений, HTML-файлов и архивов."
   },
   "tooltipSpf": {
     "message": "Sender Policy Framework: Проверяет, авторизован ли отправляющий сервер DNS-записями домена."

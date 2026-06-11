@@ -38,24 +38,6 @@
   "cardTitleRoute": {
     "message": "PERCORSO DI CONSEGNA (Mittente → Destinatario)"
   },
-  "cardTitleAttachments": {
-    "message": "ALLEGATI"
-  },
-  "attachmentExecutable": {
-    "message": "Rilevato file eseguibile o script"
-  },
-  "attachmentDoubleExt": {
-    "message": "Rilevata doppia estensione"
-  },
-  "attachmentHtml": {
-    "message": "Allegato HTML rilevato (vettore di phishing potenziale)"
-  },
-  "attachmentArchive": {
-    "message": "Allegato archivio rilevato (contenuto non ispezionabile)"
-  },
-  "attachmentSummary": {
-    "message": "Allegati totali:"
-  },
   "dkimWeakKeyLength": {
     "message": "Chiave DKIM debole (inferiore a 2048 bit)"
   },
@@ -76,9 +58,6 @@
   },
   "tlsUnknown": {
     "message": "Nessuna informazione TLS disponibile"
-  },
-  "tooltipAttachments": {
-    "message": "Analizza i nomi degli allegati per rilevare tipi potenzialmente pericolosi come eseguibili, doppie estensioni, file HTML e archivi."
   },
   "tooltipSpf": {
     "message": "Sender Policy Framework: Verifica se il server di invio è autorizzato dai record DNS del dominio."

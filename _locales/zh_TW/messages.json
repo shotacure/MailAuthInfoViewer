@@ -38,24 +38,6 @@
   "cardTitleRoute": {
     "message": "投遞路徑（寄件者 → 收件者）"
   },
-  "cardTitleAttachments": {
-    "message": "附件"
-  },
-  "attachmentExecutable": {
-    "message": "偵測到可執行檔或指令碼"
-  },
-  "attachmentDoubleExt": {
-    "message": "偵測到雙重副檔名"
-  },
-  "attachmentHtml": {
-    "message": "偵測到HTML附件（潛在釣魚攻擊媒介）"
-  },
-  "attachmentArchive": {
-    "message": "偵測到壓縮檔附件（無法檢查內容）"
-  },
-  "attachmentSummary": {
-    "message": "總附件數："
-  },
   "dkimWeakKeyLength": {
     "message": "DKIM 金鑰強度不足（低於 2048 位元）"
   },
@@ -76,9 +58,6 @@
   },
   "tlsUnknown": {
     "message": "無 TLS 資訊"
-  },
-  "tooltipAttachments": {
-    "message": "分析附件檔名，偵測可執行檔、雙重副檔名、HTML 檔案、壓縮檔等潛在危險類型。"
   },
   "tooltipSpf": {
     "message": "寄件者政策框架：檢查發送伺服器是否獲得該網域 DNS 記錄的授權。"

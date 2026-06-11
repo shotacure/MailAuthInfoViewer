@@ -38,24 +38,6 @@
   "cardTitleRoute": {
     "message": "مسار التسليم (المرسل ← المستلم)"
   },
-  "cardTitleAttachments": {
-    "message": "المرفقات"
-  },
-  "attachmentExecutable": {
-    "message": "تم اكتشاف ملف قابل للتنفيذ أو نص برمجي"
-  },
-  "attachmentDoubleExt": {
-    "message": "تم اكتشاف امتداد مزدوج"
-  },
-  "attachmentHtml": {
-    "message": "تم اكتشاف مرفق HTML (متجه هجوم محتمل)"
-  },
-  "attachmentArchive": {
-    "message": "تم اكتشاف مرفق أرشيف (لا يمكن فحص المحتوى)"
-  },
-  "attachmentSummary": {
-    "message": "إجمالي المرفقات:"
-  },
   "dkimWeakKeyLength": {
     "message": "مفتاح DKIM ضعيف (أقل من 2048 بت)"
   },
@@ -76,9 +58,6 @@
   },
   "tlsUnknown": {
     "message": "لا تتوفر معلومات TLS"
-  },
-  "tooltipAttachments": {
-    "message": "يفحص أسماء الملفات المرفقة للكشف عن الأنواع الخطرة المحتملة مثل الملفات القابلة للتنفيذ والامتدادات المزدوجة وملفات HTML والأرشيفات."
   },
   "tooltipSpf": {
     "message": "إطار سياسة المرسل: يتحقق مما إذا كان خادم الإرسال مصرحاً به في سجلات DNS للنطاق."
