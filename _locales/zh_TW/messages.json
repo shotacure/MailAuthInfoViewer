@@ -38,6 +38,27 @@
   "cardTitleRoute": {
     "message": "投遞路徑（寄件者 → 收件者）"
   },
+  "dkimWeakKeyLength": {
+    "message": "DKIM 金鑰強度不足（低於 2048 位元）"
+  },
+  "dkimWeakAlgorithm": {
+    "message": "已棄用的簽章演算法"
+  },
+  "dkimLimitedScope": {
+    "message": "簽章僅涵蓋部分郵件內文"
+  },
+  "dmarcWeakSubpolicy": {
+    "message": "子網域政策為 none（子網域未受保護）"
+  },
+  "dmarcLimitedPct": {
+    "message": "政策僅套用於部分郵件"
+  },
+  "tlsUnencrypted": {
+    "message": "此節點未記錄 TLS 加密"
+  },
+  "tlsUnknown": {
+    "message": "無 TLS 資訊"
+  },
   "tooltipSpf": {
     "message": "寄件者政策框架：檢查發送伺服器是否獲得該網域 DNS 記錄的授權。"
   },
@@ -204,7 +225,7 @@
     "message": "信任網域"
   },
   "optionsWhitelistDesc": {
-    "message": "此清單中的網域不會觸發警告。"
+    "message": "此清單中的網域作為連結目的地出現時，不會觸發連結不符警告。"
   },
   "optionsAddDomain": {
     "message": "新增"
@@ -229,5 +250,14 @@
   },
   "linkCtaExternalUntrusted": {
     "message": "主要點擊區域指向未信任的外部網域"
+  },
+  "copyButton": {
+    "message": "複製"
+  },
+  "copiedSuccess": {
+    "message": "已複製！"
+  },
+  "copiedFailed": {
+    "message": "失敗"
   }
 }

@@ -43,6 +43,27 @@
   "cardTitleLinkSafety": {
     "message": "リンク安全性分析"
   },
+  "dkimWeakKeyLength": {
+    "message": "DKIM鍵長が2048ビット未満です"
+  },
+  "dkimWeakAlgorithm": {
+    "message": "非推奨の署名アルゴリズムです"
+  },
+  "dkimLimitedScope": {
+    "message": "署名が本文の一部のみを保護しています"
+  },
+  "dmarcWeakSubpolicy": {
+    "message": "サブドメインポリシーがnoneです（サブドメインが無防備）"
+  },
+  "dmarcLimitedPct": {
+    "message": "ポリシーが一部のメールにのみ適用されています"
+  },
+  "tlsUnencrypted": {
+    "message": "このホップではTLS暗号化の記録がありません"
+  },
+  "tlsUnknown": {
+    "message": "TLS情報がありません"
+  },
   "tooltipSpf": {
     "message": "Sender Policy Framework: 送信サーバーがドメインのDNSレコードで許可されているかを検証します。"
   },
@@ -231,5 +252,14 @@
   },
   "linkCtaExternalUntrusted": {
     "message": "メインのクリック領域が未信頼の外部ドメインを指しています"
+  },
+  "copyButton": {
+    "message": "コピー"
+  },
+  "copiedSuccess": {
+    "message": "コピーしました！"
+  },
+  "copiedFailed": {
+    "message": "失敗"
   }
 }

@@ -38,6 +38,27 @@
   "cardTitleRoute": {
     "message": "ROTA DE ENTREGA (Remetente → Destinatário)"
   },
+  "dkimWeakKeyLength": {
+    "message": "Chave DKIM fraca (abaixo de 2048 bits)"
+  },
+  "dkimWeakAlgorithm": {
+    "message": "Algoritmo de assinatura obsoleto"
+  },
+  "dkimLimitedScope": {
+    "message": "A assinatura cobre apenas parte do corpo da mensagem"
+  },
+  "dmarcWeakSubpolicy": {
+    "message": "A política de subdomínios é none (subdomínios desprotegidos)"
+  },
+  "dmarcLimitedPct": {
+    "message": "A política se aplica apenas a parte dos e-mails"
+  },
+  "tlsUnencrypted": {
+    "message": "Sem criptografia TLS registrada para este salto"
+  },
+  "tlsUnknown": {
+    "message": "Sem informações TLS disponíveis"
+  },
   "tooltipSpf": {
     "message": "Sender Policy Framework: Verifica se o servidor de envio é autorizado pelos registros DNS do domínio."
   },
@@ -204,7 +225,7 @@
     "message": "Domínios confiáveis"
   },
   "optionsWhitelistDesc": {
-    "message": "Estes domínios não ativarão alertas."
+    "message": "Os domínios nesta lista não acionarão avisos de incompatibilidade de link quando aparecerem como destinos de link."
   },
   "optionsAddDomain": {
     "message": "Adicionar"
@@ -229,5 +250,14 @@
   },
   "linkCtaExternalUntrusted": {
     "message": "A área principal de clique aponta para um domínio externo não confiável"
+  },
+  "copyButton": {
+    "message": "Copiar"
+  },
+  "copiedSuccess": {
+    "message": "Copiado!"
+  },
+  "copiedFailed": {
+    "message": "Falha"
   }
 }

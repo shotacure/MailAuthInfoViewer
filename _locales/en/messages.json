@@ -43,6 +43,27 @@
   "cardTitleLinkSafety": {
     "message": "LINK SAFETY ANALYSIS"
   },
+  "dkimWeakKeyLength": {
+    "message": "Weak DKIM key (below 2048 bits)"
+  },
+  "dkimWeakAlgorithm": {
+    "message": "Deprecated signature algorithm"
+  },
+  "dkimLimitedScope": {
+    "message": "Signature covers only part of the message body"
+  },
+  "dmarcWeakSubpolicy": {
+    "message": "Subdomain policy is none (subdomains unprotected)"
+  },
+  "dmarcLimitedPct": {
+    "message": "Policy applies to only part of the mail flow"
+  },
+  "tlsUnencrypted": {
+    "message": "No TLS encryption recorded for this hop"
+  },
+  "tlsUnknown": {
+    "message": "No TLS information available"
+  },
   "tooltipSpf": {
     "message": "Sender Policy Framework: Checks if the sending server is authorized by the domain's DNS records."
   },
@@ -231,5 +252,14 @@
   },
   "linkCtaExternalUntrusted": {
     "message": "Main click area points to an untrusted external domain"
+  },
+  "copyButton": {
+    "message": "Copy"
+  },
+  "copiedSuccess": {
+    "message": "Copied!"
+  },
+  "copiedFailed": {
+    "message": "Failed"
   }
 }

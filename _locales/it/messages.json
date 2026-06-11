@@ -38,6 +38,27 @@
   "cardTitleRoute": {
     "message": "PERCORSO DI CONSEGNA (Mittente → Destinatario)"
   },
+  "dkimWeakKeyLength": {
+    "message": "Chiave DKIM debole (inferiore a 2048 bit)"
+  },
+  "dkimWeakAlgorithm": {
+    "message": "Algoritmo di firma obsoleto"
+  },
+  "dkimLimitedScope": {
+    "message": "La firma copre solo una parte del corpo del messaggio"
+  },
+  "dmarcWeakSubpolicy": {
+    "message": "La policy dei sottodomini è none (sottodomini non protetti)"
+  },
+  "dmarcLimitedPct": {
+    "message": "La policy si applica solo a una parte dei messaggi"
+  },
+  "tlsUnencrypted": {
+    "message": "Nessuna crittografia TLS registrata per questo nodo"
+  },
+  "tlsUnknown": {
+    "message": "Nessuna informazione TLS disponibile"
+  },
   "tooltipSpf": {
     "message": "Sender Policy Framework: Verifica se il server di invio è autorizzato dai record DNS del dominio."
   },
@@ -204,7 +225,7 @@
     "message": "Domini fidati"
   },
   "optionsWhitelistDesc": {
-    "message": "Questi domini non attiveranno avvisi."
+    "message": "I domini in questo elenco non attiveranno avvisi di mancata corrispondenza dei link quando compaiono come destinazioni dei link."
   },
   "optionsAddDomain": {
     "message": "Aggiungi"
@@ -229,5 +250,14 @@
   },
   "linkCtaExternalUntrusted": {
     "message": "L'area di clic principale punta a un dominio esterno non attendibile"
+  },
+  "copyButton": {
+    "message": "Copia"
+  },
+  "copiedSuccess": {
+    "message": "Copiato!"
+  },
+  "copiedFailed": {
+    "message": "Errore"
   }
 }

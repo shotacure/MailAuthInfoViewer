@@ -38,6 +38,27 @@
   "cardTitleRoute": {
     "message": "ROUTE DE LIVRAISON (Expéditeur → Destinataire)"
   },
+  "dkimWeakKeyLength": {
+    "message": "Clé DKIM faible (moins de 2048 bits)"
+  },
+  "dkimWeakAlgorithm": {
+    "message": "Algorithme de signature obsolète"
+  },
+  "dkimLimitedScope": {
+    "message": "La signature ne couvre qu'une partie du corps du message"
+  },
+  "dmarcWeakSubpolicy": {
+    "message": "La politique de sous-domaine est none (sous-domaines non protégés)"
+  },
+  "dmarcLimitedPct": {
+    "message": "La politique ne s'applique qu'à une partie des messages"
+  },
+  "tlsUnencrypted": {
+    "message": "Aucun chiffrement TLS enregistré pour ce relais"
+  },
+  "tlsUnknown": {
+    "message": "Aucune information TLS disponible"
+  },
   "tooltipSpf": {
     "message": "Sender Policy Framework : Vérifie si le serveur d'envoi est autorisé par les enregistrements DNS du domaine."
   },
@@ -204,7 +225,7 @@
     "message": "Domaines de confiance"
   },
   "optionsWhitelistDesc": {
-    "message": "Ces domaines ne déclencheront pas d'alerte."
+    "message": "Les domaines de cette liste ne déclencheront pas d'avertissement de lien discordant lorsqu'ils apparaissent comme destination de lien."
   },
   "optionsAddDomain": {
     "message": "Ajouter"
@@ -229,5 +250,14 @@
   },
   "linkCtaExternalUntrusted": {
     "message": "La zone de clic principale pointe vers un domaine externe non approuvé"
+  },
+  "copyButton": {
+    "message": "Copier"
+  },
+  "copiedSuccess": {
+    "message": "Copié !"
+  },
+  "copiedFailed": {
+    "message": "Échoué"
   }
 }

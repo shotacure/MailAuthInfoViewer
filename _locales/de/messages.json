@@ -38,6 +38,27 @@
   "cardTitleRoute": {
     "message": "ZUSTELLWEG (Absender → Empfänger)"
   },
+  "dkimWeakKeyLength": {
+    "message": "Schwacher DKIM-Schlüssel (unter 2048 Bit)"
+  },
+  "dkimWeakAlgorithm": {
+    "message": "Veralteter Signaturalgorithmus"
+  },
+  "dkimLimitedScope": {
+    "message": "Signatur schützt nur einen Teil des Nachrichtentexts"
+  },
+  "dmarcWeakSubpolicy": {
+    "message": "Subdomain-Richtlinie ist none (Subdomains ungeschützt)"
+  },
+  "dmarcLimitedPct": {
+    "message": "Richtlinie gilt nur für einen Teil der E-Mails"
+  },
+  "tlsUnencrypted": {
+    "message": "Keine TLS-Verschlüsselung für diesen Hop verzeichnet"
+  },
+  "tlsUnknown": {
+    "message": "Keine TLS-Informationen verfügbar"
+  },
   "tooltipSpf": {
     "message": "Sender Policy Framework: Prüft, ob der sendende Server durch die DNS-Einträge der Domain autorisiert ist."
   },
@@ -204,7 +225,7 @@
     "message": "Vertrauenswuerdige Domains"
   },
   "optionsWhitelistDesc": {
-    "message": "Domains in dieser Liste loesen keine Warnung aus."
+    "message": "Domains in dieser Liste lösen keine Warnung bezüglich fehlender Linkübereinstimmung aus, wenn sie als Linkziele erscheinen."
   },
   "optionsAddDomain": {
     "message": "Hinzufuegen"
@@ -229,5 +250,14 @@
   },
   "linkCtaExternalUntrusted": {
     "message": "Haupt-Klickbereich verweist auf eine nicht vertrauenswürdige externe Domain"
+  },
+  "copyButton": {
+    "message": "Kopieren"
+  },
+  "copiedSuccess": {
+    "message": "Kopiert!"
+  },
+  "copiedFailed": {
+    "message": "Fehlgeschlagen"
   }
 }

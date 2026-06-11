@@ -69,8 +69,8 @@ Deceptive link text detected — the displayed URL differs from the actual desti
     * **リンクドメイン一覧:** メール本文に含まれるすべてのリンクドメインを一覧表示し、送信者の組織ドメインとの一致/不一致を色分けします。トラッキングピクセル配信元はインラインマーカーで示します。
 * **Reply-To Mismatch Detection:** Warns when the Reply-To address belongs to a different domain than the sender, a technique used to redirect replies to attackers.
     * **Reply-To不一致検知:** Reply-Toアドレスが送信者と異なるドメインの場合に警告します。返信を攻撃者に誘導するフィッシング手口です。
-* **Trusted Link Domains with Inline Shortcut:** When an untrusted link indicator involves a single external domain, a Trust button appears directly on the finding row for one-click whitelisting. Otherwise, individual Trust buttons appear next to each external domain in the domain list. Whitelisted domains suppress link mismatch and untrusted-link warnings. Manage trusted domains from the add-on settings page with text-based import/export.
-    * **信頼済みリンクドメインとインラインショートカット:** 未信頼のリンク指標が外部ドメイン1つに特定できる場合、findings行に直接Trustボタンが表示され、ワンクリックでホワイトリスト登録できます。それ以外の場合はドメイン一覧の各外部ドメイン横のTrustボタンを使用します。ホワイトリスト登録済みドメインはリンク先相違や未信頼リンク警告を抑制。アドオン設定画面からテキスト形式のインポート/エクスポートで管理可能。
+* **Trusted Link Domains with Inline Shortcut:** When an untrusted link indicator involves a single external domain, a Trust button appears directly on the finding row for one-click whitelisting. Otherwise, individual Trust buttons appear next to each external domain in the domain list. Whitelisted domains suppress untrusted-link warnings; deceptive link text (displayed URL differing from the actual destination) is always flagged regardless of the trust list, because a mismatch between what is shown and where a link goes is deceptive no matter who owns the destination. Manage trusted domains from the add-on settings page with text-based import/export.
+    * **信頼済みリンクドメインとインラインショートカット:** 未信頼のリンク指標が外部ドメイン1つに特定できる場合、findings行に直接Trustボタンが表示され、ワンクリックでホワイトリスト登録できます。それ以外の場合はドメイン一覧の各外部ドメイン横のTrustボタンを使用します。ホワイトリスト登録済みドメインは未信頼リンク警告を抑制します。一方、リンクテキスト偽装（表示URLと実際のリンク先の不一致）は、リンク先の所有者に関わらず「見せている先と飛ぶ先が違う」こと自体が欺瞞であるため、信頼リストに関係なく常に警告します。アドオン設定画面からテキスト形式のインポート/エクスポートで管理可能。
 * **Authentication Status:** Quickly check the pass/fail status of SPF, DKIM, and DMARC authentication with DMARC policy display.
     * **認証ステータス:** SPF、DKIM、DMARCの成否ステータスをDMARCポリシー表示と共に素早く確認できます。
 * **DMARC Alignment Indicators (RFC 7489):** SPF and DKIM alignment status shown within each authentication card. Alignment is evaluated only for signatures that passed authentication — failed signatures are excluded from alignment consideration. The security verdict requires DMARC pass and at least one alignment match for AUTH PASS.
@@ -93,6 +93,12 @@ Deceptive link text detected — the displayed URL differs from the actual desti
     * **メーリングリスト検知:** `List-Id` や `List-Unsubscribe` ヘッダの検出時に「メーリングリスト経由」と表示し、転送によるドメイン不一致を説明します。
 * **Trusted Authentication Filtering (authserv-id):** Filters `Authentication-Results` headers to only trust those from the receiving mail server.
     * **信頼できる認証結果のフィルタリング (authserv-id):** 受信メールサーバーの `Authentication-Results` ヘッダのみを信頼します。
+* **Authentication Strength Detection:** Flags weak authentication configurations that pass but leave fixable gaps: DKIM keys below 2048 bits (when the receiving server records the key length in Authentication-Results), deprecated rsa-sha1 signatures, partial body signing via the `l=` tag, weak DMARC subdomain policy (`sp=none` while the main policy is stronger), and partial DMARC enforcement (`pct` below 100, when recorded). Warnings appear inside the DKIM/DMARC cards as administrator guidance and do not affect the badge.
+    * **認証強度検出:** 認証は pass していても改善可能な弱さが残る設定を警告します：2048ビット未満の DKIM 鍵（受信サーバーが Authentication-Results に鍵長を記録している場合）、非推奨の rsa-sha1 署名、`l=` タグによる本文の部分署名、メインポリシーより弱い DMARC サブドメインポリシー（`sp=none`）、部分施行（`pct` が 100 未満、記録がある場合）。警告は DKIM/DMARC カード内に管理者向け情報として表示され、バッジ判定には影響しません。
+* **TLS Encryption Visualization in Delivery Route:** Each hop in the delivery route displays the TLS/encryption status recorded in its Received header: 🔒 with the version number for TLS-encrypted hops (⚠️ instead for legacy TLS 1.0/1.1), 🔓 when a plaintext protocol (SMTP/ESMTP without TLS details) was recorded, and a neutral dash when no information is available (e.g., internal delivery). Cipher suites are shown in tooltips.
+    * **送達経路の TLS 可視化:** 各ホップの Received ヘッダに記録された TLS/暗号化状態を表示します：TLS 暗号化ホップは 🔒 とバージョン番号（旧版の TLS 1.0/1.1 は ⚠️）、平文プロトコル（TLS 情報のない SMTP/ESMTP）の記録は 🔓、判定材料がない場合（内部配送等）は中立のダッシュ表示。暗号スイートはツールチップで確認できます。
+* **Report Copy to Clipboard:** A "Copy" button in the dashboard header copies a structured plain-text analysis report — verdict with reason tags, authentication results, alignment, strength warnings, sender identity, delivery route with TLS status, and link safety findings — ready to paste into team chats, tickets, or security incident reports.
+    * **レポートのクリップボード機能:** ダッシュボードヘッダの「コピー」ボタンで、総合判定と判定理由・認証結果・アライメント・強度警告・送信者情報・TLS 状態付き送達経路・リンク安全性所見を含む構造化プレーンテキストレポートをコピーできます。チームチャット・チケット・インシデント報告にそのまま貼り付けられます。
 * **Dark Mode:** Full dark mode support that follows your system preference.
     * **ダークモード:** システムの設定に連動した完全なダークモード対応。
 * **12-Language Support (i18n):** Available in English, Japanese, French, German, Spanish, Arabic, Korean, Traditional Chinese, Simplified Chinese, Portuguese (Brazil), Russian, and Italian.
@@ -112,7 +118,7 @@ This add-on is designed for mail administrators and security-conscious users who
 
 | Badge | Condition | 条件 |
 |-------|-----------|------|
-| 💀 **LINK MISMATCH** | Deceptive link text (displayed URL differs from actual destination), dangerous URI schemes, or embedded HTML forms detected. Trusted domains can be whitelisted. | リンク先相違（表示URLと実際のリンク先が不一致）・危険なURIスキーム・HTMLフォーム埋め込みを検出。信頼済みドメインはホワイトリスト登録可能。 |
+| 💀 **LINK MISMATCH** | Deceptive link text (displayed URL differs from actual destination), dangerous URI schemes, or embedded HTML forms detected. Not suppressible by the trust list. | リンク先相違（表示URLと実際のリンク先が不一致）・危険なURIスキーム・HTMLフォーム埋め込みを検出。信頼リストでは抑制されない。 |
 | ❌ **AUTH FAILED** | SPF, DKIM, or DMARC explicitly failed | SPF・DKIM・DMARCのいずれかが明示的にfail |
 | ⚠️ **AUTH PASS** | DMARC passed but other issues (alignment, spoofing, suspicious links, untrusted link domains) | DMARC passだがアライメント・なりすまし・不審リンク・未信頼リンクドメイン等の問題あり |
 | ⚠️ **PARTIAL** | Some auth passed but DMARC not passed | 一部認証passだがDMARC未通過 |
@@ -126,14 +132,14 @@ v1.1.6 ではリンク指標を4段階に分類しています。それぞれ深
 
 | Level | Examples | Meaning | Resolvable by whitelisting? |
 |-------|----------|---------|-----------------------------|
-| **critical** | Deceptive link text, `javascript:`/`data:` URIs, embedded forms | Confirmed phishing indicators (promotes to LINK MISMATCH badge) | Deceptive text: yes / Others: no |
+| **critical** | Deceptive link text, `javascript:`/`data:` URIs, embedded forms | Confirmed phishing indicators (promotes to LINK MISMATCH badge) | No |
 | **suspicious** | IP-address links, IDN homographs, URL shorteners | Patterns inherently risky regardless of who sent them | No |
 | **untrusted** | All links external, main CTA external | Simply unknown to the extension — recipient hasn't trusted the domain yet | **Yes** (add to trusted domains) |
 | **privacy** | Tracking pixels | Privacy notice only, not a phishing indicator | N/A (informational) |
 
 | レベル | 例 | 意味 | ホワイトリストで解消可能か |
 |--------|----|-------|---------------------------|
-| **critical** | リンクテキスト偽装、`javascript:`/`data:` URI、フォーム埋め込み | 確度の高いフィッシング指標（LINK MISMATCHバッジに昇格） | リンクテキスト偽装: 可 / その他: 不可 |
+| **critical** | リンクテキスト偽装、`javascript:`/`data:` URI、フォーム埋め込み | 確度の高いフィッシング指標（LINK MISMATCHバッジに昇格） | 不可 |
 | **suspicious** | IPアドレスリンク、IDNホモグラフ、短縮URL | 送信者に関係なく本質的に怪しい書式 | 不可 |
 | **untrusted** | 全リンク外部、メインCTA外部 | 単にアドオンにとって未知なだけ — ユーザーがまだ信頼表明していない | **可**（信頼済みドメインに追加） |
 | **privacy** | トラッキングピクセル | プライバシー上の注意喚起。フィッシング指標ではない | 該当なし（情報提供） |
@@ -146,6 +152,7 @@ v1.1.6 ではリンク指標を4段階に分類しています。それぞれ深
 * No critical, suspicious, or untrusted link indicators detected in email body
 * Note: Envelope domain mismatch alone does NOT block green when DMARC pass with alignment is satisfied (supports legitimate third-party sending services like SendGrid)
 * Note: DMARC `p=none` does NOT block green (authentication itself succeeded), but the DMARC card highlights the weak policy in red for administrators
+* Note: Authentication strength findings (sub-2048-bit DKIM keys, rsa-sha1, `l=` partial body signing, `sp=none`, `pct<100`) likewise do NOT affect the badge — they appear inside the DKIM/DMARC cards as administrator guidance, following the same treatment as `p=none`
 * Note: Tracking pixels (privacy level) do NOT block green (ubiquitous in legitimate marketing emails), but are reported in the Link Safety Analysis card with 🕵️ markers
 * Note: Untrusted link indicators remain orange (not green) until the user explicitly trusts the domain — the extension does not assume legitimacy for any unknown external domain
 
@@ -157,6 +164,7 @@ v1.1.6 ではリンク指標を4段階に分類しています。それぞれ深
 * メール本文に critical・suspicious・untrusted のいずれのリンク指標も検知されていないこと
 * 注: DMARCがpassかつアライメント成立時は、エンベロープドメイン不一致のみではグリーンを阻害しない（SendGrid等の正当な外部配信サービスに対応）
 * 注: DMARC `p=none` はグリーンを阻害しない（認証自体は成功）が、DMARCカード内でポリシーを赤色表示して管理者に改善を促す
+* 注: 認証強度の所見（2048ビット未満のDKIM鍵・rsa-sha1・`l=`部分署名・`sp=none`・`pct<100`）も同様にバッジ判定には影響しない — `p=none` と同じ扱いで、DKIM/DMARCカード内に管理者向け警告として表示する
 * 注: トラッキングピクセル（privacyレベル）はグリーンを阻害しない（正規のマーケティングメールにほぼ必ず含まれるため）が、リンク安全性分析カード内で🕵️マーカー付きで報告する
 * 注: 未信頼リンク指標はユーザーが明示的にドメインを信頼するまでオレンジのまま（グリーンにはならない） — アドオンは未知の外部ドメインに対し正当性を仮定しない
 
@@ -214,16 +222,17 @@ manifest.json           Extension manifest with i18n support
 background.js           Registers content scripts, handles message API
 psl_data.js             Public Suffix List data + getOrganizationalDomain()
 options.html + options.js  Trusted link domains management (add/remove/import/export)
-messagedisplay.js       Main logic — 8 core functions:
+messagedisplay.js       Main logic — 9 core functions:
 │
 ├─ parseEnvelope()          Address extraction, PSL-based alignment, mailing list, display name spoof & Reply-To mismatch detection
-├─ parseAuthResults()       Auth parsing with authserv-id filtering & display, multi-DKIM with header.d/header.i fallback, per-signature alignment, Received-SPF fallback, RFC 8601 comment-aware semicolon splitting (preserves `header.d=` etc. when key-info such as `(2048-bit key; unprotected)` appears in DKIM results)
-├─ parseRoute()             Delivery route from Received headers with IP classification
+├─ parseAuthResults()       Auth parsing with authserv-id filtering & display, multi-DKIM with header.d/header.i fallback, per-signature alignment, Received-SPF fallback, RFC 8601 comment-aware semicolon splitting (preserves `header.d=` etc. when key-info such as `(2048-bit key; unprotected)` appears in DKIM results), authentication strength detection (sub-2048-bit DKIM keys from A-R comments, rsa-sha1, `l=` partial body signing, DMARC `sp=none` / `pct<100` from A-R comments)
+├─ parseRoute()             Delivery route from Received headers with IP classification and per-hop TLS/encryption status extraction (TLS version, cipher suite, plaintext-protocol detection)
 ├─ parseArcChain()          ARC chain parsing (RFC 8617)
 ├─ parseMessageBody()       MIME tree traversal to extract HTML/text body content
 ├─ analyzeLinkSafety()      Four-tier phishing detection (critical/suspicious/untrusted/privacy): deceptive text, dangerous schemes, forms, IP/IDN/shortener links (aggregated per type), all-external & CTA analysis, tracking pixels, resource domains, trusted domain whitelist, external link domain collection for one-click trust
 ├─ determineSecurityStatus()  5-tier verdict (phishing > auth failed > auth pass warning > partial > auth pass) with auth-gated alignment, per-reason tags including "link_untrusted", and privacy-level findings excluded from verdict
-└─ buildUI()                Shadow DOM isolated, i18n'd, dark-mode-aware rendering with always-collapsed panel, collapsible auth cards (full RFC 8601 properties), per-signature DKIM display, collapsible link safety with severity-aware styling (critical/suspicious/untrusted/privacy), inline Trust shortcut on untrusted findings when a single external domain is identified, and verdict reason tags
+├─ generateReportText()     Generates structured plain-text analysis report with all findings for clipboard export
+└─ buildUI()                Shadow DOM isolated, i18n'd, dark-mode-aware rendering with always-collapsed panel, collapsible auth cards (full RFC 8601 properties), per-signature DKIM display, authentication strength warnings inside DKIM/DMARC cards, TLS status column in delivery route table with visual indicators (🔒⚠️🔓), collapsible link safety with severity-aware styling (critical/suspicious/untrusted/privacy), inline Trust shortcut on untrusted findings when a single external domain is identified, copy-to-clipboard button in header, verdict reason tags
 
 _locales/
 ├─ en/messages.json     English (default)
