@@ -805,11 +805,25 @@
         if (!parts) return;
         for (const part of parts) {
           const contentType = (part.contentType || "").toLowerCase();
-          const filename = part.filename || "";
-          const contentDisposition = (part.contentDisposition || "").toLowerCase();
 
-          // 添付ファイル判定: Content-Disposition が attachment か filename が存在
-          if ((contentDisposition === "attachment" || filename.trim()) && filename.trim()) {
+          // Thunderbird messages.getFull() の MessagePart は、ファイル名を
+          // name プロパティで返す（filename というプロパティは存在しない）。
+          // Content-Disposition もパート直下のプロパティではなく、パート自身の
+          // headers オブジェクト（小文字キー・値は配列）に格納される。
+          let filename = (part.name || "").trim();
+          const dispositionRaw = (part.headers && part.headers["content-disposition"])
+            ? String(part.headers["content-disposition"][0] || "")
+            : "";
+          // name が空でも Content-Disposition の filename*= / filename= から補完を試みる
+          if (!filename && dispositionRaw) {
+            const fnMatch = dispositionRaw.match(/filename\*\s*=\s*(?:UTF-8''|utf-8'')?"?([^";\r\n]+)"?/i) ||
+                            dispositionRaw.match(/filename\s*=\s*"?([^";\r\n]+)"?/i);
+            if (fnMatch) filename = fnMatch[1].trim();
+          }
+
+          // 添付ファイル判定: ファイル名を持つパートを添付とみなす
+          // （インライン画像等もファイル名があれば対象 — 危険形式の見落とし防止を優先）
+          if (filename) {
             attachments.push({ filename, contentType });
 
             // 危険度判定は「実際に実行されうる最終拡張子」を基準に行う。
@@ -1829,6 +1843,34 @@
         return lines.join("\n");
       };
 
+      // --- クリップボード書き込みヘルパー ---
+      // メッセージ表示ペインの文書は mailbox:// / imap:// 等の非セキュアコンテキストで
+      // 表示されるため、セキュアコンテキスト限定の navigator.clipboard が存在しない。
+      // 利用可能ならそちらを使い、不可なら一時 textarea + document.execCommand("copy") に
+      // フォールバックする（クリックというユーザー操作起点のため execCommand が許可される）。
+      const writeToClipboard = async (text) => {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          try {
+            await navigator.clipboard.writeText(text);
+            return true;
+          } catch { /* 権限拒否などの場合はフォールバックへ */ }
+        }
+        const helper = document.createElement("textarea");
+        helper.value = text;
+        // select() を効かせるため display:none は使わず、画面外へ不可視配置する
+        helper.style.position = "fixed";
+        helper.style.left = "-9999px";
+        helper.style.top = "0";
+        helper.setAttribute("readonly", "");
+        document.body.appendChild(helper);
+        helper.focus();
+        helper.select();
+        let ok = false;
+        try { ok = document.execCommand("copy"); } catch { ok = false; }
+        helper.remove();
+        return ok;
+      };
+
       // --- コンテナ作成 ---
       const container = document.createElement("div");
       container.className = "maiv-container";
@@ -2517,22 +2559,19 @@
       if (copyBtn) {
         copyBtn.addEventListener('click', async (e) => {
           e.stopPropagation();
+          let ok = false;
           try {
             const reportText = generateReportText();
-            await navigator.clipboard.writeText(reportText);
-            // 成功時: テキスト変更
-            copyBtn.textContent = `✅ ${msg("copiedSuccess")}`;
-            setTimeout(() => {
-              copyBtn.textContent = `📋 ${msg("copyButton")}`;
-            }, 2000);
+            ok = await writeToClipboard(reportText);
           } catch (err) {
-            // 失敗時: エラー表示
             console.error("MailAuthInfoViewer: Failed to copy to clipboard", err);
-            copyBtn.textContent = `❌ ${msg("copiedFailed")}`;
-            setTimeout(() => {
-              copyBtn.textContent = `📋 ${msg("copyButton")}`;
-            }, 2000);
+            ok = false;
           }
+          // 成否をボタン上で2秒間フィードバックして元の表記に戻す
+          copyBtn.textContent = ok ? `✅ ${msg("copiedSuccess")}` : `❌ ${msg("copiedFailed")}`;
+          setTimeout(() => {
+            copyBtn.textContent = `📋 ${msg("copyButton")}`;
+          }, 2000);
         });
       }
 
