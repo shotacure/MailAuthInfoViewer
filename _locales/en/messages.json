@@ -40,26 +40,8 @@
   "cardTitleRoute": {
     "message": "DELIVERY ROUTE (Sender → Recipient)"
   },
-  "cardTitleAttachments": {
-    "message": "ATTACHMENTS"
-  },
   "cardTitleLinkSafety": {
     "message": "LINK SAFETY ANALYSIS"
-  },
-  "attachmentExecutable": {
-    "message": "Executable or script file detected"
-  },
-  "attachmentDoubleExt": {
-    "message": "Double extension detected (e.g., invoice.pdf.exe)"
-  },
-  "attachmentHtml": {
-    "message": "HTML attachment detected (potential phishing vector)"
-  },
-  "attachmentArchive": {
-    "message": "Archive attachment detected (contents cannot be inspected)"
-  },
-  "attachmentSummary": {
-    "message": "Total attachments:"
   },
   "dkimWeakKeyLength": {
     "message": "Weak DKIM key (below 2048 bits)"
@@ -81,9 +63,6 @@
   },
   "tlsUnknown": {
     "message": "No TLS information available"
-  },
-  "tooltipAttachments": {
-    "message": "Scans attachment filenames for potentially dangerous types such as executables, double extensions, HTML files, and archives."
   },
   "tooltipSpf": {
     "message": "Sender Policy Framework: Checks if the sending server is authorized by the domain's DNS records."

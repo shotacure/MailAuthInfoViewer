@@ -38,24 +38,6 @@
   "cardTitleRoute": {
     "message": "ROUTE DE LIVRAISON (Expéditeur → Destinataire)"
   },
-  "cardTitleAttachments": {
-    "message": "PIÈCES JOINTES"
-  },
-  "attachmentExecutable": {
-    "message": "Fichier exécutable ou script détecté"
-  },
-  "attachmentDoubleExt": {
-    "message": "Double extension détectée"
-  },
-  "attachmentHtml": {
-    "message": "Pièce jointe HTML détectée (vecteur d'attaque potentiel)"
-  },
-  "attachmentArchive": {
-    "message": "Pièce jointe archive détectée (contenu non inspectable)"
-  },
-  "attachmentSummary": {
-    "message": "Pièces jointes totales :"
-  },
   "dkimWeakKeyLength": {
     "message": "Clé DKIM faible (moins de 2048 bits)"
   },
@@ -76,9 +58,6 @@
   },
   "tlsUnknown": {
     "message": "Aucune information TLS disponible"
-  },
-  "tooltipAttachments": {
-    "message": "Analyse les noms des pièces jointes pour détecter les types potentiellement dangereux : exécutables, doubles extensions, fichiers HTML et archives."
   },
   "tooltipSpf": {
     "message": "Sender Policy Framework : Vérifie si le serveur d'envoi est autorisé par les enregistrements DNS du domaine."

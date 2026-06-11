@@ -38,24 +38,6 @@
   "cardTitleRoute": {
     "message": "ZUSTELLWEG (Absender → Empfänger)"
   },
-  "cardTitleAttachments": {
-    "message": "ANHÄNGE"
-  },
-  "attachmentExecutable": {
-    "message": "Ausführbare Datei oder Skript erkannt"
-  },
-  "attachmentDoubleExt": {
-    "message": "Doppelte Dateierweiterung erkannt"
-  },
-  "attachmentHtml": {
-    "message": "HTML-Anhang erkannt (potentieller Phishing-Vektor)"
-  },
-  "attachmentArchive": {
-    "message": "Archiv-Anhang erkannt (Inhalt nicht prüfbar)"
-  },
-  "attachmentSummary": {
-    "message": "Anhänge insgesamt:"
-  },
   "dkimWeakKeyLength": {
     "message": "Schwacher DKIM-Schlüssel (unter 2048 Bit)"
   },
@@ -76,9 +58,6 @@
   },
   "tlsUnknown": {
     "message": "Keine TLS-Informationen verfügbar"
-  },
-  "tooltipAttachments": {
-    "message": "Prüft Dateinamen von Anhängen auf potenziell gefährliche Typen wie ausführbare Dateien, doppelte Erweiterungen, HTML-Dateien und Archive."
   },
   "tooltipSpf": {
     "message": "Sender Policy Framework: Prüft, ob der sendende Server durch die DNS-Einträge der Domain autorisiert ist."

@@ -40,26 +40,8 @@
   "cardTitleRoute": {
     "message": "送達経路（送信元 → 受信先）"
   },
-  "cardTitleAttachments": {
-    "message": "添付ファイル"
-  },
   "cardTitleLinkSafety": {
     "message": "リンク安全性分析"
-  },
-  "attachmentExecutable": {
-    "message": "実行形式またはスクリプトファイルを検出"
-  },
-  "attachmentDoubleExt": {
-    "message": "二重拡張子を検出（例: invoice.pdf.exe）"
-  },
-  "attachmentHtml": {
-    "message": "HTML添付を検出（フィッシング配送手段の可能性）"
-  },
-  "attachmentArchive": {
-    "message": "アーカイブ添付を検出（内容を検査できません）"
-  },
-  "attachmentSummary": {
-    "message": "合計添付ファイル数："
   },
   "dkimWeakKeyLength": {
     "message": "DKIM鍵長が2048ビット未満です"
@@ -81,9 +63,6 @@
   },
   "tlsUnknown": {
     "message": "TLS情報がありません"
-  },
-  "tooltipAttachments": {
-    "message": "添付ファイル名を解析し、実行形式・二重拡張子・HTMLファイル・アーカイブなどの潜在的に危険な形式を検出します。"
   },
   "tooltipSpf": {
     "message": "Sender Policy Framework: 送信サーバーがドメインのDNSレコードで許可されているかを検証します。"

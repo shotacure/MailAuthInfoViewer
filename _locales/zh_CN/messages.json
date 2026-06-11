@@ -38,24 +38,6 @@
   "cardTitleRoute": {
     "message": "投递路径（发件人 → 收件人）"
   },
-  "cardTitleAttachments": {
-    "message": "附件"
-  },
-  "attachmentExecutable": {
-    "message": "检测到可执行文件或脚本"
-  },
-  "attachmentDoubleExt": {
-    "message": "检测到双重扩展名"
-  },
-  "attachmentHtml": {
-    "message": "检测到HTML附件（潜在钓鱼攻击媒介）"
-  },
-  "attachmentArchive": {
-    "message": "检测到压缩文件附件（无法检查内容）"
-  },
-  "attachmentSummary": {
-    "message": "总附件数："
-  },
   "dkimWeakKeyLength": {
     "message": "DKIM 密钥强度不足（低于 2048 位）"
   },
@@ -76,9 +58,6 @@
   },
   "tlsUnknown": {
     "message": "无 TLS 信息"
-  },
-  "tooltipAttachments": {
-    "message": "分析附件文件名，检测可执行文件、双重扩展名、HTML 文件、压缩文件等潜在危险类型。"
   },
   "tooltipSpf": {
     "message": "发件人策略框架：检查发送服务器是否获得该域名 DNS 记录的授权。"

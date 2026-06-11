@@ -38,24 +38,6 @@
   "cardTitleRoute": {
     "message": "ROTA DE ENTREGA (Remetente → Destinatário)"
   },
-  "cardTitleAttachments": {
-    "message": "ANEXOS"
-  },
-  "attachmentExecutable": {
-    "message": "Arquivo executável ou script detectado"
-  },
-  "attachmentDoubleExt": {
-    "message": "Extensão dupla detectada"
-  },
-  "attachmentHtml": {
-    "message": "Anexo HTML detectado (vetor potencial de phishing)"
-  },
-  "attachmentArchive": {
-    "message": "Anexo de arquivo compactado detectado (conteúdo não inspecionável)"
-  },
-  "attachmentSummary": {
-    "message": "Anexos totais:"
-  },
   "dkimWeakKeyLength": {
     "message": "Chave DKIM fraca (abaixo de 2048 bits)"
   },
@@ -76,9 +58,6 @@
   },
   "tlsUnknown": {
     "message": "Sem informações TLS disponíveis"
-  },
-  "tooltipAttachments": {
-    "message": "Analisa os nomes dos anexos para detectar tipos potencialmente perigosos, como executáveis, extensões duplas, arquivos HTML e arquivos compactados."
   },
   "tooltipSpf": {
     "message": "Sender Policy Framework: Verifica se o servidor de envio é autorizado pelos registros DNS do domínio."
