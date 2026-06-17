@@ -269,9 +269,28 @@
       const getLastReceivedBy = () => {
         const received = headers["received"] || [];
         if (received.length === 0) return "";
-        // received[0] が最新（受信MTA自身が追加）
-        const byMatch = received[0].match(/\bby\s+([^\s;]+)/i);
-        return byMatch ? byMatch[1].toLowerCase() : "";
+        // received[0] が最新（受信MTA自身が追加）。
+        // ただし Gmail / Google Workspace 等は配送の最終段で
+        //   Received: by 2002:<IPv6> with SMTP id ...
+        // という内部ハンドオフを最上段に積む。この by は IP リテラルであって
+        // authserv-id（例: mx.google.com）になり得ないため、これをそのまま
+        // 最終受信ホストに採用すると、本来信頼すべき Authentication-Results が
+        // authserv-id 不一致で破棄され、DKIM/DMARC が none に化けてしまう。
+        // そこで by が IP リテラル（IPv4 / IPv6）の Received は読み飛ばし、
+        // 最初に現れる実ホスト名の by を最終受信ホストとして採用する。
+        // 内部ホップは境界 MTA より上に積まれるため、最初の実ホスト名は必ず
+        // 境界 MTA（authserv を発行したホスト）を指し、信頼境界は保たれる。
+        for (const line of received) {
+          const byMatch = line.match(/\bby\s+([^\s;]+)/i);
+          if (!byMatch) continue;
+          const host = byMatch[1].toLowerCase().replace(/^\[|\]$/g, "");
+          if (isIPv4Like(host) || isIPv6Like(host)) continue;
+          return host;
+        }
+        // すべて IP リテラル等で実ホスト名が得られない場合は、従来どおり
+        // 先頭の by をそのまま返す（フォールバック）。
+        const firstByMatch = received[0].match(/\bby\s+([^\s;]+)/i);
+        return firstByMatch ? firstByMatch[1].toLowerCase() : "";
       };
 
       const filterByAuthServId = (authResultHeaders, trustedHost) => {
