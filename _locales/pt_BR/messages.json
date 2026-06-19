@@ -128,6 +128,12 @@
   "mailingListNote": {
     "message": "A discrepância de domínio pode ser devido ao encaminhamento por lista de e-mails"
   },
+  "reportedUnverifiedLabel": {
+    "message": "Relatado, não verificado"
+  },
+  "reportedUnverifiedNotice": {
+    "message": "Resultados relatados pelo seu servidor de recebimento. Não foi possível verificá-los de forma independente (o cabeçalho Authentication-Results não pôde ser atribuído ao seu servidor, ou aparecem apenas na cadeia ARC) e não são considerados no veredito."
+  },
   "cardTitleArc": {
     "message": "CADEIA ARC (Verificação de encaminhamento)"
   },

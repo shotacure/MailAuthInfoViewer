@@ -128,6 +128,12 @@
   "mailingListNote": {
     "message": "Domain-Abweichung kann durch Mailinglisten-Weiterleitung verursacht werden"
   },
+  "reportedUnverifiedLabel": {
+    "message": "Gemeldet, ungeprüft"
+  },
+  "reportedUnverifiedNotice": {
+    "message": "Vom empfangenden Server gemeldete Ergebnisse. Sie konnten nicht unabhängig überprüft werden (die Authentication-Results konnten Ihrem Server nicht zugeordnet werden oder erscheinen nur in der ARC-Kette) und fließen nicht in die Bewertung ein."
+  },
   "cardTitleArc": {
     "message": "ARC-KETTE (Weiterleitungsverifizierung)"
   },

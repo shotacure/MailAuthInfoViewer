@@ -128,6 +128,12 @@
   "mailingListNote": {
     "message": "La discrepanza di dominio potrebbe essere dovuta all'inoltro tramite mailing list"
   },
+  "reportedUnverifiedLabel": {
+    "message": "Segnalato, non verificato"
+  },
+  "reportedUnverifiedNotice": {
+    "message": "Risultati segnalati dal tuo server di ricezione. Non è stato possibile verificarli in modo indipendente (l'intestazione Authentication-Results non è attribuibile al tuo server, oppure compaiono solo nella catena ARC) e non sono conteggiati nel verdetto."
+  },
   "cardTitleArc": {
     "message": "CATENA ARC (Verifica inoltro)"
   },

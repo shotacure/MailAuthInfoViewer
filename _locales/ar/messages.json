@@ -128,6 +128,12 @@
   "mailingListNote": {
     "message": "قد يكون عدم تطابق النطاق بسبب إعادة التوجيه عبر قائمة بريدية"
   },
+  "reportedUnverifiedLabel": {
+    "message": "مُبلَّغ، غير مُتحقَّق"
+  },
+  "reportedUnverifiedNotice": {
+    "message": "نتائج أبلغ عنها خادم الاستقبال لديك. تعذّر التحقق منها بشكل مستقل (تعذّر نسب ترويسة Authentication-Results إلى خادمك، أو أنها تظهر فقط في سلسلة ARC)، ولذلك لا تُحتسب في الحكم."
+  },
   "cardTitleArc": {
     "message": "سلسلة ARC (التحقق من إعادة التوجيه)"
   },

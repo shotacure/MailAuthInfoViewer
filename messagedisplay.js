@@ -348,10 +348,12 @@
       const authHeaders = trustedRegular;
 
       // セミコロンで区切ってメソッド単位に分割し、認証タイプのステータスを抽出
-      // 分割は splitOnTopLevelSemicolons を用い、コメント括弧内のセミコロンを保護する
-      const parseAuthStatus = (type) => {
+      // 分割は splitOnTopLevelSemicolons を用い、コメント括弧内のセミコロンを保護する。
+      // 任意のヘッダ群を対象に取れるよう汎用化し、信頼済み A-R 以外
+      // （authserv-id 不一致で除外したものや ARC-AR）の報告値抽出にも再利用する。
+      const statusFromHeaderList = (headerList, type) => {
         const regex = new RegExp(`\\b${type}\\s*=\\s*([a-zA-Z0-9]+)`, "i");
-        for (const h of authHeaders) {
+        for (const h of headerList) {
           const methods = splitOnTopLevelSemicolons(h).slice(1);
           for (const m of methods) {
             const match = m.match(regex);
@@ -360,6 +362,7 @@
         }
         return "none";
       };
+      const parseAuthStatus = (type) => statusFromHeaderList(authHeaders, type);
 
       // ■ 複数 DKIM 署名への対応
       // メールによっては複数の DKIM 署名があり、一部は pass・一部は fail のことがある。
@@ -649,6 +652,35 @@
       };
       const strength = detectStrengthWarnings();
 
+      // ■ 信頼できないソースからの報告値（判定には一切用いない・断り書き表示用）
+      // ある方式の信頼済み判定が none のとき、次の「信頼しないソース」に結果が
+      // あれば、それを「受信サーバの報告値（未検証）」として控えめに surface する。
+      //   ① authserv-id 不一致で除外した標準 Authentication-Results
+      //   ② ARC-Authentication-Results（暗号検証不能・偽造可能なため判定外）
+      // 設計思想（グリーン昇格は保守的に）を守るため、これらはバッジ・カード判定に
+      // 影響させず、ヘッダのピル＋ツールチップで情報提供するに留める。
+      const buildReportedUnverified = () => {
+        const result = { spf: null, dkim: null, dmarc: null, fromUnmatchedAR: false, fromArc: false, any: false };
+        // authserv-id 不一致で信頼対象から外れた標準 A-R
+        const untrustedRegular = regularAuth.filter(h => !trustedRegular.includes(h));
+        const arcAuthHeaders = headers["arc-authentication-results"] || [];
+        const trustedStatus = { spf: spfStatus, dkim: dkimResult.aggregated, dmarc: dmarcStatus };
+        for (const type of ["spf", "dkim", "dmarc"]) {
+          // 信頼済み判定で結果が出ている方式は報告不要（重複・矛盾の糊塗を避ける）
+          if (trustedStatus[type] && trustedStatus[type] !== "none") continue;
+          // ①不一致だった標準 A-R を優先、無ければ②ARC-AR
+          let status = statusFromHeaderList(untrustedRegular, type);
+          let viaAR = status !== "none";
+          if (!viaAR) status = statusFromHeaderList(arcAuthHeaders, type);
+          if (status === "none") continue;
+          result[type] = status;
+          if (viaAR) result.fromUnmatchedAR = true; else result.fromArc = true;
+          result.any = true;
+        }
+        return result;
+      };
+      const reportedUnverified = buildReportedUnverified();
+
       return {
         authServId: trustedRegular.length > 0
           ? splitOnTopLevelSemicolons(trustedRegular[0])[0].trim()
@@ -657,7 +689,8 @@
         dkim: { status: dkimResult.aggregated, detail: dkimDetail, signatures: dkimResult.results },
         dmarc: { status: dmarcStatus, detail: dmarcDetail },
         alignment,
-        strength
+        strength,
+        reportedUnverified
       };
     };
 
@@ -1427,6 +1460,16 @@
         .maiv-verdict-reason.reason-untrusted {
           background-color: var(--maiv-untrusted-bg); color: var(--maiv-untrusted-text);
         }
+        /* 信頼できない報告値ピル: 判定に算入しない情報提供。点線下線とヘルプ
+           カーソルで「hover で全文の断り書きが出る」ことを示す。控えめな情報色
+           （privacy 系）を流用し、警告色と混同させない。 */
+        .maiv-reported-pill {
+          font-size: 10px; font-weight: bold;
+          padding: 2px 8px; border-radius: 10px; margin-left: 8px;
+          background-color: var(--maiv-privacy-bg); color: var(--maiv-privacy-text);
+          white-space: nowrap; cursor: help;
+          text-decoration: underline dotted; text-underline-offset: 2px;
+        }
 
         .maiv-toggle-icon { margin-left: 15px; margin-right: 15px; color: var(--maiv-text-faint); transition: transform 0.3s; display: inline-block; }
         .maiv-toggle-icon.expanded { transform: rotate(180deg); }
@@ -1648,6 +1691,16 @@
         if (authResults.authServId) {
           lines.push(`Authserv-Id: ${authResults.authServId}`);
         }
+        // 信頼できないソース（authserv-id 不一致の標準 A-R / ARC-AR）からの報告値。
+        // 判定には算入していない旨を明記して情報提供する。
+        const ru = authResults.reportedUnverified;
+        if (ru && ru.any) {
+          const parts = [];
+          if (ru.spf) parts.push(`SPF:${ru.spf}`);
+          if (ru.dkim) parts.push(`DKIM:${ru.dkim}`);
+          if (ru.dmarc) parts.push(`DMARC:${ru.dmarc}`);
+          lines.push(`Reported (unverified, not counted): ${parts.join(" ")}`);
+        }
         lines.push("");
 
         // アライメントセクション
@@ -1811,6 +1864,24 @@
         verdictReasonHTML = `<span class="maiv-verdict-reasons-wrap">${tags}</span>`;
       }
 
+      // --- 信頼できない報告値ピル ---
+      // authserv-id 不一致で除外した標準 A-R / ARC-AR にしか結果が無い方式を、
+      // 「受信サーバの報告値（未検証）」としてヘッダのピル列に控えめに表示する。
+      // 判定・バッジ・各カードには一切影響しない情報提供。縦の高さを増やさないよう
+      // 専用バナーは設けず既存ピル列に同居させ、全文の断り書きはツールチップに逃がす。
+      // 先頭の ℹ️ アイコン・点線下線・ヘルプカーソルで「hover で説明が出る」ことを示す。
+      let reportedUnverifiedTag = "";
+      const ru = authResults.reportedUnverified;
+      if (ru && ru.any) {
+        const parts = [];
+        if (ru.spf) parts.push(`SPF:${ru.spf}`);
+        if (ru.dkim) parts.push(`DKIM:${ru.dkim}`);
+        if (ru.dmarc) parts.push(`DMARC:${ru.dmarc}`);
+        reportedUnverifiedTag =
+          `<span class="maiv-reported-pill" title="${escapeHTML(msg("reportedUnverifiedNotice"))}">` +
+          `ℹ️ ${escapeHTML(msg("reportedUnverifiedLabel"))} ${escapeHTML(parts.join(" "))}</span>`;
+      }
+
       const headerHTML = `
         <div class="maiv-header" id="maiv-header-toggle" title="${escapeHTML(msg("toggleDetails"))}"
              aria-expanded="${security.shouldAutoExpand}" aria-controls="maiv-body-wrapper">
@@ -1818,6 +1889,7 @@
           <span class="maiv-header-domain">${headerDomainText}</span>
           ${mailingListTag}
           ${verdictReasonHTML}
+          ${reportedUnverifiedTag}
           <span style="flex-grow:1;"></span>
           <button class="maiv-copy-btn" id="maiv-copy-btn" title="${escapeHTML(msg("copyButton"))}" type="button">📋 ${escapeHTML(msg("copyButton"))}</button>
           <span class="maiv-toggle-icon" id="maiv-toggle-icon" aria-hidden="true">▼</span>

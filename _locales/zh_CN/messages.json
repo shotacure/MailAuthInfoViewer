@@ -128,6 +128,12 @@
   "mailingListNote": {
     "message": "域名不匹配可能是因为邮件列表转发所致"
   },
+  "reportedUnverifiedLabel": {
+    "message": "已报告，未验证"
+  },
+  "reportedUnverifiedNotice": {
+    "message": "接收服务器报告的结果。无法独立验证（Authentication-Results 无法归属到您的服务器，或仅存在于 ARC 链中），因此不计入判定。"
+  },
   "cardTitleArc": {
     "message": "ARC 链（转发验证）"
   },
