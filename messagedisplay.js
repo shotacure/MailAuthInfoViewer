@@ -269,28 +269,55 @@
       const getLastReceivedBy = () => {
         const received = headers["received"] || [];
         if (received.length === 0) return "";
-        // received[0] が最新（受信MTA自身が追加）。
-        // ただし Gmail / Google Workspace 等は配送の最終段で
-        //   Received: by 2002:<IPv6> with SMTP id ...
-        // という内部ハンドオフを最上段に積む。この by は IP リテラルであって
-        // authserv-id（例: mx.google.com）になり得ないため、これをそのまま
-        // 最終受信ホストに採用すると、本来信頼すべき Authentication-Results が
-        // authserv-id 不一致で破棄され、DKIM/DMARC が none に化けてしまう。
-        // そこで by が IP リテラル（IPv4 / IPv6）の Received は読み飛ばし、
-        // 最初に現れる実ホスト名の by を最終受信ホストとして採用する。
-        // 内部ホップは境界 MTA より上に積まれるため、最初の実ホスト名は必ず
-        // 境界 MTA（authserv を発行したホスト）を指し、信頼境界は保たれる。
+
+        // authserv-id 照合に使う「信頼する受信ホスト」を求める。
+        // 単純に received[0] の by を採るだけでは、受信プロバイダの構成によって
+        // 「最終配送ホップ ≠ 認証（Authentication-Results 付与）ホスト」となり、
+        // 正規の A-R が authserv-id 不一致で破棄されてしまう。代表的な2パターン:
+        //   - Gmail / Google Workspace: 最上段に内部ハンドオフ
+        //       Received: by 2002:<IPv6> with SMTP id ...
+        //     を積む（by が IP リテラルで authserv-id になり得ない）。
+        //   - Fastmail (messagingengine.com): Cyrus LMTP の内部ホスト
+        //       Received: ... by slotpiXXmYY (Cyrus ...) with LMTPA
+        //     が最終配送だが、認証は phl-mx-NN.messagingengine.com が実施し
+        //     A-R を付与する。間に *.internal / localhost の内部ホップが挟まる。
+        // そこで以下の優先順で境界 MTA（=authserv 発行ホスト）を特定する。
+
+        const extractBy = (line) => {
+          const m = line.match(/\bby\s+([^\s;]+)/i);
+          return m ? m[1].toLowerCase().replace(/^\[|\]$/g, "") : "";
+        };
+        const isIpLiteral = (h) => isIPv4Like(h) || isIPv6Like(h);
+        // 公開到達可能な実 FQDN か（ドットを含み、IP リテラルでも内部/予約
+        // ホスト名でもない）。.internal/.local 等や単一ラベル名・localhost を除外する。
+        const isPublicFqdn = (h) =>
+          !!h && h.includes(".") && !isIpLiteral(h) && h !== "localhost" &&
+          !/\.(internal|local|lan|intranet|localdomain|home\.arpa)$/.test(h);
+
+        // 優先1: 外部（公開 IP）から受信した最初のホップ＝境界 MTA。その by を採用。
+        // 内部配送ホップ（private IP / localhost / from 無し）はこの段で自然に飛ぶ。
+        // 単一ラベル名の受信ホストでも、公開 IP から受信していれば正しく採用される。
         for (const line of received) {
-          const byMatch = line.match(/\bby\s+([^\s;]+)/i);
-          if (!byMatch) continue;
-          const host = byMatch[1].toLowerCase().replace(/^\[|\]$/g, "");
-          if (isIPv4Like(host) || isIPv6Like(host)) continue;
-          return host;
+          const fromMatch = line.match(/\bfrom\s+(.+?)(?=\s+by\s+|;|$)/i);
+          const fromIP = extractIPFromReceived(fromMatch ? fromMatch[1] : "");
+          if (fromIP && !isPrivateIP(fromIP)) {
+            const by = extractBy(line);
+            if (by && !isIpLiteral(by)) return by;
+            break; // 境界は見つかったが by が使えない → 後段へ
+          }
         }
-        // すべて IP リテラル等で実ホスト名が得られない場合は、従来どおり
-        // 先頭の by をそのまま返す（フォールバック）。
-        const firstByMatch = received[0].match(/\bby\s+([^\s;]+)/i);
-        return firstByMatch ? firstByMatch[1].toLowerCase() : "";
+
+        // 優先2: 公開 IP からの受信ホップが無い場合（自己送信や全内部経路）。
+        // 先頭から最初の実 FQDN の by を採用する。Fastmail の自己送信のように
+        // slotpiXX（単一ラベル）・*.internal・localhost ばかりの経路でも、
+        // 認証ホスト phl-mx-NN.messagingengine.com に正しく当てられる。
+        for (const line of received) {
+          const by = extractBy(line);
+          if (isPublicFqdn(by)) return by;
+        }
+
+        // 優先3: いずれも該当しなければ従来どおり received[0] の by を返す。
+        return extractBy(received[0]);
       };
 
       const filterByAuthServId = (authResultHeaders, trustedHost) => {
