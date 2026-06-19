@@ -128,6 +128,12 @@
   "mailingListNote": {
     "message": "網域不符可能是因為郵件群組轉發所致"
   },
+  "reportedUnverifiedLabel": {
+    "message": "已回報，未驗證"
+  },
+  "reportedUnverifiedNotice": {
+    "message": "接收伺服器回報的結果。無法獨立驗證（Authentication-Results 無法歸屬至您的伺服器，或僅存在於 ARC 鏈中），因此不列入判定。"
+  },
   "cardTitleArc": {
     "message": "ARC 鏈（轉發驗證）"
   },

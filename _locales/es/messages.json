@@ -128,6 +128,12 @@
   "mailingListNote": {
     "message": "La discrepancia de dominio puede deberse al reenvío por lista de correo"
   },
+  "reportedUnverifiedLabel": {
+    "message": "Informado, sin verificar"
+  },
+  "reportedUnverifiedNotice": {
+    "message": "Resultados informados por su servidor de recepción. No se pudieron verificar de forma independiente (la cabecera Authentication-Results no pudo atribuirse a su servidor, o solo aparecen en la cadena ARC) y no se tienen en cuenta en el veredicto."
+  },
   "cardTitleArc": {
     "message": "CADENA ARC (Verificación de reenvío)"
   },

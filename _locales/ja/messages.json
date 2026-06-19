@@ -136,6 +136,12 @@
   "mailingListNote": {
     "message": "ドメイン不一致はメーリングリスト転送が原因の可能性があります"
   },
+  "reportedUnverifiedLabel": {
+    "message": "報告・未検証"
+  },
+  "reportedUnverifiedNotice": {
+    "message": "受信サーバが報告した結果です。Authentication-Results を受信サーバに帰属できない、または ARC チェーンにのみ存在するため独立に検証できておらず、判定には算入していません。"
+  },
   "cardTitleArc": {
     "message": "ARCチェーン（転送検証）"
   },

@@ -128,6 +128,12 @@
   "mailingListNote": {
     "message": "La non-concordance de domaine peut être due au transfert par liste de diffusion"
   },
+  "reportedUnverifiedLabel": {
+    "message": "Signalé, non vérifié"
+  },
+  "reportedUnverifiedNotice": {
+    "message": "Résultats signalés par votre serveur de réception. Ils n'ont pas pu être vérifiés de façon indépendante (l'en-tête Authentication-Results n'a pas pu être attribué à votre serveur, ou les résultats n'apparaissent que dans la chaîne ARC) et ne sont pas pris en compte dans le verdict."
+  },
   "cardTitleArc": {
     "message": "CHAÎNE ARC (Vérification de transfert)"
   },

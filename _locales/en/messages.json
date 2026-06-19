@@ -136,6 +136,12 @@
   "mailingListNote": {
     "message": "Domain mismatch may be due to mailing list forwarding"
   },
+  "reportedUnverifiedLabel": {
+    "message": "Reported, unverified"
+  },
+  "reportedUnverifiedNotice": {
+    "message": "Results reported by your receiving server. They could not be independently verified (the Authentication-Results could not be attributed to your server, or they appear only in the ARC chain) and are not counted in the verdict."
+  },
   "cardTitleArc": {
     "message": "ARC CHAIN (Forwarding Verification)"
   },
