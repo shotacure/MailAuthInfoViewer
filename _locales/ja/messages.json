@@ -250,6 +250,18 @@
   "optionsImport": {
     "message": "インポート"
   },
+  "optionsDisplayTitle": {
+    "message": "表示設定"
+  },
+  "optionsDisplayDesc": {
+    "message": "メッセージ表示画面での情報バーの見え方を調整します。"
+  },
+  "optionsCompactMode": {
+    "message": "コンパクト表示（情報バーの高さを抑える）"
+  },
+  "optionsSaved": {
+    "message": "保存しました"
+  },
   "verdictReasonUntrusted": {
     "message": "未信頼のリンクドメイン"
   },

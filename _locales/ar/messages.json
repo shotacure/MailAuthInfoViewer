@@ -248,6 +248,18 @@
   "optionsImport": {
     "message": "استيراد"
   },
+  "optionsDisplayTitle": {
+    "message": "العرض"
+  },
+  "optionsDisplayDesc": {
+    "message": "اضبط طريقة عرض شريط المعلومات في عرض الرسائل."
+  },
+  "optionsCompactMode": {
+    "message": "الوضع المضغوط (تقليل ارتفاع شريط المعلومات)"
+  },
+  "optionsSaved": {
+    "message": "تم الحفظ"
+  },
   "verdictReasonUntrusted": {
     "message": "نطاق رابط غير موثوق"
   },

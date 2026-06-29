@@ -248,6 +248,18 @@
   "optionsImport": {
     "message": "Importa"
   },
+  "optionsDisplayTitle": {
+    "message": "Visualizzazione"
+  },
+  "optionsDisplayDesc": {
+    "message": "Regola come viene visualizzata la barra delle informazioni nella vista dei messaggi."
+  },
+  "optionsCompactMode": {
+    "message": "Modalità compatta (riduci l'altezza della barra delle informazioni)"
+  },
+  "optionsSaved": {
+    "message": "Salvato"
+  },
   "verdictReasonUntrusted": {
     "message": "Dominio del link non attendibile"
   },

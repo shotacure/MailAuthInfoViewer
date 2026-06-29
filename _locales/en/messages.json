@@ -250,6 +250,18 @@
   "optionsImport": {
     "message": "Import"
   },
+  "optionsDisplayTitle": {
+    "message": "Display"
+  },
+  "optionsDisplayDesc": {
+    "message": "Adjust how the information bar is shown in the message view."
+  },
+  "optionsCompactMode": {
+    "message": "Compact mode (reduce the height of the info bar)"
+  },
+  "optionsSaved": {
+    "message": "Saved"
+  },
   "verdictReasonUntrusted": {
     "message": "Untrusted link domain"
   },

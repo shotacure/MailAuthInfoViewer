@@ -103,6 +103,8 @@ Deceptive link text detected — the displayed URL differs from the actual desti
     * **レポートのクリップボード機能:** ダッシュボードヘッダの「コピー」ボタンで、総合判定と判定理由・認証結果・アライメント・強度警告・送信者情報・TLS 状態付き送達経路・リンク安全性所見を含む構造化プレーンテキストレポートをコピーできます。チームチャット・チケット・インシデント報告にそのまま貼り付けられます。
 * **Dark Mode:** Full dark mode support that follows your system preference.
     * **ダークモード:** システムの設定に連動した完全なダークモード対応。
+* **Compact Display Mode:** An optional setting on the add-on settings page that reduces the height of the always-visible info bar (tighter container padding, header, badge, and domain name), so it takes up less vertical space on small screens. It is purely cosmetic — readability is preserved, dark mode is fully respected, and the badge, cards, and verdict are unchanged. Off by default.
+    * **コンパクト表示モード:** アドオン設定画面で有効化できる任意設定で、常時表示される情報バーの高さ（コンテナ余白・ヘッダ・バッジ・ドメイン名）を抑え、小さい画面でメール本文の縦スペースを取りすぎないようにします。あくまで見た目だけの調整で、可読性は保たれ、ダークモードにも完全対応し、バッジ・各カード・総合判定は変わりません。既定はオフです。
 * **12-Language Support (i18n):** Available in English, Japanese, French, German, Spanish, Arabic, Korean, Traditional Chinese, Simplified Chinese, Portuguese (Brazil), Russian, and Italian.
     * **12言語対応:** 英語、日本語、フランス語、ドイツ語、スペイン語、アラビア語、韓国語、繁体字中国語、簡体字中国語、ポルトガル語（ブラジル）、ロシア語、イタリア語に対応。
 * **Privacy First:** All processing is performed strictly locally within Thunderbird. No external network requests are made. No data is collected or transmitted.
@@ -223,7 +225,7 @@ Both scripts read the version from `manifest.json`, stage the required files inc
 manifest.json           Extension manifest with i18n support
 background.js           Registers content scripts, handles message API
 psl_data.js             Public Suffix List data + getOrganizationalDomain()
-options.html + options.js  Trusted link domains management (add/remove/import/export)
+options.html + options.js  Trusted link domains management (add/remove/import/export) + compact display mode toggle
 messagedisplay.js       Main logic — 9 core functions:
 │
 ├─ parseEnvelope()          Address extraction, PSL-based alignment, mailing list, display name spoof & Reply-To mismatch detection
@@ -234,7 +236,7 @@ messagedisplay.js       Main logic — 9 core functions:
 ├─ analyzeLinkSafety()      Four-tier phishing detection (critical/suspicious/untrusted/privacy): deceptive text, dangerous schemes, forms, IP/IDN/shortener links (aggregated per type), all-external & CTA analysis, tracking pixels, resource domains, trusted domain whitelist, external link domain collection for one-click trust
 ├─ determineSecurityStatus()  5-tier verdict (phishing > auth failed > auth pass warning > partial > auth pass) with auth-gated alignment, per-reason tags including "link_untrusted", and privacy-level findings excluded from verdict
 ├─ generateReportText()     Generates structured plain-text analysis report with all findings for clipboard export
-└─ buildUI()                Shadow DOM isolated, i18n'd, dark-mode-aware rendering with always-collapsed panel, collapsible auth cards (full RFC 8601 properties), per-signature DKIM display, authentication strength warnings inside DKIM/DMARC cards, TLS status column in delivery route table with visual indicators (🔒⚠️🔓), collapsible link safety with severity-aware styling (critical/suspicious/untrusted/privacy), inline Trust shortcut on untrusted findings when a single external domain is identified, copy-to-clipboard button in header, verdict reason tags
+└─ buildUI()                Shadow DOM isolated, i18n'd, dark-mode-aware rendering with always-collapsed panel, optional compact display mode (reduced info-bar height), collapsible auth cards (full RFC 8601 properties), per-signature DKIM display, authentication strength warnings inside DKIM/DMARC cards, TLS status column in delivery route table with visual indicators (🔒⚠️🔓), collapsible link safety with severity-aware styling (critical/suspicious/untrusted/privacy), inline Trust shortcut on untrusted findings when a single external domain is identified, copy-to-clipboard button in header, verdict reason tags
 
 _locales/
 ├─ en/messages.json     English (default)

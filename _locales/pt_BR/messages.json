@@ -248,6 +248,18 @@
   "optionsImport": {
     "message": "Importar"
   },
+  "optionsDisplayTitle": {
+    "message": "Exibição"
+  },
+  "optionsDisplayDesc": {
+    "message": "Ajuste como a barra de informações é exibida na visualização da mensagem."
+  },
+  "optionsCompactMode": {
+    "message": "Modo compacto (reduzir a altura da barra de informações)"
+  },
+  "optionsSaved": {
+    "message": "Salvo"
+  },
   "verdictReasonUntrusted": {
     "message": "Domínio de link não confiável"
   },

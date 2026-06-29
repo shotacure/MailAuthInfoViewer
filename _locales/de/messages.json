@@ -248,6 +248,18 @@
   "optionsImport": {
     "message": "Importieren"
   },
+  "optionsDisplayTitle": {
+    "message": "Anzeige"
+  },
+  "optionsDisplayDesc": {
+    "message": "Passen Sie an, wie die Informationsleiste in der Nachrichtenansicht angezeigt wird."
+  },
+  "optionsCompactMode": {
+    "message": "Kompaktmodus (Höhe der Informationsleiste verringern)"
+  },
+  "optionsSaved": {
+    "message": "Gespeichert"
+  },
   "verdictReasonUntrusted": {
     "message": "Nicht vertrauenswürdige Link-Domain"
   },

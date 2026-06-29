@@ -248,6 +248,18 @@
   "optionsImport": {
     "message": "Импорт"
   },
+  "optionsDisplayTitle": {
+    "message": "Отображение"
+  },
+  "optionsDisplayDesc": {
+    "message": "Настройте отображение информационной панели в окне просмотра сообщения."
+  },
+  "optionsCompactMode": {
+    "message": "Компактный режим (уменьшить высоту информационной панели)"
+  },
+  "optionsSaved": {
+    "message": "Сохранено"
+  },
   "verdictReasonUntrusted": {
     "message": "Недоверенный домен ссылки"
   },
