@@ -1473,13 +1473,17 @@
 
         /* コンパクト表示モード: options 画面で有効化すると .maiv-container に
            付与される。小さい画面でメール本文の縦スペースを圧迫しないよう、
-           常時表示される通知バー（コンテナ余白・ヘッダ余白・バッジ・ドメイン名）の
-           縦方向の占有を縮める。配色や判定には一切手を入れず、ダークモードの
-           CSS 変数もそのまま継承するため、表示の意味は変わらず高さだけが下がる。 */
-        .maiv-container.maiv-compact { padding: 4px 10px; margin-bottom: 8px; }
-        .maiv-container.maiv-compact .maiv-header { padding: 1px 0; }
-        .maiv-container.maiv-compact .maiv-badge { padding: 3px 7px; font-size: 12px; }
-        .maiv-container.maiv-compact .maiv-header-domain { font-size: 14px; }
+           常時表示される通知バーの縦方向の占有を大きく抑える。バーの高さは
+           その中で最も背の高い要素で決まるため、コンテナ余白・ヘッダ余白・
+           バッジ・ドメイン名に加えて、同じ行に並ぶコピーボタンも併せて縮める
+           （いずれか一つでも大きいままだとバー全体が縮まらない）。配色や判定には
+           手を入れず、ダークモードの CSS 変数もそのまま継承するため、表示の意味は
+           変わらず高さだけが下がる。 */
+        .maiv-container.maiv-compact { padding: 2px 8px; margin-bottom: 4px; }
+        .maiv-container.maiv-compact .maiv-header { padding: 0; }
+        .maiv-container.maiv-compact .maiv-badge { padding: 2px 6px; font-size: 11px; }
+        .maiv-container.maiv-compact .maiv-header-domain { font-size: 12px; }
+        .maiv-container.maiv-compact .maiv-copy-btn { padding: 2px 6px; font-size: 10px; }
 
         .maiv-toggle-icon { margin-left: 15px; margin-right: 15px; color: var(--maiv-text-faint); transition: transform 0.3s; display: inline-block; }
         .maiv-toggle-icon.expanded { transform: rotate(180deg); }
