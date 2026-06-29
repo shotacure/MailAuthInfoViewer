@@ -248,6 +248,18 @@
   "optionsImport": {
     "message": "导入"
   },
+  "optionsDisplayTitle": {
+    "message": "显示"
+  },
+  "optionsDisplayDesc": {
+    "message": "调整信息栏在邮件视图中的显示方式。"
+  },
+  "optionsCompactMode": {
+    "message": "紧凑模式（缩小信息栏高度）"
+  },
+  "optionsSaved": {
+    "message": "已保存"
+  },
   "verdictReasonUntrusted": {
     "message": "未信任的链接域名"
   },

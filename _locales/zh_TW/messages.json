@@ -248,6 +248,18 @@
   "optionsImport": {
     "message": "匯入"
   },
+  "optionsDisplayTitle": {
+    "message": "顯示"
+  },
+  "optionsDisplayDesc": {
+    "message": "調整資訊列在郵件檢視畫面中的顯示方式。"
+  },
+  "optionsCompactMode": {
+    "message": "精簡模式（縮小資訊列高度）"
+  },
+  "optionsSaved": {
+    "message": "已儲存"
+  },
   "verdictReasonUntrusted": {
     "message": "未信任的連結網域"
   },

@@ -1279,7 +1279,7 @@
     // =========================================================
     // 8. buildUI - UI構築 (HTML/CSS) — Shadow DOM・i18n・ダークモード完全対応
     // =========================================================
-    const buildUI = (envelope, authResults, routeHops, security, arcChain, linkSafety, trustedDomains) => {
+    const buildUI = (envelope, authResults, routeHops, security, arcChain, linkSafety, trustedDomains, compactMode) => {
 
       // --- スタイル定義 (CSS変数によるダークモード完全対応) ---
       const style = document.createElement('style');
@@ -1470,6 +1470,20 @@
           white-space: nowrap; cursor: help;
           text-decoration: underline dotted; text-underline-offset: 2px;
         }
+
+        /* コンパクト表示モード: options 画面で有効化すると .maiv-container に
+           付与される。小さい画面でメール本文の縦スペースを圧迫しないよう、
+           常時表示される通知バーの縦方向の占有を大きく抑える。バーの高さは
+           その中で最も背の高い要素で決まるため、コンテナ余白・ヘッダ余白・
+           バッジ・ドメイン名に加えて、同じ行に並ぶコピーボタンも併せて縮める
+           （いずれか一つでも大きいままだとバー全体が縮まらない）。配色や判定には
+           手を入れず、ダークモードの CSS 変数もそのまま継承するため、表示の意味は
+           変わらず高さだけが下がる。 */
+        .maiv-container.maiv-compact { padding: 2px 8px; margin-bottom: 4px; }
+        .maiv-container.maiv-compact .maiv-header { padding: 0; }
+        .maiv-container.maiv-compact .maiv-badge { padding: 2px 6px; font-size: 11px; }
+        .maiv-container.maiv-compact .maiv-header-domain { font-size: 12px; }
+        .maiv-container.maiv-compact .maiv-copy-btn { padding: 2px 6px; font-size: 10px; }
 
         .maiv-toggle-icon { margin-left: 15px; margin-right: 15px; color: var(--maiv-text-faint); transition: transform 0.3s; display: inline-block; }
         .maiv-toggle-icon.expanded { transform: rotate(180deg); }
@@ -1819,6 +1833,10 @@
       // --- コンテナ作成 ---
       const container = document.createElement("div");
       container.className = "maiv-container";
+      // コンパクト表示が有効なときは縮小用クラスを付与する。
+      // 高さ圧縮は CSS 側（.maiv-container.maiv-compact）に集約しており、
+      // ここではフラグに応じてクラスを足すだけに留める。
+      if (compactMode) container.classList.add("maiv-compact");
 
       // --- ヘッダーバッジとドメイン表示 ---
       // バッジ横のドメイン表示: 常にヘッダFromドメインを表示
@@ -2596,6 +2614,15 @@
       }
     } catch { /* storage未対応環境ではスキップ */ }
 
+    // ■ コンパクト表示設定の読み込み（options 画面で切り替え）
+    //    通知バーの高さを抑えたいユーザー向けの表示オプション。判定には影響せず、
+    //    未設定／storage 未対応環境では既定の通常表示にフォールバックする。
+    let compactMode = false;
+    try {
+      const stored = await browser.storage.local.get("compactMode");
+      compactMode = stored.compactMode === true;
+    } catch { /* storage未対応環境では通常表示 */ }
+
     const envelope = parseEnvelope(fullMsg, headers, msgHeader);
     const authResults = parseAuthResults(headers, envelope);
     const routeHops = parseRoute(headers);
@@ -2604,7 +2631,7 @@
     const linkSafety = analyzeLinkSafety(bodyContent, envelope.headerOrgDomain, trustedDomains);
     const security = determineSecurityStatus(authResults, envelope.isDomainAligned, envelope.envelopeFrom, envelope.isDisplayNameSpoofed, linkSafety);
 
-    buildUI(envelope, authResults, routeHops, security, arcChain, linkSafety, trustedDomains);
+    buildUI(envelope, authResults, routeHops, security, arcChain, linkSafety, trustedDomains, compactMode);
 
   } catch (e) {
     console.error("MailAuthInfoViewer Error:", e);

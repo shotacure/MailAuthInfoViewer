@@ -248,6 +248,18 @@
   "optionsImport": {
     "message": "Importer"
   },
+  "optionsDisplayTitle": {
+    "message": "Affichage"
+  },
+  "optionsDisplayDesc": {
+    "message": "Ajustez l'affichage de la barre d'informations dans la vue des messages."
+  },
+  "optionsCompactMode": {
+    "message": "Mode compact (réduire la hauteur de la barre d'informations)"
+  },
+  "optionsSaved": {
+    "message": "Enregistré"
+  },
   "verdictReasonUntrusted": {
     "message": "Domaine de lien non approuvé"
   },

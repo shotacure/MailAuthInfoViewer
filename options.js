@@ -9,9 +9,13 @@ const exportBtn = document.getElementById("exportBtn");
 const importBtn = document.getElementById("importBtn");
 const importFile = document.getElementById("importFile");
 const statusEl = document.getElementById("status");
+const compactCheckbox = document.getElementById("compactMode");
 
 // i18n
 document.getElementById("title").textContent = msg("optionsTitle");
+document.getElementById("displayTitle").textContent = msg("optionsDisplayTitle");
+document.getElementById("displayDesc").textContent = msg("optionsDisplayDesc");
+document.getElementById("compactLabel").textContent = msg("optionsCompactMode");
 document.getElementById("whitelistTitle").textContent = msg("optionsWhitelistTitle");
 document.getElementById("whitelistDesc").textContent = msg("optionsWhitelistDesc");
 addBtn.textContent = msg("optionsAddDomain");
@@ -138,5 +142,18 @@ importFile.addEventListener("change", async (e) => {
   importFile.value = "";
 });
 
+// コンパクト表示設定: 起動時に現在値を復元し、変更時に保存する。
+// 値は messagedisplay 側と共有する browser.storage.local の compactMode（boolean）。
+const loadCompactMode = async () => {
+  const stored = await browser.storage.local.get("compactMode");
+  compactCheckbox.checked = stored.compactMode === true;
+};
+
+compactCheckbox.addEventListener("change", async () => {
+  await browser.storage.local.set({ compactMode: compactCheckbox.checked });
+  showStatus(msg("optionsSaved"));
+});
+
 // 初期表示
 renderList();
+loadCompactMode();

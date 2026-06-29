@@ -248,6 +248,18 @@
   "optionsImport": {
     "message": "가져오기"
   },
+  "optionsDisplayTitle": {
+    "message": "표시"
+  },
+  "optionsDisplayDesc": {
+    "message": "메시지 보기에서 정보 표시줄이 표시되는 방식을 조정합니다."
+  },
+  "optionsCompactMode": {
+    "message": "간략 모드 (정보 표시줄의 높이 줄이기)"
+  },
+  "optionsSaved": {
+    "message": "저장됨"
+  },
   "verdictReasonUntrusted": {
     "message": "신뢰할 수 없는 링크 도메인"
   },
