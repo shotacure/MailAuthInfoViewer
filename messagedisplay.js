@@ -114,6 +114,62 @@
     ];
 
     // =========================================================
+    // 汎用の authserv-id 照合が成立しない受信プロバイダの定義
+    // =========================================================
+    // 以下のプロバイダは、受信境界の後ろにグローバル IP で接続された内部ホップが多段に続き
+    // （最終配送ホストは認証を実施したホストではない）、しかも付与する A-R の authserv-id が
+    // ホスト名と対応しないため、境界ホスト名との照合では正規の A-R を特定できない。
+    //   - Microsoft 365 / Exchange Online:
+    //       受信境界は EOP（*.mail.protection.outlook.com）。内部ホップは *.prod.outlook.com /
+    //       *.outlook.office365.com。A-R に authserv-id 自体が無い（RFC 8601 非準拠）。
+    //         Authentication-Results: spf=pass (sender IP is ...) smtp.mailfrom=...; dkim=pass ...
+    //   - mailbox.org:
+    //       受信境界は mx*.mailbox.org。内部ホップは *.heinlein-hosting.de。
+    //       authserv-id はホスト名ではない固定値 "incoming_mbo"。
+    // これらは parseAuthResults の detectProviderRoute で境界を特定し、生ヘッダ順序で
+    // A-R の付与位置を検証したうえで採用する。各定義:
+    //   orgDomains:         プロバイダ自身のホストの組織ドメイン
+    //   ingress:            外部から受け取る受信境界ホスト（by）のパターン
+    //   providerAuthServId: プロバイダが付与する A-R の authserv-id（null は authserv-id 無し）
+    //   arPlacement:        プロバイダが A-R を付与する位置
+    //                         "above": 受信境界の Received より上（EOP は受信後のヘッダとして積む）
+    //                         "below": 受信境界の Received の直下（Postfix + milter 構成では、
+    //                                  MTA 自身の Received の直後に milter のヘッダが挿入される）
+    //   queueIdHeader:      "below" の位置は元メール先頭に置かれた偽 A-R と区別できないため、
+    //                       受信時にプロバイダが付与するキュー ID ヘッダの値が受信境界の
+    //                       Received の "id" と一致することを要求する（受信時に初めて決まる値で
+    //                       送信者は予測できないため、プロバイダが実際に処理したことの証跡になる）
+    //   detectInternal:     組織内で完結した配送を判定・注記する対象か
+    const PROVIDER_INGRESS_RULES = [
+      {
+        name: "Microsoft 365",
+        orgDomains: ["outlook.com", "office365.com"],
+        ingress: /\.mail\.protection\.outlook\.com$/,
+        providerAuthServId: null,
+        arPlacement: "above",
+        queueIdHeader: null,
+        detectInternal: true
+      },
+      {
+        name: "mailbox.org",
+        orgDomains: ["mailbox.org", "heinlein-hosting.de"],
+        ingress: /^mx\d*\.mailbox\.org$/,
+        providerAuthServId: "incoming_mbo",
+        arPlacement: "below",
+        queueIdHeader: "x-rspamd-queue-id",
+        detectInternal: false
+      }
+    ];
+
+    // 受信ホスト名から該当するプロバイダ定義を返す（該当なしは undefined）
+    const findProviderRule = (host) => {
+      if (!host) return undefined;
+      const getOrgDomain = window.getOrganizationalDomain || ((d) => d);
+      const org = getOrgDomain(host.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, ""));
+      return PROVIDER_INGRESS_RULES.find(r => r.orgDomains.includes(org));
+    };
+
+    // =========================================================
     // 1. parseEnvelope - エンベロープ情報・アドレスアライメント・メーリングリスト検知
     // =========================================================
     const parseEnvelope = (fullMsg, headers, msgHeader) => {
@@ -247,7 +303,8 @@
     // =========================================================
     // 2. parseAuthResults - メール認証結果の解析 (authserv-id フィルタリング付き)
     // =========================================================
-    const parseAuthResults = (headers, envelope) => {
+    // rawHeaderOrder: 生ヘッダを上から順に並べた [{name, value}]（取得できない場合は null）
+    const parseAuthResults = (headers, envelope, rawHeaderOrder) => {
       // ■ authserv-id による信頼フィルタリング
       // 最新の Received ヘッダの by ホスト名と Authentication-Results の authserv-id を比較し、
       // 信頼できるヘッダのみを採用する。攻撃者が注入した偽の認証結果を排除するため。
@@ -321,7 +378,7 @@
         // 単一ラベル名の受信ホストでも、公開 IP から受信していれば正しく採用される。
         // 括弧内 IPv6 は抽出しない: Exchange 系の内部ホップは "(2001:db8::1)" の形で
         // 公開 IPv6 を記録するため、これを外部受信とみなすと内部ホップを境界と誤認する。
-        // （Microsoft 365 は detectMicrosoft365Route で別途ホスト名ベースに境界を特定する）
+        // （Microsoft 365 等は detectProviderRoute で別途ホスト名ベースに境界を特定する）
         for (const line of received) {
           const fromMatch = line.match(/\bfrom\s+(.+?)(?=\s+by\s+|;|$)/i);
           const fromIP = extractIPFromReceived(fromMatch ? fromMatch[1] : "", false);
@@ -363,73 +420,132 @@
         return trusted;
       };
 
-      // ■ Microsoft 365 / Exchange Online の受信経路判定
-      // Exchange Online は次の2点で汎用の authserv-id 照合が成立しない:
-      //   - 受信境界（EOP: *.mail.protection.outlook.com）の後ろに、グローバル IPv6 で
-      //     接続された内部ホップ（*.prod.outlook.com / *.outlook.office365.com）が多段に続き、
-      //     最終配送ホストは認証を実施したホストではない。
-      //   - 付与する Authentication-Results に authserv-id が無い（RFC 8601 非準拠）。
-      //       Authentication-Results: spf=pass (sender IP is ...) smtp.mailfrom=...; dkim=pass ...
-      // そこで「最上段から連続する Microsoft 内部ホップをたどり、外部から EOP に入った
-      // 受信ホップに到達できた場合のみ」その EOP ホストを受信境界として特定する。
+      // authserv-id を持たない A-R か（先頭セグメントが "method=result" の形をしている）
+      const lacksAuthServId = (h) => /^\s*[a-z][a-z0-9-]*\s*=/i.test(splitOnTopLevelSemicolons(h)[0]);
+
+      // プロバイダが付与した形式の A-R か（PROVIDER_INGRESS_RULES の providerAuthServId で判定）
+      const isProviderAR = (rule, h) => rule.providerAuthServId === null
+        ? lacksAuthServId(h)
+        : splitOnTopLevelSemicolons(h)[0].trim().toLowerCase() === rule.providerAuthServId;
+
+      // ■ プロバイダ受信経路の判定
+      // 「最上段から連続するプロバイダ内部ホップをたどり、外部から受信境界に入ったホップに
+      // 到達できた場合のみ」そのホストを受信境界として特定する。
       //   - 最上段 Received は実際の受信側が書くため外部から偽造できない。
       //   - 前段の from と次段の by が同一サーバ（先頭ラベル一致）である連続性を要求し、
       //     攻撃者が下段に積んだ偽の Received へ走査が乗り移らないようにする。
       //     （EOP は from に *.prod.outlook.com、by に *.mail.protection.outlook.com という
       //       別名を用いるため、FQDN 全体ではなくサーバ名である先頭ラベルで比較する）
       // 戻り値:
-      //   ingressHost:  外部→EOP の受信ホップの by（見つからなければ ""）
-      //   internalOnly: 全経路が Microsoft 内部で完結（組織内配送）していれば true
-      const detectMicrosoft365Route = () => {
-        const result = { ingressHost: "", internalOnly: false };
+      //   rule:         最上段がこのプロバイダだった場合の定義（該当なしは null）
+      //   ingressHost:  外部→受信境界のホップの by（見つからなければ ""）
+      //   ingressIndex: そのホップの received 配列上の位置（見つからなければ -1）
+      //   internalOnly: 全経路がプロバイダ内部で完結（組織内配送）していれば true
+      const detectProviderRoute = () => {
+        const result = { rule: null, ingressHost: "", ingressIndex: -1, internalOnly: false };
         const received = headers["received"] || [];
         if (received.length === 0) return result;
 
         const getOrgDomain = window.getOrganizationalDomain || ((d) => d);
-        const isMicrosoftHost = (h) => !!h && ["outlook.com", "office365.com"].includes(getOrgDomain(h));
         const firstLabel = (h) => (h || "").split(".")[0];
+        const normalize = (h) => h.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
         const hops = received.map(line => {
           const byMatch = line.match(/\bby\s+([^\s;]+)/i);
           const fromMatch = line.match(/\bfrom\s+(.+?)(?=\s+by\s+|;|$)/i);
           const fromHost = fromMatch ? fromMatch[1].trim().split(/\s+/)[0] : "";
-          const normalize = (h) => h.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
           return {
             by: byMatch ? normalize(byMatch[1]) : "",
             fromHost: normalize(fromHost)
           };
         });
 
+        // 最上段の受信ホストからプロバイダを特定する
+        const rule = findProviderRule(hops[0].by);
+        if (!rule) return result;
+        result.rule = rule;
+        const isProviderHost = (h) => !!h && rule.orgDomains.includes(getOrgDomain(h));
+
         for (let i = 0; i < hops.length; i++) {
           const hop = hops[i];
-          // 受信ホストが Microsoft でなくなった時点で Microsoft の受信経路ではない
-          if (!isMicrosoftHost(hop.by)) return result;
+          // 受信ホストがプロバイダでなくなった時点でプロバイダの受信経路ではない
+          if (!isProviderHost(hop.by)) return result;
           // 前段の送信元と、このホップの受信ホストが同一サーバでなければ連続性が途切れている
           if (i > 0 && firstLabel(hops[i - 1].fromHost) !== firstLabel(hop.by)) return result;
           // 同一サーバが自身から受け取ったホップ（from X by X）は組織内での送信受付の起点。
           // これより下段はクライアントが送信時に含めた任意のヘッダであり信頼できないため、
           // ここで走査を打ち切り、組織内で発生した配送として扱う。
-          // （内部の送信者が偽の EOP 受信ホップを下段に積んで境界を詐称することを防ぐ）
+          // （内部の送信者が偽の受信境界ホップを下段に積んで境界を詐称することを防ぐ）
           if (firstLabel(hop.fromHost) === firstLabel(hop.by)) {
             result.internalOnly = true;
             return result;
           }
-          if (!isMicrosoftHost(hop.fromHost)) {
-            // Microsoft 外から受信したホップ。EOP の受信ホストであれば受信境界として採用する。
+          if (!isProviderHost(hop.fromHost)) {
+            // プロバイダ外から受信したホップ。受信境界ホストであれば境界として採用する。
             // それ以外（SMTP AUTH による送信受付等）は境界として扱わない。
-            if (/\.mail\.protection\.outlook\.com$/.test(hop.by)) result.ingressHost = hop.by;
+            if (rule.ingress.test(hop.by)) {
+              result.ingressHost = hop.by;
+              result.ingressIndex = i;
+            }
             return result;
           }
         }
-        // 外部から入ったホップが一つも無く、全経路が Microsoft 内部で連続している
+        // 外部から入ったホップが一つも無く、全経路がプロバイダ内部で連続している
         result.internalOnly = true;
         return result;
       };
 
-      // authserv-id を持たない A-R か（先頭セグメントが "method=result" の形をしている）
-      const lacksAuthServId = (h) => /^\s*[a-z][a-z0-9-]*\s*=/i.test(splitOnTopLevelSemicolons(h)[0]);
+      // ■ 生ヘッダ順序による A-R 付与位置の検証
+      // getFull のヘッダはヘッダ名ごとにまとめられ、異なるヘッダ間の前後関係が失われる。
+      // そこで生のヘッダ順（rawHeaderOrder: [{name, value}]、上から順）を用いて、
+      // 採用候補の A-R がプロバイダの付与位置（rule.arPlacement）にあることを確かめる。
+      //   "above": 受信境界の Received より上。受信境界より上のヘッダは受信後に
+      //            プロバイダが付与したものであり、元メールに注入された偽の A-R は
+      //            必ず受信境界より下に位置するため、プロバイダが A-R の付与や偽 A-R の
+      //            除去を行わなかった場合でも偽物を採用しない。
+      //   "below": 受信境界の Received の直下（次の Received より前）。この位置は元メール
+      //            先頭に置かれた偽 A-R とも重なるため、キュー ID の一致（rule.queueIdHeader）
+      //            でプロバイダが実際に処理したことを併せて確かめる。プロバイダの milter は
+      //            自身の A-R を元メールのヘッダより上に挿入するため、処理済みであれば
+      //            直下で最初に現れる A-R がプロバイダのものになる。
+      // 生ヘッダが得られない・内容が getFull と一致しない場合は信頼しない（安全側）。
+      const isProviderARPlaced = (rule, candidateAR, ingressIndex) => {
+        if (!Array.isArray(rawHeaderOrder) || ingressIndex < 0) return false;
+        const squash = (s) => (s || "").replace(/\s+/g, " ").trim();
 
-      const m365Route = detectMicrosoft365Route();
-      const lastReceivedBy = m365Route.ingressHost || getLastReceivedBy();
+        if (rule.queueIdHeader) {
+          // キュー ID ヘッダはちょうど1本で、受信境界の Received の "id" と一致すること
+          // （送信者が同名ヘッダを含めていれば2本以上になり、不一致として扱う）
+          const queueIds = headers[rule.queueIdHeader] || [];
+          const ingressId = ((headers["received"] || [])[ingressIndex] || "").match(/\bid\s+([A-Za-z0-9]+)/i);
+          if (queueIds.length !== 1 || !ingressId || squash(queueIds[0]) !== ingressId[1]) return false;
+        }
+
+        let receivedSeen = 0;
+        let pastIngress = false;
+        for (const h of rawHeaderOrder) {
+          if (h.name === "received") {
+            // "below": 受信境界の直下で A-R が現れないまま次の Received に達した
+            if (pastIngress) return false;
+            if (receivedSeen === ingressIndex) {
+              // "above": 受信境界の Received に到達するまでに A-R が現れなかった
+              if (rule.arPlacement === "above") return false;
+              pastIngress = true;
+            }
+            receivedSeen++;
+            continue;
+          }
+          if (h.name === "authentication-results") {
+            // 付与位置で最初に現れた A-R が候補と同一であること
+            if (rule.arPlacement === "above" || pastIngress) return squash(h.value) === squash(candidateAR);
+            // "below" で受信境界より上に A-R がある場合、最上段の候補は境界直下のものではない
+            return false;
+          }
+        }
+        return false;
+      };
+
+      const providerRoute = detectProviderRoute();
+      const lastReceivedBy = providerRoute.ingressHost || getLastReceivedBy();
       const regularAuth = headers["authentication-results"] || [];
 
       // 通常の Authentication-Results のみ authserv-id でフィルタリング
@@ -438,16 +554,20 @@
       let trustedRegular = filterByAuthServId(regularAuth, lastReceivedBy);
       let authHeaders = trustedRegular;
 
-      // ■ Microsoft 365 の authserv-id 無し A-R の採用
-      // EOP の受信境界が特定でき、かつ最上段の A-R が authserv-id を持たない場合に限り、
-      // その1本だけを EOP が付与したものとして信頼する。EOP は自身の A-R を既存ヘッダの
-      // 上に積むため、下段にある A-R（元メールに含まれていたもの）は対象にしない。
-      // 既存パーサは先頭セグメントを authserv-id として読み飛ばすため、
-      // 境界ホスト名を authserv-id として補った形に正規化して渡す。
-      if (trustedRegular.length === 0 && m365Route.ingressHost &&
-          regularAuth.length > 0 && lacksAuthServId(regularAuth[0])) {
+      // ■ プロバイダが付与した A-R の採用
+      // 受信境界が特定でき、最上段の A-R がそのプロバイダの形式であり、
+      // かつ生ヘッダ上でプロバイダの付与位置にある（isProviderARPlaced）場合に限り、
+      // その1本だけをプロバイダが付与したものとして信頼する。
+      // 下段にある A-R（元メールに含まれていたもの）は対象にしない。
+      // authserv-id を持たない形式（Microsoft 365）は、既存パーサが先頭セグメントを
+      // authserv-id として読み飛ばすため、境界ホスト名を authserv-id として補って渡す。
+      if (trustedRegular.length === 0 && providerRoute.ingressHost && regularAuth.length > 0 &&
+          isProviderAR(providerRoute.rule, regularAuth[0]) &&
+          isProviderARPlaced(providerRoute.rule, regularAuth[0], providerRoute.ingressIndex)) {
         trustedRegular = [regularAuth[0]];
-        authHeaders = [`${m365Route.ingressHost}; ${regularAuth[0]}`];
+        authHeaders = lacksAuthServId(regularAuth[0])
+          ? [`${providerRoute.ingressHost}; ${regularAuth[0]}`]
+          : [regularAuth[0]];
       }
 
       // セミコロンで区切ってメソッド単位に分割し、認証タイプのステータスを抽出
@@ -823,7 +943,8 @@
         // Microsoft 365 組織内で完結した配送か（注記表示用。判定には影響させない）
         // 外部から EOP を経由したメールには必ず A-R が付与されるため、A-R が1本でも
         // 存在する場合は組織内配送とはみなさない（外部メールへの誤った注記を防ぐ）。
-        m365Internal: m365Route.internalOnly && regularAuth.length === 0,
+        m365Internal: !!providerRoute.rule && providerRoute.rule.detectInternal &&
+                      providerRoute.internalOnly && regularAuth.length === 0,
         relayOriginal
       };
     };
@@ -2797,8 +2918,34 @@
       compactMode = stored.compactMode === true;
     } catch { /* storage未対応環境では通常表示 */ }
 
+    // ■ 生ヘッダ順序の取得（受信プロバイダ固有ルールが該当する場合のみ）
+    //    最上段 Received の受信ホストが PROVIDER_INGRESS_RULES のプロバイダである場合に限り、
+    //    A-R の付与位置を検証するための生ヘッダを background 経由で取得する。
+    //    メッセージ全体の読み込みを伴うため、該当しないメールでは取得しない。
+    //    取得に失敗した場合は null のまま進め、プロバイダ固有の A-R 採用を行わない（安全側）。
+    let rawHeaderOrder = null;
+    const topReceivedBy = ((headers["received"] || [])[0] || "").match(/\bby\s+([^\s;]+)/i);
+    if (topReceivedBy && findProviderRule(topReceivedBy[1])) {
+      try {
+        const rawResp = await browser.runtime.sendMessage({ command: "getRawHeaders" });
+        if (rawResp && typeof rawResp.rawHeaders === "string") {
+          // 折り返し行（先頭が空白）を直前のヘッダに連結し、上から順に {name, value} へ分解する
+          rawHeaderOrder = [];
+          for (const line of rawResp.rawHeaders.split(/\r?\n/)) {
+            if (/^[ \t]/.test(line) && rawHeaderOrder.length > 0) {
+              rawHeaderOrder[rawHeaderOrder.length - 1].value += " " + line.trim();
+              continue;
+            }
+            const idx = line.indexOf(":");
+            if (idx <= 0) continue;
+            rawHeaderOrder.push({ name: line.slice(0, idx).trim().toLowerCase(), value: line.slice(idx + 1).trim() });
+          }
+        }
+      } catch { /* 取得できない環境ではプロバイダ固有ルールを適用しない */ }
+    }
+
     const envelope = parseEnvelope(fullMsg, headers, msgHeader);
-    const authResults = parseAuthResults(headers, envelope);
+    const authResults = parseAuthResults(headers, envelope, rawHeaderOrder);
     const routeHops = parseRoute(headers);
     const arcChain = parseArcChain(headers);
     const bodyContent = parseMessageBody(fullMsg);
