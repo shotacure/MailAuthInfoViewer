@@ -122,6 +122,15 @@
   "alignNotAuth": {
     "message": "⚠️ Domaine aligné, mais l'expéditeur n'est pas authentifié"
   },
+  "m365InternalNote": {
+    "message": "ℹ️ Distribution interne Microsoft 365 : SPF/DKIM/DMARC ne s'appliquent pas aux messages qui restent au sein de l'organisation"
+  },
+  "relayOriginalAuthLabel": {
+    "message": "Expéditeur d'origine (signalé par le service de transfert)"
+  },
+  "relayOriginalAuthNotice": {
+    "message": "Résultats d'authentification du message d'origine, enregistrés par le service de transfert d'e-mails à sa réception. Cet en-tête ne peut pas être vérifié cryptographiquement. Tant que le DMARC de l'expéditeur d'origine n'est pas « pass », le verdict n'est pas affiché en vert."
+  },
   "mailingListVia": {
     "message": "via liste de diffusion"
   },
@@ -181,6 +190,9 @@
   },
   "verdictReasonSpoofing": {
     "message": "Usurpation de nom"
+  },
+  "verdictReasonRelayOriginal": {
+    "message": "Expéditeur d'origine non vérifié (service de transfert)"
   },
   "verdictReasonSuspicious": {
     "message": "Lien suspect"

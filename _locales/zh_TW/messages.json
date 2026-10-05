@@ -122,6 +122,15 @@
   "alignNotAuth": {
     "message": "⚠️ 網域一致，但寄件者未經驗證"
   },
+  "m365InternalNote": {
+    "message": "ℹ️ Microsoft 365 組織內部傳遞：未離開組織的郵件不適用 SPF/DKIM/DMARC"
+  },
+  "relayOriginalAuthLabel": {
+    "message": "原始寄件者（轉寄服務回報值）"
+  },
+  "relayOriginalAuthNotice": {
+    "message": "這是郵件轉寄服務在接收原始郵件時記錄的驗證結果。此標頭無法以密碼學方式驗證。只要原始寄件者的 DMARC 不是 pass，判定就不會顯示為綠色。"
+  },
   "mailingListVia": {
     "message": "透過郵件群組"
   },
@@ -181,6 +190,9 @@
   },
   "verdictReasonSpoofing": {
     "message": "顯示名稱偽造"
+  },
+  "verdictReasonRelayOriginal": {
+    "message": "原始寄件者未驗證（轉寄服務）"
   },
   "verdictReasonSuspicious": {
     "message": "可疑連結"

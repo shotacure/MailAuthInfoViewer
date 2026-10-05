@@ -122,6 +122,15 @@
   "alignNotAuth": {
     "message": "⚠️ Domínio alinhado, mas o remetente não está autenticado"
   },
+  "m365InternalNote": {
+    "message": "ℹ️ Entrega interna do Microsoft 365: SPF/DKIM/DMARC não se aplicam a mensagens que permanecem dentro da organização"
+  },
+  "relayOriginalAuthLabel": {
+    "message": "Remetente original (informado pelo serviço de encaminhamento)"
+  },
+  "relayOriginalAuthNotice": {
+    "message": "Resultados de autenticação da mensagem original, registrados pelo serviço de encaminhamento de e-mail ao recebê-la. Este cabeçalho não pode ser verificado criptograficamente. Enquanto o DMARC do remetente original não for pass, o veredito não será exibido em verde."
+  },
   "mailingListVia": {
     "message": "via lista de e-mails"
   },
@@ -181,6 +190,9 @@
   },
   "verdictReasonSpoofing": {
     "message": "Spoofing de nome"
+  },
+  "verdictReasonRelayOriginal": {
+    "message": "Remetente original não verificado (serviço de encaminhamento)"
   },
   "verdictReasonSuspicious": {
     "message": "Link suspeito"

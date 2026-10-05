@@ -122,6 +122,15 @@
   "alignNotAuth": {
     "message": "⚠️ 域名一致，但发件人未经认证"
   },
+  "m365InternalNote": {
+    "message": "ℹ️ Microsoft 365 组织内部投递：未离开组织的邮件不适用 SPF/DKIM/DMARC"
+  },
+  "relayOriginalAuthLabel": {
+    "message": "原始发件人（转发服务报告值）"
+  },
+  "relayOriginalAuthNotice": {
+    "message": "这是邮件转发服务在接收原始邮件时记录的认证结果。此标头无法通过密码学方式验证。只要原始发件人的 DMARC 不是 pass，判定就不会显示为绿色。"
+  },
   "mailingListVia": {
     "message": "通过邮件列表"
   },
@@ -181,6 +190,9 @@
   },
   "verdictReasonSpoofing": {
     "message": "显示名称伪造"
+  },
+  "verdictReasonRelayOriginal": {
+    "message": "原始发件人未验证（转发服务）"
   },
   "verdictReasonSuspicious": {
     "message": "可疑链接"

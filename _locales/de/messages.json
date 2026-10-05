@@ -122,6 +122,15 @@
   "alignNotAuth": {
     "message": "⚠️ Domain abgeglichen, aber Absender nicht authentifiziert"
   },
+  "m365InternalNote": {
+    "message": "ℹ️ Interne Microsoft 365-Zustellung: SPF/DKIM/DMARC werden auf Nachrichten, die die Organisation nicht verlassen, nicht angewendet"
+  },
+  "relayOriginalAuthLabel": {
+    "message": "Ursprünglicher Absender (vom Weiterleitungsdienst gemeldet)"
+  },
+  "relayOriginalAuthNotice": {
+    "message": "Authentifizierungsergebnisse der ursprünglichen Nachricht, die der E-Mail-Weiterleitungsdienst beim Empfang aufgezeichnet hat. Dieser Header kann nicht kryptografisch überprüft werden. Solange DMARC des ursprünglichen Absenders nicht „pass“ ist, wird das Ergebnis nicht grün angezeigt."
+  },
   "mailingListVia": {
     "message": "über Mailingliste"
   },
@@ -181,6 +190,9 @@
   },
   "verdictReasonSpoofing": {
     "message": "Anzeigename-Spoofing"
+  },
+  "verdictReasonRelayOriginal": {
+    "message": "Ursprünglicher Absender nicht verifiziert (Weiterleitungsdienst)"
   },
   "verdictReasonSuspicious": {
     "message": "Verdächtiger Link"

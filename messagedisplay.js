@@ -53,7 +53,9 @@
     };
 
     // Received ヘッダの from 句からIPアドレスを抽出
-    const extractIPFromReceived = (line) => {
+    // includeParenIPv6=false の場合は角括弧なしの括弧内 IPv6 を対象外とする
+    // （authserv 信頼ホストの境界検出で、従来の判定結果を変えないため）
+    const extractIPFromReceived = (line, includeParenIPv6 = true) => {
       if (!line) return null;
       // 角括弧内のIPv4/IPv6 (例: [192.168.1.1])
       const bracketMatch = line.match(/\[([^\]]+)\]/);
@@ -63,6 +65,14 @@
       // 括弧内のIPv4 (例: (192.168.1.1))
       const parenMatch = line.match(/\((\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\)/);
       if (parenMatch) return parenMatch[1];
+      // 括弧内のIPv6 (例: (2603:10a6:10:360::8))
+      // Exchange Online / Exchange Server は角括弧を付けずに括弧内へ IPv6 を記録する。
+      // "(Postfix)" 等のコメントや時刻表記との誤マッチを避けるため、
+      // コロンを2つ以上含む IPv6 形式の文字列のみを対象とする。
+      const parenV6Match = includeParenIPv6 && line.match(/\(([a-fA-F0-9:]+)\)/);
+      if (parenV6Match && isIPv6Like(parenV6Match[1]) && (parenV6Match[1].match(/:/g) || []).length >= 2) {
+        return parenV6Match[1];
+      }
       return null;
     };
 
@@ -90,6 +100,18 @@
       "33mail.com",               // 33Mail
       "spamgourmet.com",          // SpamGourmet
     ]);
+
+    // =========================================================
+    // 転送サービスが「元メールの認証結果」を記録する独自ヘッダ
+    // =========================================================
+    // エイリアス転送サービスは元メールを受信した時点で SPF/DKIM/DMARC を検証し、
+    // その結果を独自ヘッダに記録したうえで、自身のドメインで再署名して転送する。
+    // 外側の認証（転送サービス→受信者）が pass しても元送信者の正当性は保証されないため、
+    // このヘッダがある場合は「元送信者の DMARC pass」をグリーンの追加条件として用いる。
+    // ヘッダ自体は暗号学的に検証できない報告値であり、判定を緩める方向には使わない。
+    const RELAY_ORIGINAL_AUTH_HEADERS = [
+      "x-anonaddy-authentication-results", // addy.io (AnonAddy)
+    ];
 
     // =========================================================
     // 1. parseEnvelope - エンベロープ情報・アドレスアライメント・メーリングリスト検知
@@ -297,9 +319,12 @@
         // 優先1: 外部（公開 IP）から受信した最初のホップ＝境界 MTA。その by を採用。
         // 内部配送ホップ（private IP / localhost / from 無し）はこの段で自然に飛ぶ。
         // 単一ラベル名の受信ホストでも、公開 IP から受信していれば正しく採用される。
+        // 括弧内 IPv6 は抽出しない: Exchange 系の内部ホップは "(2001:db8::1)" の形で
+        // 公開 IPv6 を記録するため、これを外部受信とみなすと内部ホップを境界と誤認する。
+        // （Microsoft 365 は detectMicrosoft365Route で別途ホスト名ベースに境界を特定する）
         for (const line of received) {
           const fromMatch = line.match(/\bfrom\s+(.+?)(?=\s+by\s+|;|$)/i);
-          const fromIP = extractIPFromReceived(fromMatch ? fromMatch[1] : "");
+          const fromIP = extractIPFromReceived(fromMatch ? fromMatch[1] : "", false);
           if (fromIP && !isPrivateIP(fromIP)) {
             const by = extractBy(line);
             if (by && !isIpLiteral(by)) return by;
@@ -338,14 +363,92 @@
         return trusted;
       };
 
-      const lastReceivedBy = getLastReceivedBy();
+      // ■ Microsoft 365 / Exchange Online の受信経路判定
+      // Exchange Online は次の2点で汎用の authserv-id 照合が成立しない:
+      //   - 受信境界（EOP: *.mail.protection.outlook.com）の後ろに、グローバル IPv6 で
+      //     接続された内部ホップ（*.prod.outlook.com / *.outlook.office365.com）が多段に続き、
+      //     最終配送ホストは認証を実施したホストではない。
+      //   - 付与する Authentication-Results に authserv-id が無い（RFC 8601 非準拠）。
+      //       Authentication-Results: spf=pass (sender IP is ...) smtp.mailfrom=...; dkim=pass ...
+      // そこで「最上段から連続する Microsoft 内部ホップをたどり、外部から EOP に入った
+      // 受信ホップに到達できた場合のみ」その EOP ホストを受信境界として特定する。
+      //   - 最上段 Received は実際の受信側が書くため外部から偽造できない。
+      //   - 前段の from と次段の by が同一サーバ（先頭ラベル一致）である連続性を要求し、
+      //     攻撃者が下段に積んだ偽の Received へ走査が乗り移らないようにする。
+      //     （EOP は from に *.prod.outlook.com、by に *.mail.protection.outlook.com という
+      //       別名を用いるため、FQDN 全体ではなくサーバ名である先頭ラベルで比較する）
+      // 戻り値:
+      //   ingressHost:  外部→EOP の受信ホップの by（見つからなければ ""）
+      //   internalOnly: 全経路が Microsoft 内部で完結（組織内配送）していれば true
+      const detectMicrosoft365Route = () => {
+        const result = { ingressHost: "", internalOnly: false };
+        const received = headers["received"] || [];
+        if (received.length === 0) return result;
+
+        const getOrgDomain = window.getOrganizationalDomain || ((d) => d);
+        const isMicrosoftHost = (h) => !!h && ["outlook.com", "office365.com"].includes(getOrgDomain(h));
+        const firstLabel = (h) => (h || "").split(".")[0];
+        const hops = received.map(line => {
+          const byMatch = line.match(/\bby\s+([^\s;]+)/i);
+          const fromMatch = line.match(/\bfrom\s+(.+?)(?=\s+by\s+|;|$)/i);
+          const fromHost = fromMatch ? fromMatch[1].trim().split(/\s+/)[0] : "";
+          const normalize = (h) => h.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+          return {
+            by: byMatch ? normalize(byMatch[1]) : "",
+            fromHost: normalize(fromHost)
+          };
+        });
+
+        for (let i = 0; i < hops.length; i++) {
+          const hop = hops[i];
+          // 受信ホストが Microsoft でなくなった時点で Microsoft の受信経路ではない
+          if (!isMicrosoftHost(hop.by)) return result;
+          // 前段の送信元と、このホップの受信ホストが同一サーバでなければ連続性が途切れている
+          if (i > 0 && firstLabel(hops[i - 1].fromHost) !== firstLabel(hop.by)) return result;
+          // 同一サーバが自身から受け取ったホップ（from X by X）は組織内での送信受付の起点。
+          // これより下段はクライアントが送信時に含めた任意のヘッダであり信頼できないため、
+          // ここで走査を打ち切り、組織内で発生した配送として扱う。
+          // （内部の送信者が偽の EOP 受信ホップを下段に積んで境界を詐称することを防ぐ）
+          if (firstLabel(hop.fromHost) === firstLabel(hop.by)) {
+            result.internalOnly = true;
+            return result;
+          }
+          if (!isMicrosoftHost(hop.fromHost)) {
+            // Microsoft 外から受信したホップ。EOP の受信ホストであれば受信境界として採用する。
+            // それ以外（SMTP AUTH による送信受付等）は境界として扱わない。
+            if (/\.mail\.protection\.outlook\.com$/.test(hop.by)) result.ingressHost = hop.by;
+            return result;
+          }
+        }
+        // 外部から入ったホップが一つも無く、全経路が Microsoft 内部で連続している
+        result.internalOnly = true;
+        return result;
+      };
+
+      // authserv-id を持たない A-R か（先頭セグメントが "method=result" の形をしている）
+      const lacksAuthServId = (h) => /^\s*[a-z][a-z0-9-]*\s*=/i.test(splitOnTopLevelSemicolons(h)[0]);
+
+      const m365Route = detectMicrosoft365Route();
+      const lastReceivedBy = m365Route.ingressHost || getLastReceivedBy();
       const regularAuth = headers["authentication-results"] || [];
 
       // 通常の Authentication-Results のみ authserv-id でフィルタリング
       // ARC-Authentication-Results は暗号学的検証なしでは偽造可能なため、
       // 本判定からは除外し、ARC カード表示（parseArcChain）のみで利用する
-      const trustedRegular = filterByAuthServId(regularAuth, lastReceivedBy);
-      const authHeaders = trustedRegular;
+      let trustedRegular = filterByAuthServId(regularAuth, lastReceivedBy);
+      let authHeaders = trustedRegular;
+
+      // ■ Microsoft 365 の authserv-id 無し A-R の採用
+      // EOP の受信境界が特定でき、かつ最上段の A-R が authserv-id を持たない場合に限り、
+      // その1本だけを EOP が付与したものとして信頼する。EOP は自身の A-R を既存ヘッダの
+      // 上に積むため、下段にある A-R（元メールに含まれていたもの）は対象にしない。
+      // 既存パーサは先頭セグメントを authserv-id として読み飛ばすため、
+      // 境界ホスト名を authserv-id として補った形に正規化して渡す。
+      if (trustedRegular.length === 0 && m365Route.ingressHost &&
+          regularAuth.length > 0 && lacksAuthServId(regularAuth[0])) {
+        trustedRegular = [regularAuth[0]];
+        authHeaders = [`${m365Route.ingressHost}; ${regularAuth[0]}`];
+      }
 
       // セミコロンで区切ってメソッド単位に分割し、認証タイプのステータスを抽出
       // 分割は splitOnTopLevelSemicolons を用い、コメント括弧内のセミコロンを保護する。
@@ -450,9 +553,11 @@
               }
 
               // IP
+              // "sender IP is x.x.x.x" は Exchange Online のコメント表記
               const ipMatch = m.match(/designates\s+([a-fA-F0-9.:]+)\s+as\s+permitted\s+sender/i) ||
                               m.match(/client-ip=([a-fA-F0-9.:]+)/i) ||
-                              m.match(/smtp\.remote-ip=([a-fA-F0-9.:]+)/i);
+                              m.match(/smtp\.remote-ip=([a-fA-F0-9.:]+)/i) ||
+                              m.match(/sender\s+IP\s+is\s+([a-fA-F0-9.:]+)/i);
               if (ipMatch) ip = ipMatch[1];
 
               if (domain || ip) return { domain, ip, rawSegment };
@@ -681,16 +786,45 @@
       };
       const reportedUnverified = buildReportedUnverified();
 
+      // ■ 転送サービスが記録した元メールの認証結果（RELAY_ORIGINAL_AUTH_HEADERS）
+      // 外側の認証とは別に、転送サービスが元メール受信時に検証した結果を抽出する。
+      // 元送信者の DMARC は、全インスタンスが pass の場合のみ pass とみなす
+      // （同名ヘッダが複数ある場合に、都合のよい1本だけを採用しないため）。
+      const parseRelayOriginalAuth = () => {
+        for (const name of RELAY_ORIGINAL_AUTH_HEADERS) {
+          const list = headers[name] || [];
+          if (list.length === 0) continue;
+          const fromMatch = list[0].match(/header\.from=([^;\s()]+)/i);
+          return {
+            present: true,
+            header: name,
+            spf: statusFromHeaderList([list[0]], "spf"),
+            dkim: statusFromHeaderList([list[0]], "dkim"),
+            dmarc: statusFromHeaderList([list[0]], "dmarc"),
+            fromDomain: fromMatch ? fromMatch[1].replace(/["']/g, '').toLowerCase() : "",
+            dmarcPass: list.every(h => statusFromHeaderList([h], "dmarc") === "pass")
+          };
+        }
+        return { present: false };
+      };
+      const relayOriginal = parseRelayOriginalAuth();
+
       return {
-        authServId: trustedRegular.length > 0
-          ? splitOnTopLevelSemicolons(trustedRegular[0])[0].trim()
+        // 信頼した A-R の authserv-id（Microsoft 365 の場合は補った EOP ホスト名）
+        authServId: authHeaders.length > 0
+          ? splitOnTopLevelSemicolons(authHeaders[0])[0].trim()
           : lastReceivedBy,
         spf: { status: spfStatus, detail: spfDetail },
         dkim: { status: dkimResult.aggregated, detail: dkimDetail, signatures: dkimResult.results },
         dmarc: { status: dmarcStatus, detail: dmarcDetail },
         alignment,
         strength,
-        reportedUnverified
+        reportedUnverified,
+        // Microsoft 365 組織内で完結した配送か（注記表示用。判定には影響させない）
+        // 外部から EOP を経由したメールには必ず A-R が付与されるため、A-R が1本でも
+        // 存在する場合は組織内配送とはみなさない（外部メールへの誤った注記を防ぐ）。
+        m365Internal: m365Route.internalOnly && regularAuth.length === 0,
+        relayOriginal
       };
     };
 
@@ -1214,10 +1348,19 @@
       // （SendGrid等の正当な外部配信サービス利用パターンに対応）
       const domainCheckOk = isDmarcOk && isDmarcAligned ? true : isDomainAligned;
 
+      // ■ 転送サービス経由メールの元送信者認証
+      // 外側の認証が示すのは「転送サービスが自ドメインで送った」ことまでで、
+      // 元送信者の正当性は転送サービスが記録した元メールの認証結果にしか現れない。
+      // その報告値が存在し DMARC pass でない場合は、外側がすべて pass でもグリーンにしない。
+      // 報告値は検証不能なため、ヘッダが無いメールの判定を緩める方向には使わない。
+      const relayOriginal = authResults.relayOriginal || { present: false };
+      const isRelayOriginalUnverified = relayOriginal.present && !relayOriginal.dmarcPass;
+
       const isSecure = isSpfOk && isDkimOk && isDmarcOk &&
                        domainCheckOk && isDmarcAligned &&
                        !isDisplayNameSpoofed && !hasCriticalPhishing &&
-                       !hasSuspiciousLink && !hasUntrustedLink;
+                       !hasSuspiciousLink && !hasUntrustedLink &&
+                       !isRelayOriginalUnverified;
 
       // 認証系: pass 以外なら実際のステータスを記録 (例: "SPF: softfail")
       if (!isSpfOk) verdictReasons.push(`SPF: ${authResults.spf.status}`);
@@ -1232,6 +1375,7 @@
       if (!dmarcOverallOk && isDkimOk && !al.dkimAligned) verdictReasons.push("dkim_align_fail");
       if (!domainCheckOk) verdictReasons.push("domain_not_aligned");
       if (isDisplayNameSpoofed) verdictReasons.push("display_name_spoofed");
+      if (isRelayOriginalUnverified) verdictReasons.push("relay_original_unverified");
       // phishing_critical はバッジ自体が「💀 フィッシング検出」になるため判定理由には含めない
       // privacy（トラッキングピクセル）は判定理由タグに出さず、リンク安全性カード内で情報提供
       if (hasSuspiciousLink) verdictReasons.push("phishing_suspicious");
@@ -1565,6 +1709,9 @@
         .align-ok { color: var(--maiv-align-ok-text); font-weight: bold; font-size: 11px; margin-top: 6px; }
         .align-ng { background-color: var(--maiv-align-ng-bg); color: var(--maiv-align-ng-text); font-weight: bold; padding: 6px; border-radius: 4px; font-size: 12px; margin-top: 6px; display: block; }
         .align-warn { background-color: var(--maiv-align-warn-bg); color: var(--maiv-align-warn-text); font-weight: bold; padding: 6px; border-radius: 4px; font-size: 12px; margin-top: 6px; display: block; }
+        /* 判定に影響しない情報提供の注記（組織内配送・転送元の報告値など）。
+           警告色と混同させないよう privacy 系の情報色を流用し、ダークモードも変数で追従する。 */
+        .align-info { background-color: var(--maiv-privacy-bg); color: var(--maiv-privacy-text); font-weight: bold; padding: 6px; border-radius: 4px; font-size: 12px; margin-top: 6px; display: block; }
 
         .address-row { margin-bottom: 4px; display: flex; align-items: center; }
         .address-label { color: var(--maiv-text-muted); width: 85px; display: inline-block; font-size: 10px; text-transform: uppercase; flex-shrink: 0; }
@@ -1715,6 +1862,15 @@
           if (ru.dmarc) parts.push(`DMARC:${ru.dmarc}`);
           lines.push(`Reported (unverified, not counted): ${parts.join(" ")}`);
         }
+        // 転送サービスが記録した元送信者の認証結果（DMARC pass でなければグリーンを阻害）
+        const ro = authResults.relayOriginal;
+        if (ro && ro.present) {
+          const roDomain = ro.fromDomain ? ` (${ro.fromDomain})` : "";
+          lines.push(`Original sender (reported by forwarding service, unverified): SPF:${ro.spf} DKIM:${ro.dkim} DMARC:${ro.dmarc}${roDomain}`);
+        }
+        if (authResults.m365Internal) {
+          lines.push("Note: Microsoft 365 internal delivery (SPF/DKIM/DMARC not applied)");
+        }
         lines.push("");
 
         // アライメントセクション
@@ -1859,6 +2015,7 @@
           "dkim_align_fail": msg("verdictReasonDkimAlign"),
           "domain_not_aligned": msg("verdictReasonDomainMismatch"),
           "display_name_spoofed": msg("verdictReasonSpoofing"),
+          "relay_original_unverified": msg("verdictReasonRelayOriginal"),
           "phishing_suspicious": msg("verdictReasonSuspicious"),
           "link_untrusted": msg("verdictReasonUntrusted")
         };
@@ -2176,9 +2333,26 @@
         // ドメイン一致かつ認証も通っている場合はグリーン表示
         // （p=none等で総合判定がグリーンでなくても、認証自体は成功している）
         alignmentWarningHTML += `<div class="align-ok">${escapeHTML(msg("alignOk"))}</div>`;
-      } else if (envelope.isDomainAligned) {
+      } else if (envelope.isDomainAligned && !authResults.m365Internal) {
         // ドメインは一致しているが認証が通っていない
         alignmentWarningHTML += `<div class="align-warn">${escapeHTML(msg("alignNotAuth"))}</div>`;
+      }
+
+      // Microsoft 365 組織内配送の注記: 組織外へ出ない配送には SPF/DKIM/DMARC が
+      // そもそも適用されないため、「外部送信者を検証できなかった」とは区別して伝える。
+      // バッジ・判定理由は変えない情報提供（組織内配送の信頼性を保証するものではない）。
+      if (authResults.m365Internal) {
+        alignmentWarningHTML += `<div class="align-info">${escapeHTML(msg("m365InternalNote"))}</div>`;
+      }
+
+      // 転送サービスが記録した元送信者の認証結果（未検証の報告値）
+      const relayOriginal = authResults.relayOriginal;
+      if (relayOriginal && relayOriginal.present) {
+        const relayParts = `SPF:${relayOriginal.spf} DKIM:${relayOriginal.dkim} DMARC:${relayOriginal.dmarc}`;
+        const relayDomain = relayOriginal.fromDomain ? ` (${relayOriginal.fromDomain})` : "";
+        const relayCls = relayOriginal.dmarcPass ? "align-info" : "align-warn";
+        alignmentWarningHTML += `<div class="${relayCls}" title="${escapeHTML(msg("relayOriginalAuthNotice"))}">` +
+          `ℹ️ ${escapeHTML(msg("relayOriginalAuthLabel"))}: ${escapeHTML(relayParts + relayDomain)}</div>`;
       }
 
       // Reply-To 不一致警告: フィッシングで返信先を攻撃者に誘導する手口の可能性

@@ -130,6 +130,15 @@
   "alignNotAuth": {
     "message": "⚠️ ドメインは一致していますが、送信者が認証されていません"
   },
+  "m365InternalNote": {
+    "message": "ℹ️ Microsoft 365 組織内の配送: 組織外へ出ないメールには SPF/DKIM/DMARC が適用されません"
+  },
+  "relayOriginalAuthLabel": {
+    "message": "元送信者（転送サービスの報告値）"
+  },
+  "relayOriginalAuthNotice": {
+    "message": "メール転送サービスが元メールを受信した時点で記録した認証結果です。このヘッダは暗号学的に検証できません。元送信者の DMARC が pass でない限り、判定はグリーンになりません。"
+  },
   "mailingListVia": {
     "message": "メーリングリスト経由"
   },
@@ -183,6 +192,9 @@
   },
   "verdictReasonSpoofing": {
     "message": "表示名なりすまし"
+  },
+  "verdictReasonRelayOriginal": {
+    "message": "元送信者未検証（転送サービス）"
   },
   "verdictReasonSuspicious": {
     "message": "不審なリンク"
