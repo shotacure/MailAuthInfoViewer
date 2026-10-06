@@ -2759,7 +2759,45 @@
       if (host) host.remove();
       host = document.createElement("div");
       host.id = hostId;
-      document.body.insertAdjacentElement("afterbegin", host);
+
+      // ■ ホスト要素のレイアウト固定
+      // Shadow DOM が隔離するのは内部のスタイルだけで、ホスト要素自身の箱は
+      // 親要素やメール側 CSS のレイアウト指定を受ける。例えば崩れた HTML メールで
+      // 文書途中に現れた <body style="max-width:480px"> の属性は、HTML の構文解析
+      // ルールにより本来の body 要素に合流するため、body 内に置いたダッシュボードが
+      // その幅に閉じ込められて右側が切れてしまう。
+      // そこでホストは body の中ではなく <html> 直下（<body> の直前）に置き、
+      // メールが body に与えた幅・余白・配置の影響を受けないようにする。
+      // さらに `div { max-width: ... !important }` のようにメール側 CSS がホストを
+      // 直接対象にした場合にも負けないよう、レイアウトに関わる指定をインラインの
+      // !important で固定する（インラインの !important はページ側のどの指定にも優先する）。
+      // 余白は body の既定余白（8px）相当とし、従来の見た目を保つ。
+      // メールの表示そのもの（body の属性やスタイル）には一切手を加えない。
+      const hostLayout = {
+        "display": "block",
+        "position": "static",
+        "float": "none",
+        "box-sizing": "border-box",
+        "width": "auto",
+        "min-width": "0",
+        "max-width": "none",
+        "height": "auto",
+        "max-height": "none",
+        "margin": "8px 8px 0 8px",
+        "padding": "0",
+        "transform": "none",
+        "visibility": "visible",
+        "opacity": "1"
+      };
+      for (const [prop, value] of Object.entries(hostLayout)) {
+        host.style.setProperty(prop, value, "important");
+      }
+      if (document.body && document.body.parentNode === document.documentElement) {
+        document.documentElement.insertBefore(host, document.body);
+      } else {
+        // body が存在しない・html 直下にない特殊な文書では従来どおり先頭へ挿入する
+        (document.body || document.documentElement).insertAdjacentElement("afterbegin", host);
+      }
 
       const shadow = host.attachShadow({ mode: "closed" });
       shadow.appendChild(style);
