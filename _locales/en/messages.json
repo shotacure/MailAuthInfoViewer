@@ -130,6 +130,15 @@
   "alignNotAuth": {
     "message": "⚠️ Domain aligned, but sender is not authenticated"
   },
+  "m365InternalNote": {
+    "message": "ℹ️ Microsoft 365 internal delivery: SPF/DKIM/DMARC are not applied to mail that stays within the organization"
+  },
+  "relayOriginalAuthLabel": {
+    "message": "Original sender (reported by forwarding service)"
+  },
+  "relayOriginalAuthNotice": {
+    "message": "Authentication results of the original message, recorded by the email forwarding service when it received it. This header cannot be cryptographically verified. Unless the original sender's DMARC is pass, the verdict is not shown as green."
+  },
   "mailingListVia": {
     "message": "via Mailing List"
   },
@@ -183,6 +192,9 @@
   },
   "verdictReasonSpoofing": {
     "message": "Display name spoofing"
+  },
+  "verdictReasonRelayOriginal": {
+    "message": "Original sender not verified (forwarding service)"
   },
   "verdictReasonSuspicious": {
     "message": "Suspicious link"

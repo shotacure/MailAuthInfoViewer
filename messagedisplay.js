@@ -53,7 +53,9 @@
     };
 
     // Received ヘッダの from 句からIPアドレスを抽出
-    const extractIPFromReceived = (line) => {
+    // includeParenIPv6=false の場合は角括弧なしの括弧内 IPv6 を対象外とする
+    // （authserv 信頼ホストの境界検出で、従来の判定結果を変えないため）
+    const extractIPFromReceived = (line, includeParenIPv6 = true) => {
       if (!line) return null;
       // 角括弧内のIPv4/IPv6 (例: [192.168.1.1])
       const bracketMatch = line.match(/\[([^\]]+)\]/);
@@ -63,6 +65,14 @@
       // 括弧内のIPv4 (例: (192.168.1.1))
       const parenMatch = line.match(/\((\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\)/);
       if (parenMatch) return parenMatch[1];
+      // 括弧内のIPv6 (例: (2603:10a6:10:360::8))
+      // Exchange Online / Exchange Server は角括弧を付けずに括弧内へ IPv6 を記録する。
+      // "(Postfix)" 等のコメントや時刻表記との誤マッチを避けるため、
+      // コロンを2つ以上含む IPv6 形式の文字列のみを対象とする。
+      const parenV6Match = includeParenIPv6 && line.match(/\(([a-fA-F0-9:]+)\)/);
+      if (parenV6Match && isIPv6Like(parenV6Match[1]) && (parenV6Match[1].match(/:/g) || []).length >= 2) {
+        return parenV6Match[1];
+      }
       return null;
     };
 
@@ -90,6 +100,74 @@
       "33mail.com",               // 33Mail
       "spamgourmet.com",          // SpamGourmet
     ]);
+
+    // =========================================================
+    // 転送サービスが「元メールの認証結果」を記録する独自ヘッダ
+    // =========================================================
+    // エイリアス転送サービスは元メールを受信した時点で SPF/DKIM/DMARC を検証し、
+    // その結果を独自ヘッダに記録したうえで、自身のドメインで再署名して転送する。
+    // 外側の認証（転送サービス→受信者）が pass しても元送信者の正当性は保証されないため、
+    // このヘッダがある場合は「元送信者の DMARC pass」をグリーンの追加条件として用いる。
+    // ヘッダ自体は暗号学的に検証できない報告値であり、判定を緩める方向には使わない。
+    const RELAY_ORIGINAL_AUTH_HEADERS = [
+      "x-anonaddy-authentication-results", // addy.io (AnonAddy)
+    ];
+
+    // =========================================================
+    // 汎用の authserv-id 照合が成立しない受信プロバイダの定義
+    // =========================================================
+    // 以下のプロバイダは、受信境界の後ろにグローバル IP で接続された内部ホップが多段に続き
+    // （最終配送ホストは認証を実施したホストではない）、しかも付与する A-R の authserv-id が
+    // ホスト名と対応しないため、境界ホスト名との照合では正規の A-R を特定できない。
+    //   - Microsoft 365 / Exchange Online:
+    //       受信境界は EOP（*.mail.protection.outlook.com）。内部ホップは *.prod.outlook.com /
+    //       *.outlook.office365.com。A-R に authserv-id 自体が無い（RFC 8601 非準拠）。
+    //         Authentication-Results: spf=pass (sender IP is ...) smtp.mailfrom=...; dkim=pass ...
+    //   - mailbox.org:
+    //       受信境界は mx*.mailbox.org。内部ホップは *.heinlein-hosting.de。
+    //       authserv-id はホスト名ではない固定値 "incoming_mbo"。
+    // これらは parseAuthResults の detectProviderRoute で境界を特定し、生ヘッダ順序で
+    // A-R の付与位置を検証したうえで採用する。各定義:
+    //   orgDomains:         プロバイダ自身のホストの組織ドメイン
+    //   ingress:            外部から受け取る受信境界ホスト（by）のパターン
+    //   providerAuthServId: プロバイダが付与する A-R の authserv-id（null は authserv-id 無し）
+    //   arPlacement:        プロバイダが A-R を付与する位置
+    //                         "above": 受信境界の Received より上（EOP は受信後のヘッダとして積む）
+    //                         "below": 受信境界の Received の直下（Postfix + milter 構成では、
+    //                                  MTA 自身の Received の直後に milter のヘッダが挿入される）
+    //   queueIdHeader:      "below" の位置は元メール先頭に置かれた偽 A-R と区別できないため、
+    //                       受信時にプロバイダが付与するキュー ID ヘッダの値が受信境界の
+    //                       Received の "id" と一致することを要求する（受信時に初めて決まる値で
+    //                       送信者は予測できないため、プロバイダが実際に処理したことの証跡になる）
+    //   detectInternal:     組織内で完結した配送を判定・注記する対象か
+    const PROVIDER_INGRESS_RULES = [
+      {
+        name: "Microsoft 365",
+        orgDomains: ["outlook.com", "office365.com"],
+        ingress: /\.mail\.protection\.outlook\.com$/,
+        providerAuthServId: null,
+        arPlacement: "above",
+        queueIdHeader: null,
+        detectInternal: true
+      },
+      {
+        name: "mailbox.org",
+        orgDomains: ["mailbox.org", "heinlein-hosting.de"],
+        ingress: /^mx\d*\.mailbox\.org$/,
+        providerAuthServId: "incoming_mbo",
+        arPlacement: "below",
+        queueIdHeader: "x-rspamd-queue-id",
+        detectInternal: false
+      }
+    ];
+
+    // 受信ホスト名から該当するプロバイダ定義を返す（該当なしは undefined）
+    const findProviderRule = (host) => {
+      if (!host) return undefined;
+      const getOrgDomain = window.getOrganizationalDomain || ((d) => d);
+      const org = getOrgDomain(host.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, ""));
+      return PROVIDER_INGRESS_RULES.find(r => r.orgDomains.includes(org));
+    };
 
     // =========================================================
     // 1. parseEnvelope - エンベロープ情報・アドレスアライメント・メーリングリスト検知
@@ -225,7 +303,8 @@
     // =========================================================
     // 2. parseAuthResults - メール認証結果の解析 (authserv-id フィルタリング付き)
     // =========================================================
-    const parseAuthResults = (headers, envelope) => {
+    // rawHeaderOrder: 生ヘッダを上から順に並べた [{name, value}]（取得できない場合は null）
+    const parseAuthResults = (headers, envelope, rawHeaderOrder) => {
       // ■ authserv-id による信頼フィルタリング
       // 最新の Received ヘッダの by ホスト名と Authentication-Results の authserv-id を比較し、
       // 信頼できるヘッダのみを採用する。攻撃者が注入した偽の認証結果を排除するため。
@@ -297,9 +376,12 @@
         // 優先1: 外部（公開 IP）から受信した最初のホップ＝境界 MTA。その by を採用。
         // 内部配送ホップ（private IP / localhost / from 無し）はこの段で自然に飛ぶ。
         // 単一ラベル名の受信ホストでも、公開 IP から受信していれば正しく採用される。
+        // 括弧内 IPv6 は抽出しない: Exchange 系の内部ホップは "(2001:db8::1)" の形で
+        // 公開 IPv6 を記録するため、これを外部受信とみなすと内部ホップを境界と誤認する。
+        // （Microsoft 365 等は detectProviderRoute で別途ホスト名ベースに境界を特定する）
         for (const line of received) {
           const fromMatch = line.match(/\bfrom\s+(.+?)(?=\s+by\s+|;|$)/i);
-          const fromIP = extractIPFromReceived(fromMatch ? fromMatch[1] : "");
+          const fromIP = extractIPFromReceived(fromMatch ? fromMatch[1] : "", false);
           if (fromIP && !isPrivateIP(fromIP)) {
             const by = extractBy(line);
             if (by && !isIpLiteral(by)) return by;
@@ -338,14 +420,155 @@
         return trusted;
       };
 
-      const lastReceivedBy = getLastReceivedBy();
+      // authserv-id を持たない A-R か（先頭セグメントが "method=result" の形をしている）
+      const lacksAuthServId = (h) => /^\s*[a-z][a-z0-9-]*\s*=/i.test(splitOnTopLevelSemicolons(h)[0]);
+
+      // プロバイダが付与した形式の A-R か（PROVIDER_INGRESS_RULES の providerAuthServId で判定）
+      const isProviderAR = (rule, h) => rule.providerAuthServId === null
+        ? lacksAuthServId(h)
+        : splitOnTopLevelSemicolons(h)[0].trim().toLowerCase() === rule.providerAuthServId;
+
+      // ■ プロバイダ受信経路の判定
+      // 「最上段から連続するプロバイダ内部ホップをたどり、外部から受信境界に入ったホップに
+      // 到達できた場合のみ」そのホストを受信境界として特定する。
+      //   - 最上段 Received は実際の受信側が書くため外部から偽造できない。
+      //   - 前段の from と次段の by が同一サーバ（先頭ラベル一致）である連続性を要求し、
+      //     攻撃者が下段に積んだ偽の Received へ走査が乗り移らないようにする。
+      //     （EOP は from に *.prod.outlook.com、by に *.mail.protection.outlook.com という
+      //       別名を用いるため、FQDN 全体ではなくサーバ名である先頭ラベルで比較する）
+      // 戻り値:
+      //   rule:         最上段がこのプロバイダだった場合の定義（該当なしは null）
+      //   ingressHost:  外部→受信境界のホップの by（見つからなければ ""）
+      //   ingressIndex: そのホップの received 配列上の位置（見つからなければ -1）
+      //   internalOnly: 全経路がプロバイダ内部で完結（組織内配送）していれば true
+      const detectProviderRoute = () => {
+        const result = { rule: null, ingressHost: "", ingressIndex: -1, internalOnly: false };
+        const received = headers["received"] || [];
+        if (received.length === 0) return result;
+
+        const getOrgDomain = window.getOrganizationalDomain || ((d) => d);
+        const firstLabel = (h) => (h || "").split(".")[0];
+        const normalize = (h) => h.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+        const hops = received.map(line => {
+          const byMatch = line.match(/\bby\s+([^\s;]+)/i);
+          const fromMatch = line.match(/\bfrom\s+(.+?)(?=\s+by\s+|;|$)/i);
+          const fromHost = fromMatch ? fromMatch[1].trim().split(/\s+/)[0] : "";
+          return {
+            by: byMatch ? normalize(byMatch[1]) : "",
+            fromHost: normalize(fromHost)
+          };
+        });
+
+        // 最上段の受信ホストからプロバイダを特定する
+        const rule = findProviderRule(hops[0].by);
+        if (!rule) return result;
+        result.rule = rule;
+        const isProviderHost = (h) => !!h && rule.orgDomains.includes(getOrgDomain(h));
+
+        for (let i = 0; i < hops.length; i++) {
+          const hop = hops[i];
+          // 受信ホストがプロバイダでなくなった時点でプロバイダの受信経路ではない
+          if (!isProviderHost(hop.by)) return result;
+          // 前段の送信元と、このホップの受信ホストが同一サーバでなければ連続性が途切れている
+          if (i > 0 && firstLabel(hops[i - 1].fromHost) !== firstLabel(hop.by)) return result;
+          // 同一サーバが自身から受け取ったホップ（from X by X）は組織内での送信受付の起点。
+          // これより下段はクライアントが送信時に含めた任意のヘッダであり信頼できないため、
+          // ここで走査を打ち切り、組織内で発生した配送として扱う。
+          // （内部の送信者が偽の受信境界ホップを下段に積んで境界を詐称することを防ぐ）
+          if (firstLabel(hop.fromHost) === firstLabel(hop.by)) {
+            result.internalOnly = true;
+            return result;
+          }
+          if (!isProviderHost(hop.fromHost)) {
+            // プロバイダ外から受信したホップ。受信境界ホストであれば境界として採用する。
+            // それ以外（SMTP AUTH による送信受付等）は境界として扱わない。
+            if (rule.ingress.test(hop.by)) {
+              result.ingressHost = hop.by;
+              result.ingressIndex = i;
+            }
+            return result;
+          }
+        }
+        // 外部から入ったホップが一つも無く、全経路がプロバイダ内部で連続している
+        result.internalOnly = true;
+        return result;
+      };
+
+      // ■ 生ヘッダ順序による A-R 付与位置の検証
+      // getFull のヘッダはヘッダ名ごとにまとめられ、異なるヘッダ間の前後関係が失われる。
+      // そこで生のヘッダ順（rawHeaderOrder: [{name, value}]、上から順）を用いて、
+      // 採用候補の A-R がプロバイダの付与位置（rule.arPlacement）にあることを確かめる。
+      //   "above": 受信境界の Received より上。受信境界より上のヘッダは受信後に
+      //            プロバイダが付与したものであり、元メールに注入された偽の A-R は
+      //            必ず受信境界より下に位置するため、プロバイダが A-R の付与や偽 A-R の
+      //            除去を行わなかった場合でも偽物を採用しない。
+      //   "below": 受信境界の Received の直下（次の Received より前）。この位置は元メール
+      //            先頭に置かれた偽 A-R とも重なるため、キュー ID の一致（rule.queueIdHeader）
+      //            でプロバイダが実際に処理したことを併せて確かめる。プロバイダの milter は
+      //            自身の A-R を元メールのヘッダより上に挿入するため、処理済みであれば
+      //            直下で最初に現れる A-R がプロバイダのものになる。
+      // 生ヘッダが得られない・内容が getFull と一致しない場合は信頼しない（安全側）。
+      const isProviderARPlaced = (rule, candidateAR, ingressIndex) => {
+        if (!Array.isArray(rawHeaderOrder) || ingressIndex < 0) return false;
+        const squash = (s) => (s || "").replace(/\s+/g, " ").trim();
+
+        if (rule.queueIdHeader) {
+          // キュー ID ヘッダはちょうど1本で、受信境界の Received の "id" と一致すること
+          // （送信者が同名ヘッダを含めていれば2本以上になり、不一致として扱う）
+          const queueIds = headers[rule.queueIdHeader] || [];
+          const ingressId = ((headers["received"] || [])[ingressIndex] || "").match(/\bid\s+([A-Za-z0-9]+)/i);
+          if (queueIds.length !== 1 || !ingressId || squash(queueIds[0]) !== ingressId[1]) return false;
+        }
+
+        let receivedSeen = 0;
+        let pastIngress = false;
+        for (const h of rawHeaderOrder) {
+          if (h.name === "received") {
+            // "below": 受信境界の直下で A-R が現れないまま次の Received に達した
+            if (pastIngress) return false;
+            if (receivedSeen === ingressIndex) {
+              // "above": 受信境界の Received に到達するまでに A-R が現れなかった
+              if (rule.arPlacement === "above") return false;
+              pastIngress = true;
+            }
+            receivedSeen++;
+            continue;
+          }
+          if (h.name === "authentication-results") {
+            // 付与位置で最初に現れた A-R が候補と同一であること
+            if (rule.arPlacement === "above" || pastIngress) return squash(h.value) === squash(candidateAR);
+            // "below" で受信境界より上に A-R がある場合、最上段の候補は境界直下のものではない
+            return false;
+          }
+        }
+        return false;
+      };
+
+      const providerRoute = detectProviderRoute();
+      const lastReceivedBy = providerRoute.ingressHost || getLastReceivedBy();
       const regularAuth = headers["authentication-results"] || [];
 
       // 通常の Authentication-Results のみ authserv-id でフィルタリング
       // ARC-Authentication-Results は暗号学的検証なしでは偽造可能なため、
       // 本判定からは除外し、ARC カード表示（parseArcChain）のみで利用する
-      const trustedRegular = filterByAuthServId(regularAuth, lastReceivedBy);
-      const authHeaders = trustedRegular;
+      let trustedRegular = filterByAuthServId(regularAuth, lastReceivedBy);
+      let authHeaders = trustedRegular;
+
+      // ■ プロバイダが付与した A-R の採用
+      // 受信境界が特定でき、最上段の A-R がそのプロバイダの形式であり、
+      // かつ生ヘッダ上でプロバイダの付与位置にある（isProviderARPlaced）場合に限り、
+      // その1本だけをプロバイダが付与したものとして信頼する。
+      // 下段にある A-R（元メールに含まれていたもの）は対象にしない。
+      // authserv-id を持たない形式（Microsoft 365）は、既存パーサが先頭セグメントを
+      // authserv-id として読み飛ばすため、境界ホスト名を authserv-id として補って渡す。
+      if (trustedRegular.length === 0 && providerRoute.ingressHost && regularAuth.length > 0 &&
+          isProviderAR(providerRoute.rule, regularAuth[0]) &&
+          isProviderARPlaced(providerRoute.rule, regularAuth[0], providerRoute.ingressIndex)) {
+        trustedRegular = [regularAuth[0]];
+        authHeaders = lacksAuthServId(regularAuth[0])
+          ? [`${providerRoute.ingressHost}; ${regularAuth[0]}`]
+          : [regularAuth[0]];
+      }
 
       // セミコロンで区切ってメソッド単位に分割し、認証タイプのステータスを抽出
       // 分割は splitOnTopLevelSemicolons を用い、コメント括弧内のセミコロンを保護する。
@@ -450,9 +673,11 @@
               }
 
               // IP
+              // "sender IP is x.x.x.x" は Exchange Online のコメント表記
               const ipMatch = m.match(/designates\s+([a-fA-F0-9.:]+)\s+as\s+permitted\s+sender/i) ||
                               m.match(/client-ip=([a-fA-F0-9.:]+)/i) ||
-                              m.match(/smtp\.remote-ip=([a-fA-F0-9.:]+)/i);
+                              m.match(/smtp\.remote-ip=([a-fA-F0-9.:]+)/i) ||
+                              m.match(/sender\s+IP\s+is\s+([a-fA-F0-9.:]+)/i);
               if (ipMatch) ip = ipMatch[1];
 
               if (domain || ip) return { domain, ip, rawSegment };
@@ -681,16 +906,46 @@
       };
       const reportedUnverified = buildReportedUnverified();
 
+      // ■ 転送サービスが記録した元メールの認証結果（RELAY_ORIGINAL_AUTH_HEADERS）
+      // 外側の認証とは別に、転送サービスが元メール受信時に検証した結果を抽出する。
+      // 元送信者の DMARC は、全インスタンスが pass の場合のみ pass とみなす
+      // （同名ヘッダが複数ある場合に、都合のよい1本だけを採用しないため）。
+      const parseRelayOriginalAuth = () => {
+        for (const name of RELAY_ORIGINAL_AUTH_HEADERS) {
+          const list = headers[name] || [];
+          if (list.length === 0) continue;
+          const fromMatch = list[0].match(/header\.from=([^;\s()]+)/i);
+          return {
+            present: true,
+            header: name,
+            spf: statusFromHeaderList([list[0]], "spf"),
+            dkim: statusFromHeaderList([list[0]], "dkim"),
+            dmarc: statusFromHeaderList([list[0]], "dmarc"),
+            fromDomain: fromMatch ? fromMatch[1].replace(/["']/g, '').toLowerCase() : "",
+            dmarcPass: list.every(h => statusFromHeaderList([h], "dmarc") === "pass")
+          };
+        }
+        return { present: false };
+      };
+      const relayOriginal = parseRelayOriginalAuth();
+
       return {
-        authServId: trustedRegular.length > 0
-          ? splitOnTopLevelSemicolons(trustedRegular[0])[0].trim()
+        // 信頼した A-R の authserv-id（Microsoft 365 の場合は補った EOP ホスト名）
+        authServId: authHeaders.length > 0
+          ? splitOnTopLevelSemicolons(authHeaders[0])[0].trim()
           : lastReceivedBy,
         spf: { status: spfStatus, detail: spfDetail },
         dkim: { status: dkimResult.aggregated, detail: dkimDetail, signatures: dkimResult.results },
         dmarc: { status: dmarcStatus, detail: dmarcDetail },
         alignment,
         strength,
-        reportedUnverified
+        reportedUnverified,
+        // Microsoft 365 組織内で完結した配送か（注記表示用。判定には影響させない）
+        // 外部から EOP を経由したメールには必ず A-R が付与されるため、A-R が1本でも
+        // 存在する場合は組織内配送とはみなさない（外部メールへの誤った注記を防ぐ）。
+        m365Internal: !!providerRoute.rule && providerRoute.rule.detectInternal &&
+                      providerRoute.internalOnly && regularAuth.length === 0,
+        relayOriginal
       };
     };
 
@@ -1214,10 +1469,19 @@
       // （SendGrid等の正当な外部配信サービス利用パターンに対応）
       const domainCheckOk = isDmarcOk && isDmarcAligned ? true : isDomainAligned;
 
+      // ■ 転送サービス経由メールの元送信者認証
+      // 外側の認証が示すのは「転送サービスが自ドメインで送った」ことまでで、
+      // 元送信者の正当性は転送サービスが記録した元メールの認証結果にしか現れない。
+      // その報告値が存在し DMARC pass でない場合は、外側がすべて pass でもグリーンにしない。
+      // 報告値は検証不能なため、ヘッダが無いメールの判定を緩める方向には使わない。
+      const relayOriginal = authResults.relayOriginal || { present: false };
+      const isRelayOriginalUnverified = relayOriginal.present && !relayOriginal.dmarcPass;
+
       const isSecure = isSpfOk && isDkimOk && isDmarcOk &&
                        domainCheckOk && isDmarcAligned &&
                        !isDisplayNameSpoofed && !hasCriticalPhishing &&
-                       !hasSuspiciousLink && !hasUntrustedLink;
+                       !hasSuspiciousLink && !hasUntrustedLink &&
+                       !isRelayOriginalUnverified;
 
       // 認証系: pass 以外なら実際のステータスを記録 (例: "SPF: softfail")
       if (!isSpfOk) verdictReasons.push(`SPF: ${authResults.spf.status}`);
@@ -1232,6 +1496,7 @@
       if (!dmarcOverallOk && isDkimOk && !al.dkimAligned) verdictReasons.push("dkim_align_fail");
       if (!domainCheckOk) verdictReasons.push("domain_not_aligned");
       if (isDisplayNameSpoofed) verdictReasons.push("display_name_spoofed");
+      if (isRelayOriginalUnverified) verdictReasons.push("relay_original_unverified");
       // phishing_critical はバッジ自体が「💀 フィッシング検出」になるため判定理由には含めない
       // privacy（トラッキングピクセル）は判定理由タグに出さず、リンク安全性カード内で情報提供
       if (hasSuspiciousLink) verdictReasons.push("phishing_suspicious");
@@ -1565,6 +1830,9 @@
         .align-ok { color: var(--maiv-align-ok-text); font-weight: bold; font-size: 11px; margin-top: 6px; }
         .align-ng { background-color: var(--maiv-align-ng-bg); color: var(--maiv-align-ng-text); font-weight: bold; padding: 6px; border-radius: 4px; font-size: 12px; margin-top: 6px; display: block; }
         .align-warn { background-color: var(--maiv-align-warn-bg); color: var(--maiv-align-warn-text); font-weight: bold; padding: 6px; border-radius: 4px; font-size: 12px; margin-top: 6px; display: block; }
+        /* 判定に影響しない情報提供の注記（組織内配送・転送元の報告値など）。
+           警告色と混同させないよう privacy 系の情報色を流用し、ダークモードも変数で追従する。 */
+        .align-info { background-color: var(--maiv-privacy-bg); color: var(--maiv-privacy-text); font-weight: bold; padding: 6px; border-radius: 4px; font-size: 12px; margin-top: 6px; display: block; }
 
         .address-row { margin-bottom: 4px; display: flex; align-items: center; }
         .address-label { color: var(--maiv-text-muted); width: 85px; display: inline-block; font-size: 10px; text-transform: uppercase; flex-shrink: 0; }
@@ -1715,6 +1983,15 @@
           if (ru.dmarc) parts.push(`DMARC:${ru.dmarc}`);
           lines.push(`Reported (unverified, not counted): ${parts.join(" ")}`);
         }
+        // 転送サービスが記録した元送信者の認証結果（DMARC pass でなければグリーンを阻害）
+        const ro = authResults.relayOriginal;
+        if (ro && ro.present) {
+          const roDomain = ro.fromDomain ? ` (${ro.fromDomain})` : "";
+          lines.push(`Original sender (reported by forwarding service, unverified): SPF:${ro.spf} DKIM:${ro.dkim} DMARC:${ro.dmarc}${roDomain}`);
+        }
+        if (authResults.m365Internal) {
+          lines.push("Note: Microsoft 365 internal delivery (SPF/DKIM/DMARC not applied)");
+        }
         lines.push("");
 
         // アライメントセクション
@@ -1859,6 +2136,7 @@
           "dkim_align_fail": msg("verdictReasonDkimAlign"),
           "domain_not_aligned": msg("verdictReasonDomainMismatch"),
           "display_name_spoofed": msg("verdictReasonSpoofing"),
+          "relay_original_unverified": msg("verdictReasonRelayOriginal"),
           "phishing_suspicious": msg("verdictReasonSuspicious"),
           "link_untrusted": msg("verdictReasonUntrusted")
         };
@@ -2176,9 +2454,26 @@
         // ドメイン一致かつ認証も通っている場合はグリーン表示
         // （p=none等で総合判定がグリーンでなくても、認証自体は成功している）
         alignmentWarningHTML += `<div class="align-ok">${escapeHTML(msg("alignOk"))}</div>`;
-      } else if (envelope.isDomainAligned) {
+      } else if (envelope.isDomainAligned && !authResults.m365Internal) {
         // ドメインは一致しているが認証が通っていない
         alignmentWarningHTML += `<div class="align-warn">${escapeHTML(msg("alignNotAuth"))}</div>`;
+      }
+
+      // Microsoft 365 組織内配送の注記: 組織外へ出ない配送には SPF/DKIM/DMARC が
+      // そもそも適用されないため、「外部送信者を検証できなかった」とは区別して伝える。
+      // バッジ・判定理由は変えない情報提供（組織内配送の信頼性を保証するものではない）。
+      if (authResults.m365Internal) {
+        alignmentWarningHTML += `<div class="align-info">${escapeHTML(msg("m365InternalNote"))}</div>`;
+      }
+
+      // 転送サービスが記録した元送信者の認証結果（未検証の報告値）
+      const relayOriginal = authResults.relayOriginal;
+      if (relayOriginal && relayOriginal.present) {
+        const relayParts = `SPF:${relayOriginal.spf} DKIM:${relayOriginal.dkim} DMARC:${relayOriginal.dmarc}`;
+        const relayDomain = relayOriginal.fromDomain ? ` (${relayOriginal.fromDomain})` : "";
+        const relayCls = relayOriginal.dmarcPass ? "align-info" : "align-warn";
+        alignmentWarningHTML += `<div class="${relayCls}" title="${escapeHTML(msg("relayOriginalAuthNotice"))}">` +
+          `ℹ️ ${escapeHTML(msg("relayOriginalAuthLabel"))}: ${escapeHTML(relayParts + relayDomain)}</div>`;
       }
 
       // Reply-To 不一致警告: フィッシングで返信先を攻撃者に誘導する手口の可能性
@@ -2464,7 +2759,45 @@
       if (host) host.remove();
       host = document.createElement("div");
       host.id = hostId;
-      document.body.insertAdjacentElement("afterbegin", host);
+
+      // ■ ホスト要素のレイアウト固定
+      // Shadow DOM が隔離するのは内部のスタイルだけで、ホスト要素自身の箱は
+      // 親要素やメール側 CSS のレイアウト指定を受ける。例えば崩れた HTML メールで
+      // 文書途中に現れた <body style="max-width:480px"> の属性は、HTML の構文解析
+      // ルールにより本来の body 要素に合流するため、body 内に置いたダッシュボードが
+      // その幅に閉じ込められて右側が切れてしまう。
+      // そこでホストは body の中ではなく <html> 直下（<body> の直前）に置き、
+      // メールが body に与えた幅・余白・配置の影響を受けないようにする。
+      // さらに `div { max-width: ... !important }` のようにメール側 CSS がホストを
+      // 直接対象にした場合にも負けないよう、レイアウトに関わる指定をインラインの
+      // !important で固定する（インラインの !important はページ側のどの指定にも優先する）。
+      // 余白は body の既定余白（8px）相当とし、従来の見た目を保つ。
+      // メールの表示そのもの（body の属性やスタイル）には一切手を加えない。
+      const hostLayout = {
+        "display": "block",
+        "position": "static",
+        "float": "none",
+        "box-sizing": "border-box",
+        "width": "auto",
+        "min-width": "0",
+        "max-width": "none",
+        "height": "auto",
+        "max-height": "none",
+        "margin": "8px 8px 0 8px",
+        "padding": "0",
+        "transform": "none",
+        "visibility": "visible",
+        "opacity": "1"
+      };
+      for (const [prop, value] of Object.entries(hostLayout)) {
+        host.style.setProperty(prop, value, "important");
+      }
+      if (document.body && document.body.parentNode === document.documentElement) {
+        document.documentElement.insertBefore(host, document.body);
+      } else {
+        // body が存在しない・html 直下にない特殊な文書では従来どおり先頭へ挿入する
+        (document.body || document.documentElement).insertAdjacentElement("afterbegin", host);
+      }
 
       const shadow = host.attachShadow({ mode: "closed" });
       shadow.appendChild(style);
@@ -2623,8 +2956,34 @@
       compactMode = stored.compactMode === true;
     } catch { /* storage未対応環境では通常表示 */ }
 
+    // ■ 生ヘッダ順序の取得（受信プロバイダ固有ルールが該当する場合のみ）
+    //    最上段 Received の受信ホストが PROVIDER_INGRESS_RULES のプロバイダである場合に限り、
+    //    A-R の付与位置を検証するための生ヘッダを background 経由で取得する。
+    //    メッセージ全体の読み込みを伴うため、該当しないメールでは取得しない。
+    //    取得に失敗した場合は null のまま進め、プロバイダ固有の A-R 採用を行わない（安全側）。
+    let rawHeaderOrder = null;
+    const topReceivedBy = ((headers["received"] || [])[0] || "").match(/\bby\s+([^\s;]+)/i);
+    if (topReceivedBy && findProviderRule(topReceivedBy[1])) {
+      try {
+        const rawResp = await browser.runtime.sendMessage({ command: "getRawHeaders" });
+        if (rawResp && typeof rawResp.rawHeaders === "string") {
+          // 折り返し行（先頭が空白）を直前のヘッダに連結し、上から順に {name, value} へ分解する
+          rawHeaderOrder = [];
+          for (const line of rawResp.rawHeaders.split(/\r?\n/)) {
+            if (/^[ \t]/.test(line) && rawHeaderOrder.length > 0) {
+              rawHeaderOrder[rawHeaderOrder.length - 1].value += " " + line.trim();
+              continue;
+            }
+            const idx = line.indexOf(":");
+            if (idx <= 0) continue;
+            rawHeaderOrder.push({ name: line.slice(0, idx).trim().toLowerCase(), value: line.slice(idx + 1).trim() });
+          }
+        }
+      } catch { /* 取得できない環境ではプロバイダ固有ルールを適用しない */ }
+    }
+
     const envelope = parseEnvelope(fullMsg, headers, msgHeader);
-    const authResults = parseAuthResults(headers, envelope);
+    const authResults = parseAuthResults(headers, envelope, rawHeaderOrder);
     const routeHops = parseRoute(headers);
     const arcChain = parseArcChain(headers);
     const bodyContent = parseMessageBody(fullMsg);

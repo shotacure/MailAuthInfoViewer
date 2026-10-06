@@ -122,6 +122,15 @@
   "alignNotAuth": {
     "message": "⚠️ 도메인은 일치하지만 발신자가 인증되지 않았습니다"
   },
+  "m365InternalNote": {
+    "message": "ℹ️ Microsoft 365 조직 내부 전달: 조직 밖으로 나가지 않는 메일에는 SPF/DKIM/DMARC가 적용되지 않습니다"
+  },
+  "relayOriginalAuthLabel": {
+    "message": "원 발신자 (전달 서비스 보고값)"
+  },
+  "relayOriginalAuthNotice": {
+    "message": "메일 전달 서비스가 원본 메일을 수신할 때 기록한 인증 결과입니다. 이 헤더는 암호학적으로 검증할 수 없습니다. 원 발신자의 DMARC가 pass가 아니면 판정은 녹색으로 표시되지 않습니다."
+  },
   "mailingListVia": {
     "message": "메일링 리스트 경유"
   },
@@ -181,6 +190,9 @@
   },
   "verdictReasonSpoofing": {
     "message": "표시 이름 스푸핑"
+  },
+  "verdictReasonRelayOriginal": {
+    "message": "원 발신자 미검증 (전달 서비스)"
   },
   "verdictReasonSuspicious": {
     "message": "의심스러운 링크"

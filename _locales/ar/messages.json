@@ -122,6 +122,15 @@
   "alignNotAuth": {
     "message": "⚠️ النطاق متطابق، لكن المرسل غير موثق"
   },
+  "m365InternalNote": {
+    "message": "ℹ️ تسليم داخلي في Microsoft 365: لا تُطبَّق SPF/DKIM/DMARC على الرسائل التي لا تغادر المؤسسة"
+  },
+  "relayOriginalAuthLabel": {
+    "message": "المرسل الأصلي (وفق تقرير خدمة إعادة التوجيه)"
+  },
+  "relayOriginalAuthNotice": {
+    "message": "نتائج مصادقة الرسالة الأصلية كما سجّلتها خدمة إعادة توجيه البريد عند استلامها. لا يمكن التحقق من هذه الترويسة تشفيريًا. ما لم تكن نتيجة DMARC للمرسل الأصلي pass فلن يُعرض الحكم باللون الأخضر."
+  },
   "mailingListVia": {
     "message": "عبر قائمة بريدية"
   },
@@ -181,6 +190,9 @@
   },
   "verdictReasonSpoofing": {
     "message": "انتحال اسم العرض"
+  },
+  "verdictReasonRelayOriginal": {
+    "message": "المرسل الأصلي غير موثَّق (خدمة إعادة التوجيه)"
   },
   "verdictReasonSuspicious": {
     "message": "رابط مشبوه"

@@ -37,4 +37,24 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // 非同期処理 (Promise) の完了後に sendResponse を呼び出すため、true を返す
     return true;
   }
+
+  // 生ヘッダ（ヘッダ部のみ）の取得リクエスト。
+  // getFull のヘッダはヘッダ名ごとにまとめられ、異なるヘッダ間の前後関係が失われるため、
+  // 「Authentication-Results が受信境界の Received より上にあるか」の検証用に
+  // 生のヘッダ順序を返す。本文や添付は不要なので最初の空行までに切り詰めて返す。
+  if (request.command === "getRawHeaders") {
+    browser.messageDisplay.getDisplayedMessage()
+      .then(msg => {
+        if (!msg?.id) throw new Error("No displayed message.");
+        return browser.messages.getRaw(msg.id);
+      })
+      .then(async raw => {
+        // Thunderbird のバージョン・オプションにより文字列または File で返る
+        const text = (typeof raw === "string") ? raw : await raw.text();
+        const end = text.search(/\r?\n\r?\n/);
+        sendResponse({ rawHeaders: end >= 0 ? text.slice(0, end) : text });
+      })
+      .catch(e => sendResponse({ error: e.toString() }));
+    return true;
+  }
 });
