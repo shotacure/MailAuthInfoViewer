@@ -174,7 +174,40 @@
     "message": "Il link punta a un indirizzo IP"
   },
   "linkIdnHomograph": {
-    "message": "Nome di dominio internazionalizzato rilevato (rischio omografo)"
+    "message": "Link a un dominio con caratteri ingannevoli (omografo)"
+  },
+  "badgeHomograph": {
+    "message": "💀 DOMINIO INGANNEVOLE"
+  },
+  "verdictReasonSenderHomograph": {
+    "message": "Dominio del mittente ingannevole"
+  },
+  "senderHomographWarning": {
+    "message": "💀 Il dominio del mittente usa caratteri ingannevoli per imitare un altro dominio"
+  },
+  "homographReasonMixed": {
+    "message": "mescola sistemi di scrittura diversi"
+  },
+  "homographReasonWholeScript": {
+    "message": "è composto solo da caratteri di un'altra scrittura simili a lettere latine"
+  },
+  "homographReasonLatin": {
+    "message": "contiene caratteri latini ingannevoli"
+  },
+  "homographReasonResembles": {
+    "message": "somiglia a"
+  },
+  "idnDomainInfo": {
+    "message": "ℹ️ Dominio internazionalizzato"
+  },
+  "replyToHomographWarning": {
+    "message": "⚠️ Il dominio di Reply-To usa caratteri ingannevoli"
+  },
+  "linkLookalikeDomain": {
+    "message": "Link a un dominio che imita un dominio noto"
+  },
+  "linkIdnDomain": {
+    "message": "Link a un dominio internazionalizzato (nessun carattere ingannevole)"
   },
   "linkShortener": {
     "message": "Accorciatore di URL rilevato (destinazione nascosta)"

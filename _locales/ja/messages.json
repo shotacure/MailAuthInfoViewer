@@ -176,7 +176,40 @@
     "message": "リンク先がIPアドレス"
   },
   "linkIdnHomograph": {
-    "message": "国際化ドメイン名を検出（ホモグラフの疑い）"
+    "message": "紛らわしい文字を使ったドメインへのリンク（ホモグラフ）"
+  },
+  "badgeHomograph": {
+    "message": "💀 なりすましドメイン"
+  },
+  "verdictReasonSenderHomograph": {
+    "message": "送信者ドメインの偽装"
+  },
+  "senderHomographWarning": {
+    "message": "💀 送信者のドメインに、別のドメインに見せかける紛らわしい文字が使われています"
+  },
+  "homographReasonMixed": {
+    "message": "複数の文字種が混在"
+  },
+  "homographReasonWholeScript": {
+    "message": "ラテン文字に見える別の文字種の字だけで構成"
+  },
+  "homographReasonLatin": {
+    "message": "紛らわしいラテン文字を含む"
+  },
+  "homographReasonResembles": {
+    "message": "酷似:"
+  },
+  "idnDomainInfo": {
+    "message": "ℹ️ 国際化ドメイン"
+  },
+  "replyToHomographWarning": {
+    "message": "⚠️ Reply-To のドメインに紛らわしい文字が使われています"
+  },
+  "linkLookalikeDomain": {
+    "message": "既知のドメインに似せた別ドメインへのリンク"
+  },
+  "linkIdnDomain": {
+    "message": "国際化ドメインへのリンク（紛らわしい文字は見つかりません）"
   },
   "linkShortener": {
     "message": "短縮URLを検出（リンク先が隠蔽）"

@@ -174,7 +174,40 @@
     "message": "連結指向 IP 位址"
   },
   "linkIdnHomograph": {
-    "message": "偵測到國際化網域名稱（同形字風險）"
+    "message": "指向使用外觀相似字元的網域的連結（同形異義）"
+  },
+  "badgeHomograph": {
+    "message": "💀 仿冒網域"
+  },
+  "verdictReasonSenderHomograph": {
+    "message": "寄件者網域仿冒"
+  },
+  "senderHomographWarning": {
+    "message": "💀 寄件者網域使用了外觀相似的字元來冒充其他網域"
+  },
+  "homographReasonMixed": {
+    "message": "混用了多種文字"
+  },
+  "homographReasonWholeScript": {
+    "message": "僅由看起來像拉丁字母的其他文字字元組成"
+  },
+  "homographReasonLatin": {
+    "message": "包含外觀相似的拉丁字元"
+  },
+  "homographReasonResembles": {
+    "message": "酷似"
+  },
+  "idnDomainInfo": {
+    "message": "ℹ️ 國際化網域"
+  },
+  "replyToHomographWarning": {
+    "message": "⚠️ Reply-To 網域使用了外觀相似的字元"
+  },
+  "linkLookalikeDomain": {
+    "message": "指向仿冒已知網域的連結"
+  },
+  "linkIdnDomain": {
+    "message": "指向國際化網域的連結（未發現外觀相似的字元）"
   },
   "linkShortener": {
     "message": "偵測到短網址（目標被隱藏）"

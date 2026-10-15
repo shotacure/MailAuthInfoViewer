@@ -174,7 +174,40 @@
     "message": "链接指向 IP 地址"
   },
   "linkIdnHomograph": {
-    "message": "检测到国际化域名（同形字风险）"
+    "message": "指向使用外观相似字符的域名的链接（同形异义）"
+  },
+  "badgeHomograph": {
+    "message": "💀 仿冒域名"
+  },
+  "verdictReasonSenderHomograph": {
+    "message": "发件人域名仿冒"
+  },
+  "senderHomographWarning": {
+    "message": "💀 发件人域名使用了外观相似的字符来冒充其他域名"
+  },
+  "homographReasonMixed": {
+    "message": "混用了多种文字"
+  },
+  "homographReasonWholeScript": {
+    "message": "仅由看起来像拉丁字母的其他文字字符组成"
+  },
+  "homographReasonLatin": {
+    "message": "包含外观相似的拉丁字符"
+  },
+  "homographReasonResembles": {
+    "message": "酷似"
+  },
+  "idnDomainInfo": {
+    "message": "ℹ️ 国际化域名"
+  },
+  "replyToHomographWarning": {
+    "message": "⚠️ Reply-To 域名使用了外观相似的字符"
+  },
+  "linkLookalikeDomain": {
+    "message": "指向仿冒已知域名的链接"
+  },
+  "linkIdnDomain": {
+    "message": "指向国际化域名的链接（未发现外观相似的字符）"
   },
   "linkShortener": {
     "message": "检测到短链接（目标被隐藏）"

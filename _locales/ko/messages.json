@@ -174,7 +174,40 @@
     "message": "링크가 IP 주소를 가리킴"
   },
   "linkIdnHomograph": {
-    "message": "국제화 도메인 이름 감지됨 (호모그래프 위험)"
+    "message": "헷갈리기 쉬운 문자를 사용한 도메인으로의 링크 (호모그래프)"
+  },
+  "badgeHomograph": {
+    "message": "💀 사칭 도메인"
+  },
+  "verdictReasonSenderHomograph": {
+    "message": "발신자 도메인 사칭"
+  },
+  "senderHomographWarning": {
+    "message": "💀 발신자 도메인이 다른 도메인처럼 보이도록 비슷한 문자를 사용합니다"
+  },
+  "homographReasonMixed": {
+    "message": "여러 문자 체계가 섞여 있음"
+  },
+  "homographReasonWholeScript": {
+    "message": "라틴 문자처럼 보이는 다른 문자 체계의 글자로만 구성됨"
+  },
+  "homographReasonLatin": {
+    "message": "헷갈리기 쉬운 라틴 문자를 포함함"
+  },
+  "homographReasonResembles": {
+    "message": "다음과 매우 유사:"
+  },
+  "idnDomainInfo": {
+    "message": "ℹ️ 국제화 도메인"
+  },
+  "replyToHomographWarning": {
+    "message": "⚠️ Reply-To 도메인에 헷갈리기 쉬운 문자가 사용되었습니다"
+  },
+  "linkLookalikeDomain": {
+    "message": "알려진 도메인을 흉내 낸 도메인으로의 링크"
+  },
+  "linkIdnDomain": {
+    "message": "국제화 도메인으로의 링크 (헷갈리기 쉬운 문자는 없음)"
   },
   "linkShortener": {
     "message": "URL 단축기 감지됨 (링크 대상 숨겨짐)"

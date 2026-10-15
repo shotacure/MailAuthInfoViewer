@@ -174,7 +174,40 @@
     "message": "Ссылка ведёт на IP-адрес"
   },
   "linkIdnHomograph": {
-    "message": "Обнаружен интернационализированный домен (гомографический риск)"
+    "message": "Ссылка на домен с похожими символами (омограф)"
+  },
+  "badgeHomograph": {
+    "message": "💀 ПОДДЕЛЬНЫЙ ДОМЕН"
+  },
+  "verdictReasonSenderHomograph": {
+    "message": "Поддельный домен отправителя"
+  },
+  "senderHomographWarning": {
+    "message": "💀 Домен отправителя использует похожие символы, чтобы выдать себя за другой домен"
+  },
+  "homographReasonMixed": {
+    "message": "смешивает разные письменности"
+  },
+  "homographReasonWholeScript": {
+    "message": "состоит только из символов другой письменности, похожих на латинские буквы"
+  },
+  "homographReasonLatin": {
+    "message": "содержит похожие латинские символы"
+  },
+  "homographReasonResembles": {
+    "message": "похож на"
+  },
+  "idnDomainInfo": {
+    "message": "ℹ️ Интернационализированный домен"
+  },
+  "replyToHomographWarning": {
+    "message": "⚠️ Домен Reply-To использует похожие символы"
+  },
+  "linkLookalikeDomain": {
+    "message": "Ссылка на домен, имитирующий известный домен"
+  },
+  "linkIdnDomain": {
+    "message": "Ссылка на интернационализированный домен (похожих символов не обнаружено)"
   },
   "linkShortener": {
     "message": "Обнаружен сокращатель URL (назначение скрыто)"

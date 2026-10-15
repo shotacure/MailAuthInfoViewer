@@ -174,7 +174,40 @@
     "message": "Link aponta para endereço IP"
   },
   "linkIdnHomograph": {
-    "message": "Nome de domínio internacionalizado detectado (risco homógrafo)"
+    "message": "Link para um domínio com caracteres enganosos (homógrafo)"
+  },
+  "badgeHomograph": {
+    "message": "💀 DOMÍNIO ENGANOSO"
+  },
+  "verdictReasonSenderHomograph": {
+    "message": "Domínio do remetente enganoso"
+  },
+  "senderHomographWarning": {
+    "message": "💀 O domínio do remetente usa caracteres enganosos para imitar outro domínio"
+  },
+  "homographReasonMixed": {
+    "message": "mistura sistemas de escrita diferentes"
+  },
+  "homographReasonWholeScript": {
+    "message": "contém apenas caracteres de outra escrita que parecem letras latinas"
+  },
+  "homographReasonLatin": {
+    "message": "contém caracteres latinos enganosos"
+  },
+  "homographReasonResembles": {
+    "message": "se parece com"
+  },
+  "idnDomainInfo": {
+    "message": "ℹ️ Domínio internacionalizado"
+  },
+  "replyToHomographWarning": {
+    "message": "⚠️ O domínio de Reply-To usa caracteres enganosos"
+  },
+  "linkLookalikeDomain": {
+    "message": "Link para um domínio que imita um domínio conhecido"
+  },
+  "linkIdnDomain": {
+    "message": "Link para um domínio internacionalizado (sem caracteres enganosos)"
   },
   "linkShortener": {
     "message": "Encurtador de URL detectado (destino oculto)"

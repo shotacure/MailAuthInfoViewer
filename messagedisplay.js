@@ -77,6 +77,202 @@
     };
 
     // =========================================================
+    // 国際化ドメイン名（IDN）の表記変換とホモグラフ判定ヘルパー群
+    // =========================================================
+    // ホモグラフ攻撃は、見た目がそっくりな別の文字（キリル文字の "а" とラテン文字の "a" 等）や
+    // 紛らわしい文字列（"rn" と "m"、"1" と "l" 等）で、実在のドメインになりすます手口。
+    // 攻撃者は偽ドメインを自分で取得して SPF/DKIM/DMARC を正しく設定できるため、
+    // 認証がすべて pass しても安全とは言えない。ここではドメインの文字そのものを検査する。
+    //
+    // 表記の扱い:
+    //   - 比較は常に ASCII 表記（Punycode、"xn--" 形式）にそろえて行う。
+    //     URL の hostname はブラウザが ASCII 表記に変換するが、ヘッダ From 等は
+    //     Unicode のまま渡ることがあり、そのまま比べると同一ドメインでも不一致になる。
+    //   - 利用者への表示には Unicode 表記を併記し、実際の文字を確認できるようにする。
+
+    // Punycode（RFC 3492）のデコード。"xn--" を除いた部分を受け取り Unicode 文字列を返す。
+    // ブラウザには ASCII→Unicode 方向の標準 API が無いため、仕様どおりに実装する。
+    const punycodeDecode = (input) => {
+      const base = 36, tMin = 1, tMax = 26, skew = 38, damp = 700;
+      const adapt = (delta, numPoints, firstTime) => {
+        let k = 0;
+        delta = firstTime ? Math.floor(delta / damp) : (delta >> 1);
+        delta += Math.floor(delta / numPoints);
+        for (; delta > ((base - tMin) * tMax) >> 1; k += base) {
+          delta = Math.floor(delta / (base - tMin));
+        }
+        return Math.floor(k + (base - tMin + 1) * delta / (delta + skew));
+      };
+      const digitOf = (cp) => {
+        if (cp >= 0x30 && cp <= 0x39) return cp - 0x16; // 0-9 → 26-35
+        if (cp >= 0x41 && cp <= 0x5A) return cp - 0x41; // A-Z → 0-25
+        if (cp >= 0x61 && cp <= 0x7A) return cp - 0x61; // a-z → 0-25
+        return base;
+      };
+      const output = [];
+      // 最後の "-" より前は基本文字（ASCII）がそのまま並ぶ
+      const basicEnd = Math.max(input.lastIndexOf("-"), 0);
+      for (let j = 0; j < basicEnd; j++) {
+        if (input.charCodeAt(j) >= 0x80) throw new Error("invalid punycode");
+        output.push(input.charCodeAt(j));
+      }
+      let n = 128, i = 0, bias = 72;
+      for (let idx = basicEnd > 0 ? basicEnd + 1 : 0; idx < input.length; ) {
+        const oldi = i;
+        for (let w = 1, k = base; ; k += base) {
+          if (idx >= input.length) throw new Error("invalid punycode");
+          const d = digitOf(input.charCodeAt(idx++));
+          if (d >= base) throw new Error("invalid punycode");
+          i += d * w;
+          const t = k <= bias ? tMin : (k >= bias + tMax ? tMax : k - bias);
+          if (d < t) break;
+          w *= base - t;
+        }
+        const len = output.length + 1;
+        bias = adapt(i - oldi, len, oldi === 0);
+        n += Math.floor(i / len);
+        i %= len;
+        output.splice(i++, 0, n);
+      }
+      return String.fromCodePoint(...output);
+    };
+
+    // ドメインを ASCII 表記（Punycode）に正規化する。URL パーサの IDNA 処理に任せることで、
+    // 大文字・全角英数字などの正規化も同時に行う。変換できない文字列は小文字化のみ。
+    const domainToAscii = (domain) => {
+      if (!domain) return "";
+      try {
+        return new URL(`http://${domain}/`).hostname.replace(/\.$/, "");
+      } catch {
+        return domain.toLowerCase();
+      }
+    };
+
+    // ドメインを Unicode 表記に変換する（表示・文字種判定用）。デコードできないラベルはそのまま。
+    const domainToUnicode = (domain) => {
+      return domainToAscii(domain).split(".").map(label => {
+        if (!label.startsWith("xn--")) return label;
+        try { return punycodeDecode(label.slice(4)); } catch { return label; }
+      }).join(".");
+    };
+
+    // ラテン文字と見分けにくい文字 → 見た目が同じラテン文字（またはそれに近い ASCII 表記）。
+    // Unicode の confusables（UTS #39）のうち、ドメイン（小文字化済み）で
+    // ラテン文字の偽装に使われるものに絞っている。"0"→"o" と "1"→"l" は ASCII 同士の紛らわしさ。
+    const CONFUSABLE_TO_LATIN = {
+      // キリル文字
+      "а": "a", "с": "c", "ԁ": "d", "е": "e", "һ": "h", "і": "i", "ј": "j", "к": "k",
+      "ӏ": "l", "о": "o", "р": "p", "ԛ": "q", "ѕ": "s", "ѵ": "v", "ԝ": "w", "х": "x",
+      "у": "y", "ү": "y",
+      // ギリシャ文字
+      "α": "a", "ι": "i", "κ": "k", "ν": "v", "ο": "o", "ρ": "p", "υ": "u", "χ": "x",
+      // アルメニア文字
+      "ա": "w", "հ": "h", "ո": "n", "ս": "u", "ց": "g", "զ": "q", "օ": "o",
+      // ラテン文字の拡張（ASCII の字と見分けにくいもの）
+      "ı": "i", "ɑ": "a", "ɡ": "g", "ɩ": "i", "ǀ": "l", "ȷ": "j",
+      // ASCII 同士
+      "0": "o", "1": "l"
+    };
+    // ラテン文字の拡張のうち、ASCII の字になりすますために使われるもの（文字種の混在が無くても警告）
+    const LATIN_LOOKALIKES = new Set(["ı", "ɑ", "ɡ", "ɩ", "ǀ", "ȷ"]);
+
+    // 文字種の判定。数字・ハイフン等の共通文字（Common / Inherited）は判定対象外として null を返す。
+    const SCRIPT_TESTS = [
+      "Latin", "Cyrillic", "Greek", "Armenian", "Georgian", "Hebrew", "Arabic", "Cherokee",
+      "Han", "Hiragana", "Katakana", "Hangul", "Bopomofo", "Thai", "Devanagari", "Ethiopic"
+    ].map(name => [name, new RegExp(`\\p{Script=${name}}`, "u")]);
+    const scriptOf = (ch) => {
+      if (/[\p{Script=Common}\p{Script=Inherited}]/u.test(ch)) return null;
+      for (const [name, re] of SCRIPT_TESTS) {
+        if (re.test(ch)) return name;
+      }
+      return "Other";
+    };
+    // 1つのラベル内で混在しても正当とみなす文字種の組み合わせ（UTS #39 "Highly Restrictive"）。
+    // 日本語・中国語・韓国語の表記ではラテン文字・漢字・かな等の併用が日常的なため。
+    const ALLOWED_SCRIPT_MIXES = [
+      ["Latin", "Han", "Hiragana", "Katakana"],
+      ["Latin", "Han", "Bopomofo"],
+      ["Latin", "Han", "Hangul"]
+    ];
+
+    // ドメインの「骨格」: 紛らわしい文字を代表の字にそろえた比較用の文字列。
+    // 骨格が同じで実際のドメインが異なれば、利用者には同じドメインに見える可能性が高い。
+    // 例: "pаypal.com"（キリル文字の а）、"paypa1.com"、"rnicrosoft.com" はいずれも
+    //     "paypal.com" / "microsoft.com" と同じ骨格になる。
+    // 合成文字は分解してアクセント記号を除き（"é"→"e"）、"rn"→"m"、"vv"→"w" もそろえる。
+    const domainSkeleton = (domain) => {
+      const base = domainToUnicode(domain).toLowerCase().normalize("NFKD").replace(/\p{M}/gu, "");
+      return [...base].map(ch => CONFUSABLE_TO_LATIN[ch] || ch).join("")
+        .replace(/rn/g, "m").replace(/vv/g, "w");
+    };
+
+    // ドメインの文字を検査し、ホモグラフ（見た目の偽装）の兆候を返す。
+    //   mixed:   1つのラベル内で、正当な組み合わせ以外の文字種が混在している（例: ラテン＋キリル）
+    //   whole:   ラベル全体がラテン文字以外の1文字種で、しかもラテン文字に見える字だけで
+    //            できている（例: キリル文字だけの "аре"）。トップレベルドメインが同じ文字種
+    //            （キリル文字のラベル＋".рф" 等）の場合は、その言語の正当な表記とみなす。
+    //   latin:   ASCII の字になりすますためのラテン文字拡張（"ı" 等）を含む
+    // 戻り値: { ascii, unicode, isIdn, reasons: [...], isDeceptive, chars: [{ch, script, code}] }
+    const analyzeDomainHomograph = (domain) => {
+      const ascii = domainToAscii(domain);
+      const unicode = domainToUnicode(domain);
+      const labels = unicode.split(".").filter(Boolean);
+      const tld = labels[labels.length - 1] || "";
+      const reasons = new Set();
+      const chars = new Map();
+      for (const label of labels) {
+        const scripts = new Set();
+        for (const ch of label) {
+          const s = scriptOf(ch);
+          if (s) scripts.add(s);
+          // 利用者に提示するため、ASCII 以外の紛らわしい文字を記録する
+          if (ch.codePointAt(0) > 0x7F && CONFUSABLE_TO_LATIN[ch] && !chars.has(ch)) {
+            chars.set(ch, { ch, script: s || "", code: "U+" + ch.codePointAt(0).toString(16).toUpperCase().padStart(4, "0") });
+          }
+          if (LATIN_LOOKALIKES.has(ch)) reasons.add("latin");
+        }
+        const scriptList = Array.from(scripts);
+        if (scriptList.length > 1 && !ALLOWED_SCRIPT_MIXES.some(mix => scriptList.every(s => mix.includes(s)))) {
+          reasons.add("mixed");
+        }
+        if (scriptList.length === 1 && scriptList[0] !== "Latin") {
+          const script = scriptList[0];
+          const allLookalike = [...label].every(ch => !scriptOf(ch) || CONFUSABLE_TO_LATIN[ch]);
+          const tldSameScript = [...tld].some(ch => scriptOf(ch) === script);
+          if (allLookalike && !tldSameScript) reasons.add("whole");
+        }
+      }
+      return {
+        ascii,
+        unicode,
+        isIdn: ascii !== unicode,
+        reasons: Array.from(reasons),
+        isDeceptive: reasons.size > 0,
+        chars: Array.from(chars.values())
+      };
+    };
+
+    // 参照ドメイン群（組織ドメイン、ASCII 表記）の骨格索引を作る。
+    // 戻り値の Map は 骨格 → 参照ドメイン。
+    const buildSkeletonIndex = (domains) => {
+      const index = new Map();
+      for (const d of domains) {
+        if (!d) continue;
+        const sk = domainSkeleton(d);
+        if (!index.has(sk)) index.set(sk, d);
+      }
+      return index;
+    };
+    // orgDomain（ASCII 表記の組織ドメイン）が、参照ドメインのどれかに「似せた別ドメイン」なら
+    // その参照ドメインを返す。同一ドメインは対象外。該当しなければ null。
+    const findLookalikeTarget = (orgDomain, skeletonIndex) => {
+      if (!orgDomain || !skeletonIndex) return null;
+      const target = skeletonIndex.get(domainSkeleton(orgDomain));
+      return (target && target !== orgDomain) ? target : null;
+    };
+
+    // =========================================================
     // 既知の電子メール匿名化・転送（リレー）サービスのドメイン
     // =========================================================
     // これらのサービスはユーザーの実アドレスを隠蔽するため、
@@ -172,7 +368,8 @@
     // =========================================================
     // 1. parseEnvelope - エンベロープ情報・アドレスアライメント・メーリングリスト検知
     // =========================================================
-    const parseEnvelope = (fullMsg, headers, msgHeader) => {
+    // trustedDomains: 利用者の信頼済みドメイン（送信者ドメインが、これらに似せた別ドメインかの判定に使う）
+    const parseEnvelope = (fullMsg, headers, msgHeader, trustedDomains) => {
       // ■ エンベロープ情報の抽出
       // envelope.from、return-path、またはauthorを評価し、送信元アドレスを特定
       const envelopeFromRaw =
@@ -208,12 +405,14 @@
         headerFromAddress = headerFromRaw.replace(/^<|>$/g, "").trim();
       }
 
-      // 比較用にドメイン部分を抽出して小文字化
+      // 比較用にドメイン部分を抽出し、ASCII 表記（Punycode）に正規化する
+      // （Thunderbird の author は国際化ドメインを Unicode のまま返すことがあり、
+      //   Authentication-Results やリンク先の ASCII 表記と比べると同一ドメインでも不一致になるため）
       const headerFromDomain = headerFromAddress.includes('@')
-        ? headerFromAddress.split('@')[1].toLowerCase()
+        ? domainToAscii(headerFromAddress.split('@')[1])
         : headerFromAddress.toLowerCase();
       const envelopeFromDomain = envelopeFrom.includes('@')
-        ? envelopeFrom.split('@')[1].toLowerCase()
+        ? domainToAscii(envelopeFrom.split('@')[1])
         : envelopeFrom.toLowerCase();
 
       // ■ 組織ドメイン (Organizational Domain) での比較 — RFC 7489 準拠
@@ -253,7 +452,7 @@
         // 表示名から @ を含む文字列（メールアドレス候補）を抽出
         const emailInName = headerFromName.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/);
         if (emailInName) {
-          const spoofedDomain = emailInName[0].split('@')[1].toLowerCase();
+          const spoofedDomain = domainToAscii(emailInName[0].split('@')[1]);
           const getOrgDomain = window.getOrganizationalDomain || ((d) => d);
           const spoofedOrgDomain = getOrgDomain(spoofedDomain);
           // 表示名内のドメインと実際のHeader Fromドメインが組織ドメインレベルで異なれば警告
@@ -272,7 +471,7 @@
         const replyToMatch = replyToRaw.match(/<([^>]+)>/);
         replyToAddress = replyToMatch ? replyToMatch[1].trim() : replyToRaw.replace(/^<|>$/g, "").trim();
         if (replyToAddress.includes('@')) {
-          const replyToDomain = replyToAddress.split('@')[1].toLowerCase();
+          const replyToDomain = domainToAscii(replyToAddress.split('@')[1]);
           const getOrgDomain = window.getOrganizationalDomain || ((d) => d);
           const replyToOrgDomain = getOrgDomain(replyToDomain);
           // Reply-To の組織ドメインが Header From と異なり、
@@ -283,7 +482,45 @@
         }
       }
 
+      // ■ 送信者ドメインのホモグラフ（見た目の偽装）検知
+      // 攻撃者は "аpple.com"（キリル文字の а）のような偽ドメインを自分で取得し、
+      // SPF/DKIM/DMARC を正しく設定できる。認証・アライメントがすべて成立しても
+      // 送信者を誤認させる手口であるため、ドメインの文字そのものを検査する。
+      //   - 文字種の混在・全体の置き換え・紛らわしいラテン文字（analyzeDomainHomograph）
+      //   - 利用者の信頼済みドメインに似せた別ドメイン（骨格の一致）
+      // いずれかに該当すれば determineSecurityStatus でフィッシング判定とする。
+      const getOrgDomainFn = window.getOrganizationalDomain || ((d) => d);
+      const senderDomainInfo = headerFromAddress.includes('@')
+        ? analyzeDomainHomograph(headerFromDomain)
+        : { ascii: headerFromDomain, unicode: headerFromDomain, isIdn: false, reasons: [], isDeceptive: false, chars: [] };
+      const trustedIndex = buildSkeletonIndex(Array.from(trustedDomains || []).map(d => getOrgDomainFn(domainToAscii(d))));
+      const senderLookalikeOf = (headerFromAddress.includes('@') && !(trustedDomains && trustedDomains.has(headerOrgDomain)))
+        ? findLookalikeTarget(headerOrgDomain, trustedIndex)
+        : null;
+      const senderHomograph = {
+        ...senderDomainInfo,
+        lookalikeOf: senderLookalikeOf,
+        isHomograph: senderDomainInfo.isDeceptive || !!senderLookalikeOf
+      };
+
+      // ■ Reply-To ドメインのホモグラフ検知
+      // 返信先に紛らわしい文字のドメインや、送信者ドメインに似せた別ドメインが
+      // 指定されている場合は、返信を攻撃者に誘導する手口の可能性が高い。
+      // リレーサービス経由でも返信先の偽装は正当化されないため、ここでは除外しない。
+      let replyToHomograph = null;
+      const replyToAddrForCheck = replyToAddress || (replyToRaw.match(/<([^>]+)>/)?.[1] || replyToRaw.replace(/^<|>$/g, "")).trim();
+      if (replyToAddrForCheck.includes('@')) {
+        const replyInfo = analyzeDomainHomograph(replyToAddrForCheck.split('@')[1]);
+        const replyOrg = getOrgDomainFn(replyInfo.ascii);
+        const replyLookalikeOf = findLookalikeTarget(replyOrg, buildSkeletonIndex([headerOrgDomain]));
+        if (replyInfo.isDeceptive || replyLookalikeOf) {
+          replyToHomograph = { ...replyInfo, address: replyToAddrForCheck, lookalikeOf: replyLookalikeOf };
+        }
+      }
+
       return {
+        senderHomograph,
+        replyToHomograph,
         envelopeFrom,
         envelopeTo,
         headerFromName,
@@ -743,7 +980,8 @@
         // SPF が pass でない場合、ドメインが一致していてもアライメント成立とはみなさない
         let spfAligned = false;
         if (spfStatus === "pass" && spfDetail.domain) {
-          const spfOrgDomain = getOrgDomain(spfDetail.domain.toLowerCase());
+          // ヘッダ From 側と同じく ASCII 表記（Punycode）にそろえて比較する
+          const spfOrgDomain = getOrgDomain(domainToAscii(spfDetail.domain));
           spfAligned = (spfOrgDomain === headerOrgDomain);
         }
 
@@ -756,7 +994,7 @@
             .filter(sig => sig.status === "pass" && sig.domain)
             .map(sig => sig.domain);
           for (const d of passedDomains) {
-            const dkimOrgDomain = getOrgDomain(d.toLowerCase());
+            const dkimOrgDomain = getOrgDomain(domainToAscii(d));
             if (dkimOrgDomain === headerOrgDomain) {
               dkimAligned = true;
               break;
@@ -1150,6 +1388,33 @@
       const doc = parser.parseFromString(bodyContent, "text/html");
       const getOrgDomain = window.getOrganizationalDomain || ((d) => d);
 
+      // ■ ホモグラフ検査の参照ドメイン: 送信者ドメインと信頼済みドメイン（いずれも組織ドメイン）
+      // リンク先がこれらに「似せた別ドメイン」（骨格が一致するが実体は異なる）であれば、
+      // 正規の送信者が使うことはまず無い偽装リンクとして critical 扱いにする。
+      const lookalikeIndex = buildSkeletonIndex([
+        headerOrgDomain,
+        ...Array.from(trustedDomains || []).map(d => getOrgDomain(domainToAscii(d)))
+      ]);
+      const lookalikeLinks = new Set();   // "偽装ドメイン ≈ 本物" の表示用文字列
+      // 国際化ドメインのリンク先を表示用の "Unicode (ASCII)" 形式で記録する
+      const idnLabel = (info) => `${info.unicode} (${info.ascii})`;
+      // リンク先ホストのホモグラフ検査（<a> と本文中の URL の両方で使う）
+      //   - 紛らわしい文字を含む国際化ドメイン → idnHomographLinks（suspicious）
+      //   - 紛らわしい兆候の無い国際化ドメイン → idnLinks（suspicious。表示で区別する）
+      //   - 参照ドメインに似せた別ドメイン     → lookalikeLinks（critical）
+      const inspectHostHomograph = (host, orgDomain) => {
+        const info = analyzeDomainHomograph(host);
+        if (info.isIdn) {
+          if (info.isDeceptive) idnHomographLinks.add(idnLabel(info));
+          else idnLinks.add(idnLabel(info));
+        }
+        const target = (trustedDomains && trustedDomains.has(orgDomain)) ? null : findLookalikeTarget(orgDomain, lookalikeIndex);
+        if (target) {
+          lookalikeLinks.add(`${domainToUnicode(orgDomain)} ≈ ${target}`);
+          deceptiveDomains.add(orgDomain);
+        }
+      };
+
       // ■ フォーム検知 (項目3): メール内の <form> 要素は極めて異常
       const forms = doc.querySelectorAll("form");
       if (forms.length > 0) {
@@ -1169,6 +1434,7 @@
       // これにより同種の警告が大量に並ぶ肥大化を防ぐ
       const ipAddressLinks = new Set();
       const idnHomographLinks = new Set();
+      const idnLinks = new Set();
       const urlShortenerLinks = new Set();
 
       for (const a of anchors) {
@@ -1201,7 +1467,10 @@
         const linkText = (a.textContent || "").trim();
         const urlInText = linkText.match(/^https?:\/\/([^\/\s?#]+)/i);
         if (urlInText) {
-          const displayHost = urlInText[1].toLowerCase();
+          // 表示テキストのホスト名も、実リンク先（URL パーサが ASCII 表記に変換済み）と同じく
+          // ASCII 表記にそろえてから比べる。そろえないと、テキストもリンク先も同じ正規の
+          // 国際化ドメイン（例: https://例え.jp/）が、表記の違いだけで偽装と誤判定される。
+          const displayHost = domainToAscii(urlInText[1].replace(/:\d+$/, ""));
           const displayOrgDomain = getOrgDomain(displayHost);
           const hrefOrgDomain = getOrgDomain(linkHost);
           if (displayOrgDomain !== hrefOrgDomain) {
@@ -1223,13 +1492,11 @@
           ipAddressLinks.add(linkHost);
         }
 
-        // --- 項目5: IDNホモグラフ攻撃検知 ---
-        if (linkHost.includes("xn--")) {
-          idnHomographLinks.add(linkHost);
-        }
+        // --- 項目5: IDNホモグラフ攻撃検知・類似ドメイン検知 ---
+        const linkOrgDomain = getOrgDomain(linkHost);
+        inspectHostHomograph(linkHost, linkOrgDomain);
 
         // --- 項目6: URLショートナー検知 ---
-        const linkOrgDomain = getOrgDomain(linkHost);
         if (URL_SHORTENERS.some(s => linkHost === s || linkHost.endsWith("." + s))) {
           urlShortenerLinks.add(linkHost);
         }
@@ -1278,13 +1545,6 @@
           detail: msg("linkIpAddress") + " " + formatAggregated(ipAddressLinks)
         });
       }
-      if (idnHomographLinks.size > 0) {
-        findings.push({
-          level: "suspicious",
-          type: "idn_homograph",
-          detail: msg("linkIdnHomograph") + " " + formatAggregated(idnHomographLinks)
-        });
-      }
       if (urlShortenerLinks.size > 0) {
         findings.push({
           level: "suspicious",
@@ -1309,9 +1569,37 @@
           if (!linkDomains.has(orgDomain)) {
             linkDomains.set(orgDomain, { count: 1, matchesFrom });
           }
+          // 本文中の URL もクリックされ得るため、リンクと同じくホモグラフを検査する
+          inspectHostHomograph(host, orgDomain);
         } catch {
           // パース不能なURLはスキップ
         }
+      }
+
+      // ■ ホモグラフ関連の findings（<a> と本文中の URL の検査結果をまとめて生成）
+      // 参照ドメインに似せた別ドメインは、リンクテキスト偽装と同じく信頼リスト対象外の critical。
+      if (lookalikeLinks.size > 0) {
+        findings.push({
+          level: "critical",
+          type: "lookalike_domain",
+          detail: msg("linkLookalikeDomain") + " " + formatAggregated(lookalikeLinks)
+        });
+      }
+      // 紛らわしい文字を含む国際化ドメインと、兆候の無い国際化ドメインは、いずれも suspicious。
+      // 後者は「国際化ドメインであること」自体を知らせるもので、文言で前者と区別する。
+      if (idnHomographLinks.size > 0) {
+        findings.push({
+          level: "suspicious",
+          type: "idn_homograph",
+          detail: msg("linkIdnHomograph") + " " + formatAggregated(idnHomographLinks)
+        });
+      }
+      if (idnLinks.size > 0) {
+        findings.push({
+          level: "suspicious",
+          type: "idn_domain",
+          detail: msg("linkIdnDomain") + " " + formatAggregated(idnLinks)
+        });
       }
 
       // ■ すべてのリンクが外部ドメイン → 未信頼レベル
@@ -1427,7 +1715,8 @@
     //   DMARCアライメント成立, 表示名なりすましなし,
     //   critical/suspicious/untrusted のいずれのリンク指標もなし
     // エンベロープドメイン不一致: DMARC pass かつアライメント成立時はグリーンを阻害しない
-    const determineSecurityStatus = (authResults, isDomainAligned, envelopeFrom, isDisplayNameSpoofed, linkSafety) => {
+    // senderHomograph: parseEnvelope が返す送信者ドメインのホモグラフ検査結果
+    const determineSecurityStatus = (authResults, isDomainAligned, envelopeFrom, isDisplayNameSpoofed, linkSafety, senderHomograph) => {
       const isSpfOk = authResults.spf.status === "pass";
       const isDkimOk = authResults.dkim.status === "pass";
       // DMARC は pass のみを合格とする。
@@ -1477,11 +1766,17 @@
       const relayOriginal = authResults.relayOriginal || { present: false };
       const isRelayOriginalUnverified = relayOriginal.present && !relayOriginal.dmarcPass;
 
+      // ■ 送信者ドメインのホモグラフ（見た目の偽装）
+      // 偽ドメインを取得した攻撃者は認証を正しく通せるため、認証結果とは独立に判定する。
+      // 「別のドメインになりすますための文字が使われている」こと自体が確度の高い攻撃の兆候であり、
+      // リンク偽装と同じくフィッシング判定（最も重いバッジ）に昇格させる。
+      const isSenderHomograph = !!(senderHomograph && senderHomograph.isHomograph);
+
       const isSecure = isSpfOk && isDkimOk && isDmarcOk &&
                        domainCheckOk && isDmarcAligned &&
                        !isDisplayNameSpoofed && !hasCriticalPhishing &&
                        !hasSuspiciousLink && !hasUntrustedLink &&
-                       !isRelayOriginalUnverified;
+                       !isRelayOriginalUnverified && !isSenderHomograph;
 
       // 認証系: pass 以外なら実際のステータスを記録 (例: "SPF: softfail")
       if (!isSpfOk) verdictReasons.push(`SPF: ${authResults.spf.status}`);
@@ -1497,6 +1792,8 @@
       if (!domainCheckOk) verdictReasons.push("domain_not_aligned");
       if (isDisplayNameSpoofed) verdictReasons.push("display_name_spoofed");
       if (isRelayOriginalUnverified) verdictReasons.push("relay_original_unverified");
+      // 送信者ドメインの偽装は、リンク起因のフィッシングと区別できるよう判定理由として明示する
+      if (isSenderHomograph) verdictReasons.push("sender_homograph");
       // phishing_critical はバッジ自体が「💀 フィッシング検出」になるため判定理由には含めない
       // privacy（トラッキングピクセル）は判定理由タグに出さず、リンク安全性カード内で情報提供
       if (hasSuspiciousLink) verdictReasons.push("phishing_suspicious");
@@ -1505,7 +1802,12 @@
       let badgeClass = "warning";
       let badgeText = msg("badgeUnverified");
 
-      if (hasCriticalPhishing) {
+      if (isSenderHomograph) {
+        // 送信者ドメインの偽装: リンクの有無に関わらずフィッシング判定。
+        // バッジ文言は「リンク先相違」ではなく「なりすましドメイン」とし、原因を取り違えさせない。
+        badgeClass = "phishing";
+        badgeText = msg("badgeHomograph");
+      } else if (hasCriticalPhishing) {
         // フィッシング確定: リンク偽装等の確度が極めて高い指標 → 専用バッジ（レッドより重い）
         badgeClass = "phishing";
         badgeText = msg("badgePhishing");
@@ -1534,6 +1836,7 @@
         hasCriticalPhishing,
         hasSuspiciousLink,
         hasUntrustedLink,
+        isSenderHomograph,
         verdictReasons,
         badgeClass,
         badgeText,
@@ -2027,8 +2330,26 @@
         if (envelope.isDisplayNameSpoofed) {
           lines.push("[!] Display name contains an email address from a different domain");
         }
+        // 国際化ドメインは Unicode 表記と ASCII 表記（Punycode）を併記し、偽装の根拠も記す
+        const reportHomograph = (info) => {
+          const reasonText = { mixed: "mixed scripts", whole: "look-alike characters of another script only", latin: "look-alike Latin characters" };
+          const parts = (info.reasons || []).map(r => reasonText[r] || r);
+          if (info.lookalikeOf) parts.push(`resembles ${info.lookalikeOf}`);
+          const chars = (info.chars || []).map(c => `${c.ch} ${c.code}${c.script ? " " + c.script : ""}`).join(", ");
+          const name = info.isIdn ? `${info.unicode} (${info.ascii})` : info.ascii;
+          return `${name}${parts.length ? " - " + parts.join("; ") : ""}${chars ? " [" + chars + "]" : ""}`;
+        };
+        const sh = envelope.senderHomograph;
+        if (sh && sh.isHomograph) {
+          lines.push(`[!] Look-alike sender domain: ${reportHomograph(sh)}`);
+        } else if (sh && sh.isIdn) {
+          lines.push(`IDN sender domain: ${sh.unicode} (${sh.ascii})`);
+        }
         if (envelope.isReplyToMismatch) {
           lines.push(`[!] Reply-To differs from sender: ${envelope.replyToAddress}`);
+        }
+        if (envelope.replyToHomograph) {
+          lines.push(`[!] Look-alike Reply-To domain: ${reportHomograph(envelope.replyToHomograph)}`);
         }
         lines.push("");
 
@@ -2119,7 +2440,11 @@
       // バッジ横のドメイン表示: 常にヘッダFromドメインを表示
       // 認証成功時は「このドメインが認証済み」の意味、
       // それ以外は「このドメインを名乗っているメール」と人間が判断する材料
-      const headerDomainText = escapeHTML(envelope.headerFromDomain);
+      // 国際化ドメインは Unicode 表記に ASCII 表記（Punycode）を併記し、見た目だけで判断させない
+      const senderInfo = envelope.senderHomograph;
+      const headerDomainText = (senderInfo && senderInfo.isIdn)
+        ? escapeHTML(`${senderInfo.unicode} (${senderInfo.ascii})`)
+        : escapeHTML(envelope.headerFromDomain);
       let mailingListTag = "";
 
       // メーリングリスト経由の場合、ヘッダにタグを追加
@@ -2136,6 +2461,7 @@
           "dkim_align_fail": msg("verdictReasonDkimAlign"),
           "domain_not_aligned": msg("verdictReasonDomainMismatch"),
           "display_name_spoofed": msg("verdictReasonSpoofing"),
+          "sender_homograph": msg("verdictReasonSenderHomograph"),
           "relay_original_unverified": msg("verdictReasonRelayOriginal"),
           "phishing_suspicious": msg("verdictReasonSuspicious"),
           "link_untrusted": msg("verdictReasonUntrusted")
@@ -2300,7 +2626,7 @@
           }
           // アライメント（passした署名のみ）— SPFと同じくparts内に含めてmaiv-detail-textの11pxを適用
           if (sig.status === "pass") {
-            const sigOrgDomain = getOrgDomain(sig.domain.toLowerCase());
+            const sigOrgDomain = getOrgDomain(domainToAscii(sig.domain));
             const aligned = (sigOrgDomain === headerOrgDomain);
             const alIcon = aligned ? "✅" : "❌";
             const alCls = aligned ? "maiv-align-pass" : "maiv-align-fail";
@@ -2435,6 +2761,27 @@
       // --- アドレス＆アライメント表示 ---
       let alignmentWarningHTML = "";
 
+      // ホモグラフ検査結果を「Unicode (ASCII) — 根拠 / 紛らわしい文字」の形で説明する
+      const describeHomograph = (info) => {
+        const reasonKey = { mixed: "homographReasonMixed", whole: "homographReasonWholeScript", latin: "homographReasonLatin" };
+        const parts = (info.reasons || []).map(r => msg(reasonKey[r] || r));
+        if (info.lookalikeOf) parts.push(`${msg("homographReasonResembles")} ${info.lookalikeOf}`);
+        const chars = (info.chars || []).map(c => `"${c.ch}" ${c.code}${c.script ? " " + c.script : ""}`).join(", ");
+        // ASCII 表記の併記は、Unicode 表記と異なる国際化ドメインの場合のみ
+        return (info.isIdn ? `${info.unicode} (${info.ascii})` : info.ascii) +
+          (parts.length ? " — " + parts.join(" / ") : "") +
+          (chars ? ` [${chars}]` : "");
+      };
+
+      // 送信者ドメインのホモグラフ警告: 認証が通っていても送信者を誤認させる偽装のため、
+      // 送信者情報カードの先頭で最も強い表示にする。紛らわしい兆候の無い国際化ドメインは
+      // 表記の併記だけを情報として示す。
+      if (senderInfo && senderInfo.isHomograph) {
+        alignmentWarningHTML += `<div class="align-ng">${escapeHTML(msg("senderHomographWarning"))}<br>${escapeHTML(describeHomograph(senderInfo))}</div>`;
+      } else if (senderInfo && senderInfo.isIdn) {
+        alignmentWarningHTML += `<div class="align-info">${escapeHTML(msg("idnDomainInfo"))}: ${escapeHTML(`${senderInfo.unicode} (${senderInfo.ascii})`)}</div>`;
+      }
+
       // 表示名なりすまし警告: 表示名に別ドメインのアドレスが埋め込まれている場合
       if (envelope.isDisplayNameSpoofed) {
         alignmentWarningHTML += `<div class="align-ng">${escapeHTML(msg("displayNameSpoofWarning"))}</div>`;
@@ -2479,6 +2826,10 @@
       // Reply-To 不一致警告: フィッシングで返信先を攻撃者に誘導する手口の可能性
       if (envelope.isReplyToMismatch) {
         alignmentWarningHTML += `<div class="align-warn">${escapeHTML(msg("replyToMismatch"))} (${escapeHTML(envelope.replyToAddress)})</div>`;
+      }
+      // Reply-To ドメインのホモグラフ警告: 返信先を偽装ドメインへ誘導する手口
+      if (envelope.replyToHomograph) {
+        alignmentWarningHTML += `<div class="align-ng">${escapeHTML(msg("replyToHomographWarning"))} (${escapeHTML(envelope.replyToHomograph.address)})<br>${escapeHTML(describeHomograph(envelope.replyToHomograph))}</div>`;
       }
 
       const displayNameHTML = envelope.headerFromName
@@ -2982,13 +3333,13 @@
       } catch { /* 取得できない環境ではプロバイダ固有ルールを適用しない */ }
     }
 
-    const envelope = parseEnvelope(fullMsg, headers, msgHeader);
+    const envelope = parseEnvelope(fullMsg, headers, msgHeader, trustedDomains);
     const authResults = parseAuthResults(headers, envelope, rawHeaderOrder);
     const routeHops = parseRoute(headers);
     const arcChain = parseArcChain(headers);
     const bodyContent = parseMessageBody(fullMsg);
     const linkSafety = analyzeLinkSafety(bodyContent, envelope.headerOrgDomain, trustedDomains);
-    const security = determineSecurityStatus(authResults, envelope.isDomainAligned, envelope.envelopeFrom, envelope.isDisplayNameSpoofed, linkSafety);
+    const security = determineSecurityStatus(authResults, envelope.isDomainAligned, envelope.envelopeFrom, envelope.isDisplayNameSpoofed, linkSafety, envelope.senderHomograph);
 
     buildUI(envelope, authResults, routeHops, security, arcChain, linkSafety, trustedDomains, compactMode);
 

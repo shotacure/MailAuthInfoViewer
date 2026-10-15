@@ -174,7 +174,40 @@
     "message": "الرابط يشير إلى عنوان IP"
   },
   "linkIdnHomograph": {
-    "message": "تم اكتشاف اسم نطاق دولي (خطر تماثلي)"
+    "message": "رابط إلى نطاق يستخدم أحرفًا متشابهة (تماثل شكلي)"
+  },
+  "badgeHomograph": {
+    "message": "💀 نطاق مخادع"
+  },
+  "verdictReasonSenderHomograph": {
+    "message": "نطاق مرسل مخادع"
+  },
+  "senderHomographWarning": {
+    "message": "💀 يستخدم نطاق المرسل أحرفًا متشابهة لانتحال نطاق آخر"
+  },
+  "homographReasonMixed": {
+    "message": "يخلط بين أنظمة كتابة مختلفة"
+  },
+  "homographReasonWholeScript": {
+    "message": "يتكون فقط من أحرف من نظام كتابة آخر تشبه الحروف اللاتينية"
+  },
+  "homographReasonLatin": {
+    "message": "يحتوي على أحرف لاتينية متشابهة"
+  },
+  "homographReasonResembles": {
+    "message": "يشبه"
+  },
+  "idnDomainInfo": {
+    "message": "ℹ️ نطاق دولي"
+  },
+  "replyToHomographWarning": {
+    "message": "⚠️ يستخدم نطاق Reply-To أحرفًا متشابهة"
+  },
+  "linkLookalikeDomain": {
+    "message": "رابط إلى نطاق يحاكي نطاقًا معروفًا"
+  },
+  "linkIdnDomain": {
+    "message": "رابط إلى نطاق دولي (لم يُعثر على أحرف متشابهة)"
   },
   "linkShortener": {
     "message": "تم اكتشاف مختصر URL (الوجهة مخفية)"
