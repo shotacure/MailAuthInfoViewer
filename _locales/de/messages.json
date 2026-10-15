@@ -182,6 +182,9 @@
   "verdictReasonSenderHomograph": {
     "message": "Gefälschte Absenderdomain"
   },
+  "verdictReasonReplyToHomograph": {
+    "message": "Gefälschte Reply-To-Domain"
+  },
   "senderHomographWarning": {
     "message": "💀 Die Absenderdomain verwendet täuschend ähnliche Zeichen, um eine andere Domain nachzuahmen"
   },

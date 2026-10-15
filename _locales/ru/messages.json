@@ -182,6 +182,9 @@
   "verdictReasonSenderHomograph": {
     "message": "Поддельный домен отправителя"
   },
+  "verdictReasonReplyToHomograph": {
+    "message": "Поддельный домен Reply-To"
+  },
   "senderHomographWarning": {
     "message": "💀 Домен отправителя использует похожие символы, чтобы выдать себя за другой домен"
   },

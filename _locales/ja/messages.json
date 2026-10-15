@@ -184,6 +184,9 @@
   "verdictReasonSenderHomograph": {
     "message": "送信者ドメインの偽装"
   },
+  "verdictReasonReplyToHomograph": {
+    "message": "Reply-To ドメインの偽装"
+  },
   "senderHomographWarning": {
     "message": "💀 送信者のドメインに、別のドメインに見せかける紛らわしい文字が使われています"
   },

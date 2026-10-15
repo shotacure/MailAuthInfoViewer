@@ -182,6 +182,9 @@
   "verdictReasonSenderHomograph": {
     "message": "발신자 도메인 사칭"
   },
+  "verdictReasonReplyToHomograph": {
+    "message": "Reply-To 도메인 사칭"
+  },
   "senderHomographWarning": {
     "message": "💀 발신자 도메인이 다른 도메인처럼 보이도록 비슷한 문자를 사용합니다"
   },

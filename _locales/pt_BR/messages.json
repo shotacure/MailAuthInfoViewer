@@ -182,6 +182,9 @@
   "verdictReasonSenderHomograph": {
     "message": "Domínio do remetente enganoso"
   },
+  "verdictReasonReplyToHomograph": {
+    "message": "Domínio de Reply-To enganoso"
+  },
   "senderHomographWarning": {
     "message": "💀 O domínio do remetente usa caracteres enganosos para imitar outro domínio"
   },

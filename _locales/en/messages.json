@@ -184,6 +184,9 @@
   "verdictReasonSenderHomograph": {
     "message": "Look-alike sender domain"
   },
+  "verdictReasonReplyToHomograph": {
+    "message": "Look-alike Reply-To domain"
+  },
   "senderHomographWarning": {
     "message": "💀 The sender's domain uses look-alike characters to imitate another domain"
   },

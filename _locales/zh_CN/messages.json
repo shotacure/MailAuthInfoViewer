@@ -182,6 +182,9 @@
   "verdictReasonSenderHomograph": {
     "message": "发件人域名仿冒"
   },
+  "verdictReasonReplyToHomograph": {
+    "message": "Reply-To 域名仿冒"
+  },
   "senderHomographWarning": {
     "message": "💀 发件人域名使用了外观相似的字符来冒充其他域名"
   },

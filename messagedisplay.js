@@ -1715,8 +1715,9 @@
     //   DMARCアライメント成立, 表示名なりすましなし,
     //   critical/suspicious/untrusted のいずれのリンク指標もなし
     // エンベロープドメイン不一致: DMARC pass かつアライメント成立時はグリーンを阻害しない
-    // senderHomograph: parseEnvelope が返す送信者ドメインのホモグラフ検査結果
-    const determineSecurityStatus = (authResults, isDomainAligned, envelopeFrom, isDisplayNameSpoofed, linkSafety, senderHomograph) => {
+    // senderHomograph:  parseEnvelope が返す送信者ドメインのホモグラフ検査結果
+    // replyToHomograph: parseEnvelope が返す Reply-To ドメインのホモグラフ検査結果（該当なしは null）
+    const determineSecurityStatus = (authResults, isDomainAligned, envelopeFrom, isDisplayNameSpoofed, linkSafety, senderHomograph, replyToHomograph) => {
       const isSpfOk = authResults.spf.status === "pass";
       const isDkimOk = authResults.dkim.status === "pass";
       // DMARC は pass のみを合格とする。
@@ -1772,11 +1773,17 @@
       // リンク偽装と同じくフィッシング判定（最も重いバッジ）に昇格させる。
       const isSenderHomograph = !!(senderHomograph && senderHomograph.isHomograph);
 
+      // ■ Reply-To ドメインのホモグラフ
+      // 返信先が偽装ドメインなら、返信を攻撃者へ誘導する手口の可能性が高い。
+      // 送信者ドメイン自体は正当でありうるためフィッシング判定までは上げないが、
+      // 受信者が注意すべき事柄が残る以上グリーンにはしない（警告付きの判定に留める）。
+      const isReplyToHomograph = !!replyToHomograph;
+
       const isSecure = isSpfOk && isDkimOk && isDmarcOk &&
                        domainCheckOk && isDmarcAligned &&
                        !isDisplayNameSpoofed && !hasCriticalPhishing &&
                        !hasSuspiciousLink && !hasUntrustedLink &&
-                       !isRelayOriginalUnverified && !isSenderHomograph;
+                       !isRelayOriginalUnverified && !isSenderHomograph && !isReplyToHomograph;
 
       // 認証系: pass 以外なら実際のステータスを記録 (例: "SPF: softfail")
       if (!isSpfOk) verdictReasons.push(`SPF: ${authResults.spf.status}`);
@@ -1794,6 +1801,7 @@
       if (isRelayOriginalUnverified) verdictReasons.push("relay_original_unverified");
       // 送信者ドメインの偽装は、リンク起因のフィッシングと区別できるよう判定理由として明示する
       if (isSenderHomograph) verdictReasons.push("sender_homograph");
+      if (isReplyToHomograph) verdictReasons.push("reply_to_homograph");
       // phishing_critical はバッジ自体が「💀 フィッシング検出」になるため判定理由には含めない
       // privacy（トラッキングピクセル）は判定理由タグに出さず、リンク安全性カード内で情報提供
       if (hasSuspiciousLink) verdictReasons.push("phishing_suspicious");
@@ -2462,6 +2470,7 @@
           "domain_not_aligned": msg("verdictReasonDomainMismatch"),
           "display_name_spoofed": msg("verdictReasonSpoofing"),
           "sender_homograph": msg("verdictReasonSenderHomograph"),
+          "reply_to_homograph": msg("verdictReasonReplyToHomograph"),
           "relay_original_unverified": msg("verdictReasonRelayOriginal"),
           "phishing_suspicious": msg("verdictReasonSuspicious"),
           "link_untrusted": msg("verdictReasonUntrusted")
@@ -3339,7 +3348,7 @@
     const arcChain = parseArcChain(headers);
     const bodyContent = parseMessageBody(fullMsg);
     const linkSafety = analyzeLinkSafety(bodyContent, envelope.headerOrgDomain, trustedDomains);
-    const security = determineSecurityStatus(authResults, envelope.isDomainAligned, envelope.envelopeFrom, envelope.isDisplayNameSpoofed, linkSafety, envelope.senderHomograph);
+    const security = determineSecurityStatus(authResults, envelope.isDomainAligned, envelope.envelopeFrom, envelope.isDisplayNameSpoofed, linkSafety, envelope.senderHomograph, envelope.replyToHomograph);
 
     buildUI(envelope, authResults, routeHops, security, arcChain, linkSafety, trustedDomains, compactMode);
 

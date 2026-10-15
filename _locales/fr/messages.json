@@ -182,6 +182,9 @@
   "verdictReasonSenderHomograph": {
     "message": "Domaine d'expéditeur trompeur"
   },
+  "verdictReasonReplyToHomograph": {
+    "message": "Domaine Reply-To trompeur"
+  },
   "senderHomographWarning": {
     "message": "💀 Le domaine de l'expéditeur utilise des caractères trompeurs pour imiter un autre domaine"
   },

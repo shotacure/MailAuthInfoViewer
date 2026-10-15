@@ -182,6 +182,9 @@
   "verdictReasonSenderHomograph": {
     "message": "نطاق مرسل مخادع"
   },
+  "verdictReasonReplyToHomograph": {
+    "message": "نطاق Reply-To مخادع"
+  },
   "senderHomographWarning": {
     "message": "💀 يستخدم نطاق المرسل أحرفًا متشابهة لانتحال نطاق آخر"
   },

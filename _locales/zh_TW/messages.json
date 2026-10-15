@@ -182,6 +182,9 @@
   "verdictReasonSenderHomograph": {
     "message": "寄件者網域仿冒"
   },
+  "verdictReasonReplyToHomograph": {
+    "message": "Reply-To 網域仿冒"
+  },
   "senderHomographWarning": {
     "message": "💀 寄件者網域使用了外觀相似的字元來冒充其他網域"
   },
