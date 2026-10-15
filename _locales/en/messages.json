@@ -176,7 +176,43 @@
     "message": "Link points to IP address instead of domain"
   },
   "linkIdnHomograph": {
-    "message": "Internationalized domain name detected (homograph risk)"
+    "message": "Link to a domain using look-alike characters (homograph)"
+  },
+  "badgeHomograph": {
+    "message": "💀 LOOKALIKE DOMAIN"
+  },
+  "verdictReasonSenderHomograph": {
+    "message": "Look-alike sender domain"
+  },
+  "verdictReasonReplyToHomograph": {
+    "message": "Look-alike Reply-To domain"
+  },
+  "senderHomographWarning": {
+    "message": "💀 The sender's domain uses look-alike characters to imitate another domain"
+  },
+  "homographReasonMixed": {
+    "message": "mixes different scripts"
+  },
+  "homographReasonWholeScript": {
+    "message": "consists only of characters from another script that look like Latin letters"
+  },
+  "homographReasonLatin": {
+    "message": "contains look-alike Latin characters"
+  },
+  "homographReasonResembles": {
+    "message": "resembles"
+  },
+  "idnDomainInfo": {
+    "message": "ℹ️ Internationalized domain"
+  },
+  "replyToHomographWarning": {
+    "message": "⚠️ The Reply-To domain uses look-alike characters"
+  },
+  "linkLookalikeDomain": {
+    "message": "Link to a look-alike of a known domain"
+  },
+  "linkIdnDomain": {
+    "message": "Link to an internationalized domain (no look-alike characters found)"
   },
   "linkShortener": {
     "message": "URL shortener detected (hides destination)"

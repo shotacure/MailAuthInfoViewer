@@ -174,7 +174,43 @@
     "message": "Link zeigt auf IP-Adresse"
   },
   "linkIdnHomograph": {
-    "message": "Internationalisierter Domainname erkannt (Homograph-Risiko)"
+    "message": "Link zu einer Domain mit täuschend ähnlichen Zeichen (Homograph)"
+  },
+  "badgeHomograph": {
+    "message": "💀 GEFÄLSCHTE DOMAIN"
+  },
+  "verdictReasonSenderHomograph": {
+    "message": "Gefälschte Absenderdomain"
+  },
+  "verdictReasonReplyToHomograph": {
+    "message": "Gefälschte Reply-To-Domain"
+  },
+  "senderHomographWarning": {
+    "message": "💀 Die Absenderdomain verwendet täuschend ähnliche Zeichen, um eine andere Domain nachzuahmen"
+  },
+  "homographReasonMixed": {
+    "message": "mischt verschiedene Schriftsysteme"
+  },
+  "homographReasonWholeScript": {
+    "message": "besteht nur aus Zeichen einer anderen Schrift, die wie lateinische Buchstaben aussehen"
+  },
+  "homographReasonLatin": {
+    "message": "enthält täuschend ähnliche lateinische Zeichen"
+  },
+  "homographReasonResembles": {
+    "message": "ähnelt"
+  },
+  "idnDomainInfo": {
+    "message": "ℹ️ Internationalisierte Domain"
+  },
+  "replyToHomographWarning": {
+    "message": "⚠️ Die Reply-To-Domain verwendet täuschend ähnliche Zeichen"
+  },
+  "linkLookalikeDomain": {
+    "message": "Link zu einer Nachahmung einer bekannten Domain"
+  },
+  "linkIdnDomain": {
+    "message": "Link zu einer internationalisierten Domain (keine täuschend ähnlichen Zeichen gefunden)"
   },
   "linkShortener": {
     "message": "URL-Verkürzer erkannt (Ziel verborgen)"

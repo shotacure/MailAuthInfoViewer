@@ -174,7 +174,43 @@
     "message": "Le lien pointe vers une adresse IP"
   },
   "linkIdnHomograph": {
-    "message": "Nom de domaine internationalisé détecté (risque homographe)"
+    "message": "Lien vers un domaine utilisant des caractères trompeurs (homographe)"
+  },
+  "badgeHomograph": {
+    "message": "💀 DOMAINE TROMPEUR"
+  },
+  "verdictReasonSenderHomograph": {
+    "message": "Domaine d'expéditeur trompeur"
+  },
+  "verdictReasonReplyToHomograph": {
+    "message": "Domaine Reply-To trompeur"
+  },
+  "senderHomographWarning": {
+    "message": "💀 Le domaine de l'expéditeur utilise des caractères trompeurs pour imiter un autre domaine"
+  },
+  "homographReasonMixed": {
+    "message": "mélange plusieurs écritures"
+  },
+  "homographReasonWholeScript": {
+    "message": "composé uniquement de caractères d'une autre écriture ressemblant à des lettres latines"
+  },
+  "homographReasonLatin": {
+    "message": "contient des caractères latins trompeurs"
+  },
+  "homographReasonResembles": {
+    "message": "ressemble à"
+  },
+  "idnDomainInfo": {
+    "message": "ℹ️ Nom de domaine internationalisé"
+  },
+  "replyToHomographWarning": {
+    "message": "⚠️ Le domaine de réponse (Reply-To) utilise des caractères trompeurs"
+  },
+  "linkLookalikeDomain": {
+    "message": "Lien vers un domaine imitant un domaine connu"
+  },
+  "linkIdnDomain": {
+    "message": "Lien vers un domaine internationalisé (aucun caractère trompeur détecté)"
   },
   "linkShortener": {
     "message": "Raccourcisseur d'URL détecté (destination masquée)"

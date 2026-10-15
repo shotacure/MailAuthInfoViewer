@@ -49,6 +49,14 @@ Deceptive link text detected — the displayed URL differs from the actual desti
     * **折りたたみ式詳細カード:** SPF・DKIM・DMARCカードはクリックで詳細を展開。リンク安全性分析は警告を常時表示し、ドメイン/リソース一覧は折りたたみ（指標検出時は自動展開）。
 * **Sender Identity & Alignment:** Instantly spot discrepancies between the Display Name, Header From, and Envelope From addresses side-by-side.
     * **送信者の身元とアライメント検証:** 「表示名」「ヘッダFrom」「エンベロープFrom」を並べて表示し、アドレスの不自然な乖離や偽装を瞬時に見抜きます。
+* **Homograph (Look-alike Domain) Detection:** Detects domains that imitate another domain with look-alike characters — for example `аpple.com` with a Cyrillic "а", `аррӏе.com` written entirely in Cyrillic, `mıcrosoft.com` with a dotless "ı", or ASCII look-alikes such as `paypa1.com` and `rnicrosoft.com`. Each label is checked for mixed scripts (Latin mixed with Cyrillic, Greek, etc.; the legitimate Japanese, Chinese and Korean combinations defined by Unicode UTS #39 are allowed), for labels made only of another script's Latin-looking letters, and for look-alike Latin characters; a "skeleton" comparison (look-alike characters folded to a common form) also catches domains that resemble the sender's domain or a domain you have trusted. Punycode (`xn--`) is decoded, and internationalized domains are always shown as "Unicode (ASCII)" so you can see the real characters.
+    * **Sender domain:** if the sender's own domain is a look-alike, the badge becomes 💀 LOOKALIKE DOMAIN with a "Look-alike sender domain" reason tag, even when SPF/DKIM/DMARC all pass — an attacker can register such a domain and authenticate it correctly, so authentication alone cannot vouch for it.
+    * **Links:** a link (or a URL in the text) to a domain that resembles the sender's domain or a trusted domain is a critical finding (💀 LINK MISMATCH, not suppressible by the trust list). Links to internationalized domains remain suspicious; the finding states whether look-alike characters were found.
+    * **Reply-To:** a Reply-To domain that uses look-alike characters or resembles the sender's domain is flagged in the sender identity card and keeps the badge from turning green (⚠️ with a "Look-alike Reply-To domain" reason tag), since replies could be steered to an attacker.
+    * **ホモグラフ（見た目の似たドメイン）検出:** 見た目の似た文字で別のドメインになりすますドメインを検出します。例: キリル文字の「а」を使った `аpple.com`、すべてキリル文字で書かれた `аррӏе.com`、点のない「ı」を使った `mıcrosoft.com`、ASCII だけで似せた `paypa1.com` や `rnicrosoft.com` など。ラベルごとに、文字種の混在（ラテン文字とキリル文字・ギリシャ文字などの混在。Unicode UTS #39 が定める日本語・中国語・韓国語の正当な組み合わせは除外）、ラテン文字に見える別の文字種の字だけで構成されたラベル、紛らわしいラテン文字を検査します。さらに、紛らわしい字を共通の形にそろえた「骨格」を比べ、送信者のドメインや信頼済みドメインに似せた別ドメインも検出します。Punycode（`xn--`）はデコードし、国際化ドメインは常に「Unicode (ASCII)」の形で表示して、実際の文字を確認できるようにしています。
+        * **送信者ドメイン:** 送信者自身のドメインが偽装ドメインの場合、SPF/DKIM/DMARC がすべて pass していても、バッジを 💀 なりすましドメイン にし、「送信者ドメインの偽装」の判定理由タグを付けます。攻撃者はこうしたドメインを取得して認証を正しく設定できるため、認証結果だけでは安全と言えないからです。
+        * **リンク:** 送信者のドメインや信頼済みドメインに似せた別ドメインへのリンク（本文中の URL を含む）は critical（💀 リンク先相違。信頼リストでは解消しない）として扱います。国際化ドメインへのリンクは引き続き suspicious とし、紛らわしい文字が見つかったかどうかを所見の文言で区別します。
+        * **Reply-To:** 紛らわしい文字を使った、または送信者のドメインに似せた Reply-To のドメインを、送信者情報カードで警告します。返信が攻撃者に誘導されるおそれがあるため、バッジはグリーンにせず、「Reply-To ドメインの偽装」の判定理由タグを付けた警告表示にします。
 * **Display Name Spoofing Detection:** Detects when the display name contains an email address from a different domain than the actual sender — a common phishing trick to mislead recipients.
     * **表示名なりすまし検知:** 表示名に実際の送信元とは異なるドメインのメールアドレスが含まれている場合を検知します。受信者を欺くためのフィッシング手口です。
 * **Domain Verification Badge:** Prominently displays the actual authenticated domain (e.g., `✅ AUTH PASS example.com`) to prevent false trust in fake display names.
@@ -56,13 +64,13 @@ Deceptive link text detected — the displayed URL differs from the actual desti
 * **Verdict Reason Display:** Shows why the badge is not green — e.g., "DMARC policy is p=none", "Phishing indicator detected", "Untrusted link domain" — so administrators know exactly what to fix or trust.
     * **判定理由の表示:** バッジがグリーンでない理由（例：「DMARCポリシーがp=none」「フィッシング指標を検出」「未信頼のリンクドメイン」）を表示し、管理者が何を修正または信頼すべきか明確にします。
 * **Four-Tier Link Safety Analysis:** Scans email body with severity-aware categorization:
-    * **critical** — deceptive link text, dangerous URI schemes (`javascript:`, `data:`), embedded HTML forms (promoted to phishing badge)
-    * **suspicious** — IP-address links, IDN homograph attacks, URL shorteners (patterns inherently risky regardless of trust)
+    * **critical** — deceptive link text, links to look-alikes of the sender's or a trusted domain, dangerous URI schemes (`javascript:`, `data:`), embedded HTML forms (promoted to phishing badge)
+    * **suspicious** — IP-address links, internationalized-domain (IDN) links — distinguishing those with look-alike characters (homographs) — and URL shorteners (patterns inherently risky regardless of trust)
     * **untrusted** — all links external, main CTA external (a single domain unknown to the extension, resolvable by trusting the domain)
     * **privacy** — tracking pixels (informational notice, does not affect verdict)
     * **4段階リンク安全性分析:** メール本文を深刻度別にスキャン:
-    * **critical** — リンクテキスト偽装、危険なURIスキーム（`javascript:`、`data:`）、HTMLフォーム埋め込み（フィッシングバッジに昇格）
-    * **suspicious** — IPアドレスリンク、IDNホモグラフ攻撃、短縮URL（信頼リストでは解消しない本質的に怪しいパターン）
+    * **critical** — リンクテキスト偽装、送信者や信頼済みドメインに似せた別ドメインへのリンク、危険なURIスキーム（`javascript:`、`data:`）、HTMLフォーム埋め込み（フィッシングバッジに昇格）
+    * **suspicious** — IPアドレスリンク、国際化ドメイン（IDN）へのリンク（紛らわしい文字を含むホモグラフかどうかを区別して表示）、短縮URL（信頼リストでは解消しない本質的に怪しいパターン）
     * **untrusted** — 全リンク外部、メインCTA外部（ドメインが未知なだけ。信頼リスト追加で解消）
     * **privacy** — トラッキングピクセル（プライバシー上の注意喚起。判定には影響しない）
 * **Link Domain Overview:** Lists all unique link domains found in the email body, color-coded by whether they match the sender's organizational domain, with inline tracker markers for tracking pixel sources.
@@ -130,9 +138,10 @@ This add-on is designed for mail administrators and security-conscious users who
 
 | Badge | Condition | 条件 |
 |-------|-----------|------|
-| 💀 **LINK MISMATCH** | Deceptive link text (displayed URL differs from actual destination), dangerous URI schemes, or embedded HTML forms detected. Not suppressible by the trust list. | リンク先相違（表示URLと実際のリンク先が不一致）・危険なURIスキーム・HTMLフォーム埋め込みを検出。信頼リストでは抑制されない。 |
+| 💀 **LOOKALIKE DOMAIN** | The sender's own domain imitates another domain with look-alike characters (mixed scripts, another script's Latin-looking letters, look-alike Latin characters, or resemblance to a trusted domain), regardless of authentication results. | 送信者自身のドメインが、紛らわしい文字（文字種の混在、ラテン文字に見える別の文字種の字、紛らわしいラテン文字、信頼済みドメインへの酷似）で別のドメインになりすましている。認証結果に関係なく判定。 |
+| 💀 **LINK MISMATCH** | Deceptive link text (displayed URL differs from actual destination), a link to a look-alike of the sender's or a trusted domain, dangerous URI schemes, or embedded HTML forms detected. Not suppressible by the trust list. | リンク先相違（表示URLと実際のリンク先が不一致）・送信者や信頼済みドメインに似せた別ドメインへのリンク・危険なURIスキーム・HTMLフォーム埋め込みを検出。信頼リストでは抑制されない。 |
 | ❌ **AUTH FAILED** | SPF, DKIM, or DMARC explicitly failed | SPF・DKIM・DMARCのいずれかが明示的にfail |
-| ⚠️ **AUTH PASS** | DMARC passed but other issues (alignment, spoofing, suspicious links, untrusted link domains, original sender not verified by a forwarding service) | DMARC passだがアライメント・なりすまし・不審リンク・未信頼リンクドメイン・転送サービス経由の元送信者未検証等の問題あり |
+| ⚠️ **AUTH PASS** | DMARC passed but other issues (alignment, spoofing, suspicious links, untrusted link domains, original sender not verified by a forwarding service, look-alike Reply-To domain) | DMARC passだがアライメント・なりすまし・不審リンク・未信頼リンクドメイン・転送サービス経由の元送信者未検証・Reply-To ドメインの偽装等の問題あり |
 | ⚠️ **PARTIAL** | Some auth passed but DMARC not passed | 一部認証passだがDMARC未通過 |
 | ✅ **AUTH PASS** | All checks passed — safe | すべてのチェックに合格 — 安全 |
 
@@ -144,15 +153,15 @@ v1.1.6 ではリンク指標を4段階に分類しています。それぞれ深
 
 | Level | Examples | Meaning | Resolvable by whitelisting? |
 |-------|----------|---------|-----------------------------|
-| **critical** | Deceptive link text, `javascript:`/`data:` URIs, embedded forms | Confirmed phishing indicators (promotes to LINK MISMATCH badge) | No |
-| **suspicious** | IP-address links, IDN homographs, URL shorteners | Patterns inherently risky regardless of who sent them | No |
+| **critical** | Deceptive link text, links to look-alikes of the sender's or a trusted domain, `javascript:`/`data:` URIs, embedded forms | Confirmed phishing indicators (promotes to LINK MISMATCH badge) | No |
+| **suspicious** | IP-address links, IDN links (homographs flagged as such), URL shorteners | Patterns inherently risky regardless of who sent them | No |
 | **untrusted** | All links external, main CTA external | Simply unknown to the extension — recipient hasn't trusted the domain yet | **Yes** (add to trusted domains) |
 | **privacy** | Tracking pixels | Privacy notice only, not a phishing indicator | N/A (informational) |
 
 | レベル | 例 | 意味 | ホワイトリストで解消可能か |
 |--------|----|-------|---------------------------|
-| **critical** | リンクテキスト偽装、`javascript:`/`data:` URI、フォーム埋め込み | 確度の高いフィッシング指標（LINK MISMATCHバッジに昇格） | 不可 |
-| **suspicious** | IPアドレスリンク、IDNホモグラフ、短縮URL | 送信者に関係なく本質的に怪しい書式 | 不可 |
+| **critical** | リンクテキスト偽装、送信者や信頼済みドメインに似せた別ドメインへのリンク、`javascript:`/`data:` URI、フォーム埋め込み | 確度の高いフィッシング指標（LINK MISMATCHバッジに昇格） | 不可 |
+| **suspicious** | IPアドレスリンク、IDN リンク（ホモグラフはその旨を明示）、短縮URL | 送信者に関係なく本質的に怪しい書式 | 不可 |
 | **untrusted** | 全リンク外部、メインCTA外部 | 単にアドオンにとって未知なだけ — ユーザーがまだ信頼表明していない | **可**（信頼済みドメインに追加） |
 | **privacy** | トラッキングピクセル | プライバシー上の注意喚起。フィッシング指標ではない | 該当なし（情報提供） |
 
@@ -161,6 +170,8 @@ v1.1.6 ではリンク指標を4段階に分類しています。それぞれ深
 * SPF pass, DKIM pass, **and** DMARC pass
 * At least one DMARC alignment (SPF or DKIM) with Header From — alignment only counts when the underlying auth method passed
 * No display name spoofing detected
+* The sender's domain does not use look-alike characters and does not resemble a trusted domain (homograph)
+* The Reply-To domain, if any, does not use look-alike characters and does not resemble the sender's domain
 * No critical, suspicious, or untrusted link indicators detected in email body
 * If a forwarding service recorded the original message's authentication (e.g. addy.io `X-AnonAddy-Authentication-Results`), the original sender's DMARC must be `pass`
 * Note: Envelope domain mismatch alone does NOT block green when DMARC pass with alignment is satisfied (supports legitimate third-party sending services like SendGrid)
@@ -174,6 +185,8 @@ v1.1.6 ではリンク指標を4段階に分類しています。それぞれ深
 * SPF pass、DKIM pass、**かつ** DMARC pass
 * SPFまたはDKIMの少なくとも一方がHeader Fromとアライメント（アライメントは対応する認証がpassの場合のみ成立）
 * 表示名なりすましが検知されていないこと
+* 送信者のドメインが紛らわしい文字を使っておらず、信頼済みドメインにも酷似していないこと（ホモグラフ）
+* Reply-To がある場合、そのドメインが紛らわしい文字を使っておらず、送信者のドメインにも酷似していないこと
 * メール本文に critical・suspicious・untrusted のいずれのリンク指標も検知されていないこと
 * 転送サービスが元メールの認証結果を記録している場合（例: addy.io の `X-AnonAddy-Authentication-Results`）、元送信者の DMARC が `pass` であること
 * 注: DMARCがpassかつアライメント成立時は、エンベロープドメイン不一致のみではグリーンを阻害しない（SendGrid等の正当な外部配信サービスに対応）
@@ -238,13 +251,13 @@ psl_data.js             Public Suffix List data + getOrganizationalDomain()
 options.html + options.js  Trusted link domains management (add/remove/import/export) + compact display mode toggle
 messagedisplay.js       Main logic — 9 core functions:
 │
-├─ parseEnvelope()          Address extraction, PSL-based alignment, mailing list, display name spoof & Reply-To mismatch detection
+├─ parseEnvelope()          Address extraction, PSL-based alignment (domains normalized to ASCII/Punycode), mailing list, display name spoof & Reply-To mismatch detection, sender and Reply-To homograph detection (mixed scripts, whole-script look-alikes, look-alike Latin characters, skeleton match against trusted domains)
 ├─ parseAuthResults()       Auth parsing with authserv-id filtering & display, multi-DKIM with header.d/header.i fallback, per-signature alignment, Received-SPF fallback, RFC 8601 comment-aware semicolon splitting (preserves `header.d=` etc. when key-info such as `(2048-bit key; unprotected)` appears in DKIM results), authentication strength detection (sub-2048-bit DKIM keys from A-R comments, rsa-sha1, `l=` partial body signing, DMARC `sp=none` / `pct<100` from A-R comments), provider-specific ingress detection for Microsoft 365 / Exchange Online and mailbox.org (contiguous provider hop walk to the inbound entry point, trusting only the topmost provider-format A-R after verifying its position in the raw header order, plus queue-ID binding for mailbox.org) and Microsoft 365 internal-delivery detection, forwarding-service original-sender results (`X-AnonAddy-Authentication-Results`)
 ├─ parseRoute()             Delivery route from Received headers with IP classification (including Exchange-style parenthesized IPv6 such as `(2001:db8::1)`) and per-hop TLS/encryption status extraction (TLS version, cipher suite, plaintext-protocol detection)
 ├─ parseArcChain()          ARC chain parsing (RFC 8617)
 ├─ parseMessageBody()       MIME tree traversal to extract HTML/text body content
-├─ analyzeLinkSafety()      Four-tier phishing detection (critical/suspicious/untrusted/privacy): deceptive text, dangerous schemes, forms, IP/IDN/shortener links (aggregated per type), all-external & CTA analysis, tracking pixels, resource domains, trusted domain whitelist, external link domain collection for one-click trust
-├─ determineSecurityStatus()  5-tier verdict (phishing > auth failed > auth pass warning > partial > auth pass) with auth-gated alignment, per-reason tags including "link_untrusted" and "relay_original_unverified", and privacy-level findings excluded from verdict
+├─ analyzeLinkSafety()      Four-tier phishing detection (critical/suspicious/untrusted/privacy): deceptive text (hosts compared in ASCII form), look-alike domains of the sender or trusted domains (skeleton match, links and text URLs), dangerous schemes, forms, IP/IDN/shortener links (aggregated per type; IDN shown as Unicode (ASCII), homographs distinguished), all-external & CTA analysis, tracking pixels, resource domains, trusted domain whitelist, external link domain collection for one-click trust
+├─ determineSecurityStatus()  5-tier verdict (phishing > auth failed > auth pass warning > partial > auth pass) with auth-gated alignment, per-reason tags including "link_untrusted", "relay_original_unverified", "sender_homograph" (promoted to the LOOKALIKE DOMAIN phishing badge) and "reply_to_homograph", and privacy-level findings excluded from verdict
 ├─ generateReportText()     Generates structured plain-text analysis report with all findings for clipboard export
 └─ buildUI()                Shadow DOM isolated, i18n'd, dark-mode-aware rendering with always-collapsed panel, optional compact display mode (reduced info-bar height), collapsible auth cards (full RFC 8601 properties), per-signature DKIM display, authentication strength warnings inside DKIM/DMARC cards, TLS status column in delivery route table with visual indicators (🔒⚠️🔓), collapsible link safety with severity-aware styling (critical/suspicious/untrusted/privacy), inline Trust shortcut on untrusted findings when a single external domain is identified, copy-to-clipboard button in header, verdict reason tags
 
