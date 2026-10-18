@@ -599,8 +599,13 @@
         //     A-R を付与する。間に *.internal / localhost の内部ホップが挟まる。
         // そこで以下の優先順で境界 MTA（=authserv 発行ホスト）を特定する。
 
+        // by 句のホスト名は空白・セミコロンに加え "(" の手前で区切る。
+        // RFC 5321 の Received 構文ではホスト名の直後に空白なしでコメントを続けられ、
+        // 例: "by mfsmax.docomo.ne.jp(DOCOMO Mail Server Ver2.0)"
+        // ここを区切らないとホスト名にコメントが混入し、authserv-id 照合に失敗して
+        // 受信サーバー自身の正規の Authentication-Results まで信頼対象から外れてしまう。
         const extractBy = (line) => {
-          const m = line.match(/\bby\s+([^\s;]+)/i);
+          const m = line.match(/\bby\s+([^\s;()]+)/i);
           return m ? m[1].toLowerCase().replace(/^\[|\]$/g, "") : "";
         };
         const isIpLiteral = (h) => isIPv4Like(h) || isIPv6Like(h);
@@ -687,9 +692,10 @@
         const firstLabel = (h) => (h || "").split(".")[0];
         const normalize = (h) => h.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
         const hops = received.map(line => {
-          const byMatch = line.match(/\bby\s+([^\s;]+)/i);
+          // ホスト名の直後に空白なしで続くコメント "host(...)" を含めないよう "(" でも区切る
+          const byMatch = line.match(/\bby\s+([^\s;()]+)/i);
           const fromMatch = line.match(/\bfrom\s+(.+?)(?=\s+by\s+|;|$)/i);
-          const fromHost = fromMatch ? fromMatch[1].trim().split(/\s+/)[0] : "";
+          const fromHost = fromMatch ? fromMatch[1].trim().split(/[\s(]+/)[0] : "";
           return {
             by: byMatch ? normalize(byMatch[1]) : "",
             fromHost: normalize(fromHost)
@@ -1052,25 +1058,31 @@
       // 件名や Content-Type（本文の MIME 構造をどう解釈するか）だけを書き換えて別の宛先へ
       // 再送する「DKIM リプレイ」では、From と署名ドメインが一致したまま DMARC も pass するため、
       // 認証結果だけでは正規メールと区別できない。
-      // RFC 6376 が署名を必須とするのは From のみだが、5.4.1 は Subject・Date・To・Cc・
-      // Reply-To 等の署名を推奨し、MIME ヘッダの署名も強く勧めている。
-      // From とアラインして pass した署名を対象に、次の 2 種類を調べる。
-      //   critical:    Subject / Content-Type。受信者が目にする件名と本文の解釈を決めるヘッダ。
-      //                メールに存在しない場合でも署名対象（オーバーサイン）に含まれていなければ
-      //                第三者が後から追加できるため、存在の有無に関わらず署名を求める。
-      //   recommended: Date / To / Cc / Reply-To / MIME-Version。メールに存在するのに
-      //                署名対象外の場合のみ報告する。
+      // RFC 6376 が署名を必須とするのは From のみだが、5.4.1 は Subject・Reply-To 等の
+      // 署名を推奨し、MIME ヘッダの署名も強く勧めている。
+      // From とアラインして pass した署名を対象に、改ざんされると受信者に実害が出るヘッダを調べる。
+      //   blocking:     Subject。署名付きメールを 1 通入手するだけで、前提条件なしに件名を
+      //                 差し替えて再送できる。判定（グリーン阻害）に用いる。
+      //   always:       Subject / Content-Type。受信者が目にする件名と本文の解釈を決めるヘッダ。
+      //                 メールに存在しない場合でも署名対象（オーバーサイン）に含まれていなければ
+      //                 第三者が後から追加できるため、存在の有無に関わらず署名を求める。
+      //                 Content-Type の差し替えで本文を別の内容として表示させるには、本文中に
+      //                 攻撃者が入力した文字列（フォーム入力の転記等）が含まれている必要があり、
+      //                 その前提はヘッダから判断できない。また Gmail 等の大手サービスも署名しない
+      //                 ことが多く、判定に用いると正規メールの大半がグリーンを失うため、
+      //                 DKIM カード内の管理者向け警告に留める。
+      //   when present: Reply-To。返信先を攻撃者へ誘導できるヘッダで、メールに存在するのに
+      //                 署名対象外の場合のみ報告する（存在しない Reply-To のオーバーサインまでは
+      //                 正規の送信基盤でもほとんど行われていないため問わない）。
+      // Date・To・Cc・MIME-Version 等の未署名は、差し替えても受信者の判断を直接誤らせないため報告しない。
       const SIGNED_HEADER_LABELS = {
         "subject": "Subject",
         "content-type": "Content-Type",
-        "date": "Date",
-        "to": "To",
-        "cc": "Cc",
-        "reply-to": "Reply-To",
-        "mime-version": "MIME-Version"
+        "reply-to": "Reply-To"
       };
-      const CRITICAL_SIGNED_HEADERS = ["subject", "content-type"];
-      const RECOMMENDED_SIGNED_HEADERS = ["date", "to", "cc", "reply-to", "mime-version"];
+      const BLOCKING_SIGNED_HEADERS = ["subject"];
+      const ALWAYS_SIGNED_HEADERS = ["subject", "content-type"];
+      const SIGNED_WHEN_PRESENT_HEADERS = ["reply-to"];
 
       const evaluateSignedHeaderCoverage = () => {
         const getOrgDomain = window.getOrganizationalDomain || ((d) => d);
@@ -1110,7 +1122,7 @@
 
           // A-R の header.s があればセレクタまで一致する署名に絞る。
           // 記録が無い場合は同一ドメインの全署名が候補となり、どれが pass したか
-          // 特定できないため、全候補が critical ヘッダを覆っている場合のみ「覆われている」とみなす
+          // 特定できないため、全候補が blocking ヘッダを覆っている場合のみ「覆われている」とみなす
           const matches = signatures.filter(sig =>
             sig.domain === passDomain && (!passSelector || sig.selector === passSelector));
           // DKIM-Signature ヘッダが見当たらない（経路上で除去された等）場合は判断材料が無いため評価しない
@@ -1119,32 +1131,31 @@
 
           let allCovered = true;
           for (const sig of matches) {
-            const missing = CRITICAL_SIGNED_HEADERS.filter(name => !sig.signed.has(name));
-            if (missing.length > 0) allCovered = false;
-            const missingRecommended = RECOMMENDED_SIGNED_HEADERS.filter(name =>
-              !sig.signed.has(name) && (headers[name] || []).length > 0);
+            const blocking = BLOCKING_SIGNED_HEADERS.some(name => !sig.signed.has(name));
+            if (blocking) allCovered = false;
 
             const sigKey = `${sig.domain}|${sig.selector}`;
             if (seenSig.has(sigKey)) continue;
             seenSig.add(sigKey);
-            const allMissing = missing.concat(missingRecommended);
-            if (allMissing.length > 0) {
+            const missing = ALWAYS_SIGNED_HEADERS.filter(name => !sig.signed.has(name))
+              .concat(SIGNED_WHEN_PRESENT_HEADERS.filter(name =>
+                !sig.signed.has(name) && (headers[name] || []).length > 0));
+            if (missing.length > 0) {
               warnings.push({
                 type: "unsigned_headers",
                 domain: sig.domain,
-                value: allMissing.map(name => SIGNED_HEADER_LABELS[name]).join(", "),
-                critical: missing.length > 0
+                value: missing.map(name => SIGNED_HEADER_LABELS[name]).join(", ")
               });
             }
           }
           if (allCovered) coveredPassCount++;
         }
 
-        // アラインした pass 署名が評価でき、そのいずれも critical ヘッダを覆っていない場合に
-        // 「件名・本文の解釈をドメイン所有者が保証していない」とみなす
+        // アラインした pass 署名が評価でき、そのいずれも Subject を覆っていない場合に
+        // 「受信者が目にする件名をドメイン所有者が保証していない」とみなす
         return {
           warnings,
-          criticalUncovered: alignedPassCount > 0 && coveredPassCount === 0
+          subjectUncovered: alignedPassCount > 0 && coveredPassCount === 0
         };
       };
       const dkimCoverage = evaluateSignedHeaderCoverage();
@@ -1288,9 +1299,9 @@
         dmarc: { status: dmarcStatus, detail: dmarcDetail },
         alignment,
         strength,
-        // アラインした pass 署名が Subject / Content-Type を署名対象に含んでいないか
-        // （DKIM リプレイで件名・本文の解釈を差し替えうる状態か）
-        dkimCriticalUnsigned: dkimCoverage.criticalUncovered,
+        // アラインした pass 署名が Subject を署名対象に含んでいないか
+        // （DKIM リプレイで件名を差し替えうる状態か）
+        dkimSubjectUnsigned: dkimCoverage.subjectUncovered,
         reportedUnverified,
         // Microsoft 365 組織内で完結した配送か（注記表示用。判定には影響させない）
         // 外部から EOP を経由したメールには必ず A-R が付与されるため、A-R が1本でも
@@ -1351,7 +1362,8 @@
 
       return rawReceived.slice().reverse().map(line => {
         const fromMatch = line.match(/\bfrom\s+(.+?)(?=\s+by\s+|;|$)/i);
-        const byMatch = line.match(/\bby\s+([^\s;]+)/i);
+        // 受信ホスト名の直後に空白なしで続くコメント "host(...)" は表示に含めない
+        const byMatch = line.match(/\bby\s+([^\s;()]+)/i);
         const date = parseReceivedDate(line);
 
         // from 句からIPアドレスを抽出し、内部/外部ネットワークを判定
@@ -1893,16 +1905,18 @@
       // 受信者が注意すべき事柄が残る以上グリーンにはしない（警告付きの判定に留める）。
       const isReplyToHomograph = !!replyToHomograph;
 
-      // ■ DKIM リプレイの余地（件名・本文の解釈が署名で守られていない）
+      // ■ DKIM リプレイの余地（件名が署名で守られていない）
       // DMARC が DKIM アライメントだけで pass している（SPF はアラインしていない）場合、
       // 「正規の送信基盤から直接届いた」保証は無く、ドメイン所有者が保証するのは署名範囲だけになる。
-      // その署名が Subject / Content-Type を含まなければ、正規の署名付きメールを入手した第三者が
-      // 件名や本文の MIME 構造の解釈を差し替えて再送しても DMARC pass のまま届く。
+      // その署名が Subject を含まなければ、正規の署名付きメールを入手した第三者が
+      // 件名を差し替えて再送しても DMARC pass のまま届く。
+      // （Content-Type の未署名は悪用に本文側の前提条件が要り、大手サービスでも一般的なため
+      //   判定には用いず、DKIM カード内の警告に留める。evaluateSignedHeaderCoverage 参照）
       // 署名範囲は送信側（署名を行う送信基盤）が広げれば解消できる不備のためグリーンにはしないが、
       // 認証自体は成功しており偽装と断定はできないため、警告付きの判定に留める。
       // SPF もアラインしている場合は第三者による再送が成立しないため、DKIM カード内の警告のみとする。
       const isDkimReplayRisk = isDmarcOk && !!al.dkimAligned && !al.spfAligned &&
-                               !!authResults.dkimCriticalUnsigned;
+                               !!authResults.dkimSubjectUnsigned;
 
       const isSecure = isSpfOk && isDkimOk && isDmarcOk &&
                        domainCheckOk && isDmarcAligned &&
@@ -1952,8 +1966,11 @@
       } else if (authResults.spf.status === "fail" || authResults.dkim.status === "fail" || authResults.dmarc.status === "fail") {
         badgeClass = "danger";
         badgeText = msg("badgeAuthFailed");
-      } else if ((isSpfOk || isDkimOk) && isDmarcOk && envelopeFrom !== "Unknown") {
+      } else if ((isSpfOk || isDkimOk) && isDmarcOk) {
         // SPF/DKIM・DMARC全て通っているが他の条件（アライメント・なりすまし等）で不合格
+        // DMARC が検証するのはヘッダ From であり、エンベロープ送信者が空（Return-Path: <>）や
+        // 取得できない場合でも DMARC pass の事実は変わらないため、ここでは envelopeFrom を問わない。
+        // （空の送信者は配送エラー通知・自動応答のほか、SPF を HELO で評価させる手口にも使われる）
         badgeClass = "warning";
         badgeText = msg("badgeAuthPassWarning");
       } else if ((isSpfOk || isDkimOk) && envelopeFrom !== "Unknown") {
@@ -3451,7 +3468,8 @@
     //    メッセージ全体の読み込みを伴うため、該当しないメールでは取得しない。
     //    取得に失敗した場合は null のまま進め、プロバイダ固有の A-R 採用を行わない（安全側）。
     let rawHeaderOrder = null;
-    const topReceivedBy = ((headers["received"] || [])[0] || "").match(/\bby\s+([^\s;]+)/i);
+    //    受信ホスト名の切り出しは detectProviderRoute と同じく "(" でも区切り、判定を一致させる。
+    const topReceivedBy = ((headers["received"] || [])[0] || "").match(/\bby\s+([^\s;()]+)/i);
     if (topReceivedBy && findProviderRule(topReceivedBy[1])) {
       try {
         const rawResp = await browser.runtime.sendMessage({ command: "getRawHeaders" });

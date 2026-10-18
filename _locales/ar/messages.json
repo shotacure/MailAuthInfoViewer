@@ -234,7 +234,7 @@
     "message": "المرسل الأصلي غير موثَّق (خدمة إعادة التوجيه)"
   },
   "verdictReasonDkimReplayRisk": {
-    "message": "الموضوع/المحتوى غير موقَّع (خطر إعادة إرسال DKIM)"
+    "message": "الموضوع غير موقَّع (خطر إعادة إرسال DKIM)"
   },
   "verdictReasonSuspicious": {
     "message": "رابط مشبوه"

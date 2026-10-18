@@ -234,7 +234,7 @@
     "message": "原始寄件者未驗證（轉寄服務）"
   },
   "verdictReasonDkimReplayRisk": {
-    "message": "主旨／內容未簽章（DKIM 重送風險）"
+    "message": "主旨未簽章（DKIM 重送風險）"
   },
   "verdictReasonSuspicious": {
     "message": "可疑連結"

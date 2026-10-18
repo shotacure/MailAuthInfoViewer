@@ -234,7 +234,7 @@
     "message": "原始发件人未验证（转发服务）"
   },
   "verdictReasonDkimReplayRisk": {
-    "message": "主题/内容未签名（DKIM 重放风险）"
+    "message": "主题未签名（DKIM 重放风险）"
   },
   "verdictReasonSuspicious": {
     "message": "可疑链接"
