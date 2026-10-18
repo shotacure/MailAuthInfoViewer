@@ -868,7 +868,9 @@
 
               // Authentication-Results と ARC-Authentication-Results に
               // 同じ署名結果が記録されることがあるため、status+domain で重複排除
-              const key = `${status}|${domain.toLowerCase()}`;
+              // セレクタも鍵に含め、同一ドメインでセレクタの異なる署名は別々に表示する
+              // （1 つにまとめると、署名ごとの警告がどの署名のものか分からなくなるため）
+              const key = `${status}|${domain.toLowerCase()}|${selector.toLowerCase()}`;
               if (seen.has(key)) continue;
               seen.add(key);
 
@@ -1144,6 +1146,8 @@
               warnings.push({
                 type: "unsigned_headers",
                 domain: sig.domain,
+                // 同一ドメインに複数の署名がある場合に、どの署名についての警告か示すため保持する
+                selector: sig.selector,
                 value: missing.map(name => SIGNED_HEADER_LABELS[name]).join(", ")
               });
             }
@@ -2463,7 +2467,7 @@
           lines.push("STRENGTH WARNINGS");
           lines.push("-----------------");
           for (const w of strength.dkim) {
-            lines.push(`[!] DKIM ${w.type}: ${w.value}${w.domain ? ` (${w.domain})` : ""}`);
+            lines.push(`[!] DKIM ${w.type}: ${w.value}${w.domain ? ` (${w.domain}${w.selector ? `, s=${w.selector}` : ""})` : ""}`);
           }
           for (const w of strength.dmarc) {
             lines.push(`[!] DMARC ${w.type}: ${w.value}`);
@@ -2744,7 +2748,9 @@
         let strengthHTML = "";
         for (const w of (authResults.strength ? authResults.strength.dkim : [])) {
           const label = strengthTypeMsg[w.type] || w.type;
-          const domainInfo = w.domain ? ` — ${w.domain}` : "";
+          // 署名単位の警告（署名対象ヘッダの不足）はセレクタも添え、どの署名についてか明示する
+          const selectorInfo = w.selector ? `, s=${w.selector}` : "";
+          const domainInfo = w.domain ? ` — ${w.domain}${selectorInfo}` : "";
           strengthHTML += `<div class="maiv-strength-warn">⚠️ ${escapeHTML(label)} (${escapeHTML(w.value)}${escapeHTML(domainInfo)})</div>`;
         }
 
