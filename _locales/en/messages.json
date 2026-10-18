@@ -236,7 +236,7 @@
     "message": "Original sender not verified (forwarding service)"
   },
   "verdictReasonDkimReplayRisk": {
-    "message": "Subject/content unsigned (DKIM replay risk)"
+    "message": "Subject unsigned (DKIM replay risk)"
   },
   "verdictReasonSuspicious": {
     "message": "Suspicious link"

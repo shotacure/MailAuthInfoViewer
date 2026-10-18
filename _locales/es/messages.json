@@ -234,7 +234,7 @@
     "message": "Remitente original no verificado (servicio de reenvío)"
   },
   "verdictReasonDkimReplayRisk": {
-    "message": "Asunto/contenido sin firmar (riesgo de repetición DKIM)"
+    "message": "Asunto sin firmar (riesgo de repetición DKIM)"
   },
   "verdictReasonSuspicious": {
     "message": "Enlace sospechoso"

@@ -234,7 +234,7 @@
     "message": "Mittente originale non verificato (servizio di inoltro)"
   },
   "verdictReasonDkimReplayRisk": {
-    "message": "Oggetto/contenuto non firmati (rischio di replay DKIM)"
+    "message": "Oggetto non firmato (rischio di replay DKIM)"
   },
   "verdictReasonSuspicious": {
     "message": "Link sospetto"

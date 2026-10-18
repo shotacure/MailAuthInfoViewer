@@ -234,7 +234,7 @@
     "message": "Expéditeur d'origine non vérifié (service de transfert)"
   },
   "verdictReasonDkimReplayRisk": {
-    "message": "Objet/contenu non signés (risque de rejeu DKIM)"
+    "message": "Objet non signé (risque de rejeu DKIM)"
   },
   "verdictReasonSuspicious": {
     "message": "Lien suspect"

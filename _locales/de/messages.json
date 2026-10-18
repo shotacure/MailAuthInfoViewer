@@ -234,7 +234,7 @@
     "message": "Ursprünglicher Absender nicht verifiziert (Weiterleitungsdienst)"
   },
   "verdictReasonDkimReplayRisk": {
-    "message": "Betreff/Inhalt nicht signiert (DKIM-Replay-Risiko)"
+    "message": "Betreff nicht signiert (DKIM-Replay-Risiko)"
   },
   "verdictReasonSuspicious": {
     "message": "Verdächtiger Link"

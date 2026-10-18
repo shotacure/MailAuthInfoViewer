@@ -234,7 +234,7 @@
     "message": "Remetente original não verificado (serviço de encaminhamento)"
   },
   "verdictReasonDkimReplayRisk": {
-    "message": "Assunto/conteúdo não assinados (risco de replay DKIM)"
+    "message": "Assunto não assinado (risco de replay DKIM)"
   },
   "verdictReasonSuspicious": {
     "message": "Link suspeito"

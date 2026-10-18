@@ -234,7 +234,7 @@
     "message": "원 발신자 미검증 (전달 서비스)"
   },
   "verdictReasonDkimReplayRisk": {
-    "message": "제목/본문 구조 미서명 (DKIM 재전송 위험)"
+    "message": "제목 미서명 (DKIM 재전송 위험)"
   },
   "verdictReasonSuspicious": {
     "message": "의심스러운 링크"
