@@ -177,6 +177,7 @@ v1.1.6 ではリンク指標を4段階に分類しています。それぞれ深
 * No critical, suspicious, or untrusted link indicators detected in email body
 * If a forwarding service recorded the original message's authentication (e.g. addy.io `X-AnonAddy-Authentication-Results`), the original sender's DMARC must be `pass`
 * If DMARC passes only through DKIM alignment (SPF not aligned), an aligned passing DKIM signature must cover `Subject` (otherwise the message could be a DKIM replay with a swapped subject)
+* Note: When DMARC passes but the message is not green for another reason, the badge is ⚠️ AUTH PASS even if the envelope sender is empty (`Return-Path: <>`) or unavailable, because DMARC validates the header From regardless of the envelope sender
 * Note: Envelope domain mismatch alone does NOT block green when DMARC pass with alignment is satisfied (supports legitimate third-party sending services like SendGrid)
 * Note: DMARC `p=none` does NOT block green (authentication itself succeeded), but the DMARC card highlights the weak policy in red for administrators
 * Note: Authentication strength findings (sub-2048-bit DKIM keys, rsa-sha1, `l=` partial body signing, unsigned `Subject`/`Content-Type`/`Reply-To`, `sp=none`, `pct<100`) likewise do NOT affect the badge — they appear inside the DKIM/DMARC cards as administrator guidance, following the same treatment as `p=none`. The only exception is an unsigned `Subject` while DMARC relies on DKIM alone (see above)
@@ -193,6 +194,7 @@ v1.1.6 ではリンク指標を4段階に分類しています。それぞれ深
 * メール本文に critical・suspicious・untrusted のいずれのリンク指標も検知されていないこと
 * 転送サービスが元メールの認証結果を記録している場合（例: addy.io の `X-AnonAddy-Authentication-Results`）、元送信者の DMARC が `pass` であること
 * DMARC が DKIM アライメントだけで pass している場合（SPF 非アライン）、アラインして pass した DKIM 署名が `Subject` を署名対象に含むこと（含まない場合、件名を差し替えた DKIM リプレイの可能性がある）
+* 注: DMARC が pass していて他の理由でグリーンにならない場合、エンベロープ送信者が空（`Return-Path: <>`）や取得できないときでも ⚠️ AUTH PASS を表示する（DMARC はエンベロープ送信者に関係なくヘッダ From を検証するため）
 * 注: DMARCがpassかつアライメント成立時は、エンベロープドメイン不一致のみではグリーンを阻害しない（SendGrid等の正当な外部配信サービスに対応）
 * 注: DMARC `p=none` はグリーンを阻害しない（認証自体は成功）が、DMARCカード内でポリシーを赤色表示して管理者に改善を促す
 * 注: 認証強度の所見（2048ビット未満のDKIM鍵・rsa-sha1・`l=`部分署名・`Subject`/`Content-Type`/`Reply-To` の未署名・`sp=none`・`pct<100`）も同様にバッジ判定には影響しない — `p=none` と同じ扱いで、DKIM/DMARCカード内に管理者向け警告として表示する。唯一の例外は、DMARC が DKIM だけに依存しているときの `Subject` の未署名（上記）

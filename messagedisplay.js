@@ -1966,8 +1966,11 @@
       } else if (authResults.spf.status === "fail" || authResults.dkim.status === "fail" || authResults.dmarc.status === "fail") {
         badgeClass = "danger";
         badgeText = msg("badgeAuthFailed");
-      } else if ((isSpfOk || isDkimOk) && isDmarcOk && envelopeFrom !== "Unknown") {
+      } else if ((isSpfOk || isDkimOk) && isDmarcOk) {
         // SPF/DKIM・DMARC全て通っているが他の条件（アライメント・なりすまし等）で不合格
+        // DMARC が検証するのはヘッダ From であり、エンベロープ送信者が空（Return-Path: <>）や
+        // 取得できない場合でも DMARC pass の事実は変わらないため、ここでは envelopeFrom を問わない。
+        // （空の送信者は配送エラー通知・自動応答のほか、SPF を HELO で評価させる手口にも使われる）
         badgeClass = "warning";
         badgeText = msg("badgeAuthPassWarning");
       } else if ((isSpfOk || isDkimOk) && envelopeFrom !== "Unknown") {
