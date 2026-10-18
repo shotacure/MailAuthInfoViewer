@@ -831,6 +831,9 @@
         const results = [];
         // 重複排除用: "status|domain" の組み合わせを記録
         const seen = new Set();
+        // pass した署名の (domain, selector) を重複排除前の状態で保持する。
+        // 同一ドメインでセレクタ違いの署名を区別する必要がある署名範囲（h=）の評価に用いる
+        const passed = [];
 
         for (const h of authHeaders) {
           // コメント括弧 "(2048-bit key; unprotected)" 等に含まれるセミコロンを
@@ -855,6 +858,7 @@
               const sMatch = m.match(/header\.s=([^;\s()]+)/i);
               const selector = sMatch ? sMatch[1].replace(/["']/g, '') : "";
               const status = statusMatch[1].toLowerCase();
+              if (status === "pass" && domain) passed.push({ domain, selector });
 
               // Authentication-Results と ARC-Authentication-Results に
               // 同じ署名結果が記録されることがあるため、status+domain で重複排除
@@ -880,7 +884,7 @@
           else aggregated = results[0].status;
         }
 
-        return { aggregated, results };
+        return { aggregated, results, passed };
       };
 
       // 認証タイプに関連する詳細情報(ドメイン, IP等)を構造化データとして抽出する
@@ -1042,6 +1046,109 @@
       // SPF/DKIM アライメントの個別評価結果（pass した署名のドメインのみで判定）
       const alignment = evaluateAlignment(spfDetail, dkimResult.results, envelope.headerOrgDomain, spfStatus, dkimResult.aggregated);
 
+      // ■ DKIM 署名範囲（h= タグ）の評価
+      // DKIM 署名が保証するのは本文と h= に列挙されたヘッダだけで、署名対象外のヘッダは
+      // 署名を壊さずに誰でも差し替え・追加できる。正規の署名付きメールを入手した第三者が
+      // 件名や Content-Type（本文の MIME 構造をどう解釈するか）だけを書き換えて別の宛先へ
+      // 再送する「DKIM リプレイ」では、From と署名ドメインが一致したまま DMARC も pass するため、
+      // 認証結果だけでは正規メールと区別できない。
+      // RFC 6376 が署名を必須とするのは From のみだが、5.4.1 は Subject・Date・To・Cc・
+      // Reply-To 等の署名を推奨し、MIME ヘッダの署名も強く勧めている。
+      // From とアラインして pass した署名を対象に、次の 2 種類を調べる。
+      //   critical:    Subject / Content-Type。受信者が目にする件名と本文の解釈を決めるヘッダ。
+      //                メールに存在しない場合でも署名対象（オーバーサイン）に含まれていなければ
+      //                第三者が後から追加できるため、存在の有無に関わらず署名を求める。
+      //   recommended: Date / To / Cc / Reply-To / MIME-Version。メールに存在するのに
+      //                署名対象外の場合のみ報告する。
+      const SIGNED_HEADER_LABELS = {
+        "subject": "Subject",
+        "content-type": "Content-Type",
+        "date": "Date",
+        "to": "To",
+        "cc": "Cc",
+        "reply-to": "Reply-To",
+        "mime-version": "MIME-Version"
+      };
+      const CRITICAL_SIGNED_HEADERS = ["subject", "content-type"];
+      const RECOMMENDED_SIGNED_HEADERS = ["date", "to", "cc", "reply-to", "mime-version"];
+
+      const evaluateSignedHeaderCoverage = () => {
+        const getOrgDomain = window.getOrganizationalDomain || ((d) => d);
+        const normalizeDomain = (d) => domainToAscii((d || "").replace(/\.$/, "")).toLowerCase();
+
+        // DKIM-Signature をタグ単位に分解する。h= の値は折り返し（FWS）を含みうるため、
+        // 空白をすべて除去してからコロンで分割する。
+        // b= の値（Base64）はセミコロンを含まないため、単純な ';' 分割で問題ない
+        const parseSigTags = (sigHeader) => {
+          const tags = {};
+          for (const part of sigHeader.split(";")) {
+            const eq = part.indexOf("=");
+            if (eq < 0) continue;
+            const name = part.slice(0, eq).trim().toLowerCase();
+            if (name && !(name in tags)) tags[name] = part.slice(eq + 1).replace(/\s+/g, "");
+          }
+          return tags;
+        };
+        const signatures = (headers["dkim-signature"] || []).map(h => {
+          const t = parseSigTags(h);
+          return {
+            domain: normalizeDomain(t.d),
+            selector: (t.s || "").toLowerCase(),
+            signed: new Set((t.h || "").toLowerCase().split(":").filter(Boolean))
+          };
+        });
+
+        const warnings = [];
+        let alignedPassCount = 0;
+        let coveredPassCount = 0;
+        const seenSig = new Set();
+
+        for (const p of dkimResult.passed) {
+          const passDomain = normalizeDomain(p.domain);
+          if (getOrgDomain(passDomain) !== envelope.headerOrgDomain) continue;
+          const passSelector = (p.selector || "").toLowerCase();
+
+          // A-R の header.s があればセレクタまで一致する署名に絞る。
+          // 記録が無い場合は同一ドメインの全署名が候補となり、どれが pass したか
+          // 特定できないため、全候補が critical ヘッダを覆っている場合のみ「覆われている」とみなす
+          const matches = signatures.filter(sig =>
+            sig.domain === passDomain && (!passSelector || sig.selector === passSelector));
+          // DKIM-Signature ヘッダが見当たらない（経路上で除去された等）場合は判断材料が無いため評価しない
+          if (matches.length === 0) continue;
+          alignedPassCount++;
+
+          let allCovered = true;
+          for (const sig of matches) {
+            const missing = CRITICAL_SIGNED_HEADERS.filter(name => !sig.signed.has(name));
+            if (missing.length > 0) allCovered = false;
+            const missingRecommended = RECOMMENDED_SIGNED_HEADERS.filter(name =>
+              !sig.signed.has(name) && (headers[name] || []).length > 0);
+
+            const sigKey = `${sig.domain}|${sig.selector}`;
+            if (seenSig.has(sigKey)) continue;
+            seenSig.add(sigKey);
+            const allMissing = missing.concat(missingRecommended);
+            if (allMissing.length > 0) {
+              warnings.push({
+                type: "unsigned_headers",
+                domain: sig.domain,
+                value: allMissing.map(name => SIGNED_HEADER_LABELS[name]).join(", "),
+                critical: missing.length > 0
+              });
+            }
+          }
+          if (allCovered) coveredPassCount++;
+        }
+
+        // アラインした pass 署名が評価でき、そのいずれも critical ヘッダを覆っていない場合に
+        // 「件名・本文の解釈をドメイン所有者が保証していない」とみなす
+        return {
+          warnings,
+          criticalUncovered: alignedPassCount > 0 && coveredPassCount === 0
+        };
+      };
+      const dkimCoverage = evaluateSignedHeaderCoverage();
+
       // ■ 認証強度の弱さ検出
       // 認証が pass していても、送信側の努力で解決できる設定上の弱さがあれば
       // 警告対象とする（設計思想: グリーン＝何もしなくて安全）。
@@ -1074,6 +1181,10 @@
             dkimWarnings.push({ type: "limited_scope", domain: sigDomain, value: `l=${lMatch[1]}` });
           }
         }
+
+        // --- 署名対象ヘッダの不足（h= タグ） ---
+        // 評価は evaluateSignedHeaderCoverage() で済ませてあり、ここでは警告一覧に合流させる
+        for (const w of dkimCoverage.warnings) dkimWarnings.push(w);
 
         // --- DKIM 鍵長検査 ---
         // 鍵長は DKIM-Signature には現れないが、受信側 MTA が
@@ -1177,6 +1288,9 @@
         dmarc: { status: dmarcStatus, detail: dmarcDetail },
         alignment,
         strength,
+        // アラインした pass 署名が Subject / Content-Type を署名対象に含んでいないか
+        // （DKIM リプレイで件名・本文の解釈を差し替えうる状態か）
+        dkimCriticalUnsigned: dkimCoverage.criticalUncovered,
         reportedUnverified,
         // Microsoft 365 組織内で完結した配送か（注記表示用。判定には影響させない）
         // 外部から EOP を経由したメールには必ず A-R が付与されるため、A-R が1本でも
@@ -1779,11 +1893,23 @@
       // 受信者が注意すべき事柄が残る以上グリーンにはしない（警告付きの判定に留める）。
       const isReplyToHomograph = !!replyToHomograph;
 
+      // ■ DKIM リプレイの余地（件名・本文の解釈が署名で守られていない）
+      // DMARC が DKIM アライメントだけで pass している（SPF はアラインしていない）場合、
+      // 「正規の送信基盤から直接届いた」保証は無く、ドメイン所有者が保証するのは署名範囲だけになる。
+      // その署名が Subject / Content-Type を含まなければ、正規の署名付きメールを入手した第三者が
+      // 件名や本文の MIME 構造の解釈を差し替えて再送しても DMARC pass のまま届く。
+      // 署名範囲は送信側（署名を行う送信基盤）が広げれば解消できる不備のためグリーンにはしないが、
+      // 認証自体は成功しており偽装と断定はできないため、警告付きの判定に留める。
+      // SPF もアラインしている場合は第三者による再送が成立しないため、DKIM カード内の警告のみとする。
+      const isDkimReplayRisk = isDmarcOk && !!al.dkimAligned && !al.spfAligned &&
+                               !!authResults.dkimCriticalUnsigned;
+
       const isSecure = isSpfOk && isDkimOk && isDmarcOk &&
                        domainCheckOk && isDmarcAligned &&
                        !isDisplayNameSpoofed && !hasCriticalPhishing &&
                        !hasSuspiciousLink && !hasUntrustedLink &&
-                       !isRelayOriginalUnverified && !isSenderHomograph && !isReplyToHomograph;
+                       !isRelayOriginalUnverified && !isSenderHomograph && !isReplyToHomograph &&
+                       !isDkimReplayRisk;
 
       // 認証系: pass 以外なら実際のステータスを記録 (例: "SPF: softfail")
       if (!isSpfOk) verdictReasons.push(`SPF: ${authResults.spf.status}`);
@@ -1799,6 +1925,7 @@
       if (!domainCheckOk) verdictReasons.push("domain_not_aligned");
       if (isDisplayNameSpoofed) verdictReasons.push("display_name_spoofed");
       if (isRelayOriginalUnverified) verdictReasons.push("relay_original_unverified");
+      if (isDkimReplayRisk) verdictReasons.push("dkim_replay_risk");
       // 送信者ドメインの偽装は、リンク起因のフィッシングと区別できるよう判定理由として明示する
       if (isSenderHomograph) verdictReasons.push("sender_homograph");
       if (isReplyToHomograph) verdictReasons.push("reply_to_homograph");
@@ -2472,6 +2599,7 @@
           "sender_homograph": msg("verdictReasonSenderHomograph"),
           "reply_to_homograph": msg("verdictReasonReplyToHomograph"),
           "relay_original_unverified": msg("verdictReasonRelayOriginal"),
+          "dkim_replay_risk": msg("verdictReasonDkimReplayRisk"),
           "phishing_suspicious": msg("verdictReasonSuspicious"),
           "link_untrusted": msg("verdictReasonUntrusted")
         };
@@ -2593,7 +2721,8 @@
         const strengthTypeMsg = {
           "weak_key": msg("dkimWeakKeyLength"),
           "weak_algorithm": msg("dkimWeakAlgorithm"),
-          "limited_scope": msg("dkimLimitedScope")
+          "limited_scope": msg("dkimLimitedScope"),
+          "unsigned_headers": msg("dkimUnsignedHeaders")
         };
         let strengthHTML = "";
         for (const w of (authResults.strength ? authResults.strength.dkim : [])) {

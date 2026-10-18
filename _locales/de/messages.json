@@ -47,6 +47,9 @@
   "dkimLimitedScope": {
     "message": "Signatur schützt nur einen Teil des Nachrichtentexts"
   },
+  "dkimUnsignedHeaders": {
+    "message": "Signatur deckt empfohlene Header nicht ab"
+  },
   "dmarcWeakSubpolicy": {
     "message": "Subdomain-Richtlinie ist none (Subdomains ungeschützt)"
   },
@@ -229,6 +232,9 @@
   },
   "verdictReasonRelayOriginal": {
     "message": "Ursprünglicher Absender nicht verifiziert (Weiterleitungsdienst)"
+  },
+  "verdictReasonDkimReplayRisk": {
+    "message": "Betreff/Inhalt nicht signiert (DKIM-Replay-Risiko)"
   },
   "verdictReasonSuspicious": {
     "message": "Verdächtiger Link"

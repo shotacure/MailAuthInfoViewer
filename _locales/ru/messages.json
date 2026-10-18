@@ -47,6 +47,9 @@
   "dkimLimitedScope": {
     "message": "Подпись покрывает только часть тела письма"
   },
+  "dkimUnsignedHeaders": {
+    "message": "Подпись не охватывает рекомендуемые заголовки"
+  },
   "dmarcWeakSubpolicy": {
     "message": "Политика поддоменов — none (поддомены не защищены)"
   },
@@ -229,6 +232,9 @@
   },
   "verdictReasonRelayOriginal": {
     "message": "Исходный отправитель не проверен (сервис пересылки)"
+  },
+  "verdictReasonDkimReplayRisk": {
+    "message": "Тема/содержимое не подписаны (риск повторной отправки DKIM)"
   },
   "verdictReasonSuspicious": {
     "message": "Подозрительная ссылка"

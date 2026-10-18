@@ -47,6 +47,9 @@
   "dkimLimitedScope": {
     "message": "서명이 본문의 일부만 보호합니다"
   },
+  "dkimUnsignedHeaders": {
+    "message": "서명이 권장 헤더를 포함하지 않습니다"
+  },
   "dmarcWeakSubpolicy": {
     "message": "하위 도메인 정책이 none입니다 (하위 도메인 무방비)"
   },
@@ -229,6 +232,9 @@
   },
   "verdictReasonRelayOriginal": {
     "message": "원 발신자 미검증 (전달 서비스)"
+  },
+  "verdictReasonDkimReplayRisk": {
+    "message": "제목/본문 구조 미서명 (DKIM 재전송 위험)"
   },
   "verdictReasonSuspicious": {
     "message": "의심스러운 링크"

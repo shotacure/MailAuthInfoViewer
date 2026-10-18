@@ -47,6 +47,9 @@
   "dkimLimitedScope": {
     "message": "簽章僅涵蓋部分郵件內文"
   },
+  "dkimUnsignedHeaders": {
+    "message": "簽章未涵蓋建議的標頭"
+  },
   "dmarcWeakSubpolicy": {
     "message": "子網域政策為 none（子網域未受保護）"
   },
@@ -229,6 +232,9 @@
   },
   "verdictReasonRelayOriginal": {
     "message": "原始寄件者未驗證（轉寄服務）"
+  },
+  "verdictReasonDkimReplayRisk": {
+    "message": "主旨／內容未簽章（DKIM 重送風險）"
   },
   "verdictReasonSuspicious": {
     "message": "可疑連結"

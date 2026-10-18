@@ -52,6 +52,9 @@
   "dkimLimitedScope": {
     "message": "Signature covers only part of the message body"
   },
+  "dkimUnsignedHeaders": {
+    "message": "Signature does not cover recommended headers"
+  },
   "dmarcWeakSubpolicy": {
     "message": "Subdomain policy is none (subdomains unprotected)"
   },
@@ -231,6 +234,9 @@
   },
   "verdictReasonRelayOriginal": {
     "message": "Original sender not verified (forwarding service)"
+  },
+  "verdictReasonDkimReplayRisk": {
+    "message": "Subject/content unsigned (DKIM replay risk)"
   },
   "verdictReasonSuspicious": {
     "message": "Suspicious link"

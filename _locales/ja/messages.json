@@ -52,6 +52,9 @@
   "dkimLimitedScope": {
     "message": "署名が本文の一部のみを保護しています"
   },
+  "dkimUnsignedHeaders": {
+    "message": "推奨ヘッダが署名対象外です"
+  },
   "dmarcWeakSubpolicy": {
     "message": "サブドメインポリシーがnoneです（サブドメインが無防備）"
   },
@@ -231,6 +234,9 @@
   },
   "verdictReasonRelayOriginal": {
     "message": "元送信者未検証（転送サービス）"
+  },
+  "verdictReasonDkimReplayRisk": {
+    "message": "件名・本文構造が署名対象外（DKIM リプレイの恐れ）"
   },
   "verdictReasonSuspicious": {
     "message": "不審なリンク"
