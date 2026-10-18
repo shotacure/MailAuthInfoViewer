@@ -599,8 +599,13 @@
         //     A-R を付与する。間に *.internal / localhost の内部ホップが挟まる。
         // そこで以下の優先順で境界 MTA（=authserv 発行ホスト）を特定する。
 
+        // by 句のホスト名は空白・セミコロンに加え "(" の手前で区切る。
+        // RFC 5321 の Received 構文ではホスト名の直後に空白なしでコメントを続けられ、
+        // 例: "by mfsmax.docomo.ne.jp(DOCOMO Mail Server Ver2.0)"
+        // ここを区切らないとホスト名にコメントが混入し、authserv-id 照合に失敗して
+        // 受信サーバー自身の正規の Authentication-Results まで信頼対象から外れてしまう。
         const extractBy = (line) => {
-          const m = line.match(/\bby\s+([^\s;]+)/i);
+          const m = line.match(/\bby\s+([^\s;()]+)/i);
           return m ? m[1].toLowerCase().replace(/^\[|\]$/g, "") : "";
         };
         const isIpLiteral = (h) => isIPv4Like(h) || isIPv6Like(h);
@@ -687,9 +692,10 @@
         const firstLabel = (h) => (h || "").split(".")[0];
         const normalize = (h) => h.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
         const hops = received.map(line => {
-          const byMatch = line.match(/\bby\s+([^\s;]+)/i);
+          // ホスト名の直後に空白なしで続くコメント "host(...)" を含めないよう "(" でも区切る
+          const byMatch = line.match(/\bby\s+([^\s;()]+)/i);
           const fromMatch = line.match(/\bfrom\s+(.+?)(?=\s+by\s+|;|$)/i);
-          const fromHost = fromMatch ? fromMatch[1].trim().split(/\s+/)[0] : "";
+          const fromHost = fromMatch ? fromMatch[1].trim().split(/[\s(]+/)[0] : "";
           return {
             by: byMatch ? normalize(byMatch[1]) : "",
             fromHost: normalize(fromHost)
@@ -1356,7 +1362,8 @@
 
       return rawReceived.slice().reverse().map(line => {
         const fromMatch = line.match(/\bfrom\s+(.+?)(?=\s+by\s+|;|$)/i);
-        const byMatch = line.match(/\bby\s+([^\s;]+)/i);
+        // 受信ホスト名の直後に空白なしで続くコメント "host(...)" は表示に含めない
+        const byMatch = line.match(/\bby\s+([^\s;()]+)/i);
         const date = parseReceivedDate(line);
 
         // from 句からIPアドレスを抽出し、内部/外部ネットワークを判定
@@ -3458,7 +3465,8 @@
     //    メッセージ全体の読み込みを伴うため、該当しないメールでは取得しない。
     //    取得に失敗した場合は null のまま進め、プロバイダ固有の A-R 採用を行わない（安全側）。
     let rawHeaderOrder = null;
-    const topReceivedBy = ((headers["received"] || [])[0] || "").match(/\bby\s+([^\s;]+)/i);
+    //    受信ホスト名の切り出しは detectProviderRoute と同じく "(" でも区切り、判定を一致させる。
+    const topReceivedBy = ((headers["received"] || [])[0] || "").match(/\bby\s+([^\s;()]+)/i);
     if (topReceivedBy && findProviderRule(topReceivedBy[1])) {
       try {
         const rawResp = await browser.runtime.sendMessage({ command: "getRawHeaders" });
