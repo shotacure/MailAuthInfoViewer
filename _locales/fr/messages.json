@@ -47,6 +47,9 @@
   "dkimLimitedScope": {
     "message": "La signature ne couvre qu'une partie du corps du message"
   },
+  "dkimUnsignedHeaders": {
+    "message": "La signature ne couvre pas les en-têtes recommandés"
+  },
   "dmarcWeakSubpolicy": {
     "message": "La politique de sous-domaine est none (sous-domaines non protégés)"
   },
@@ -229,6 +232,9 @@
   },
   "verdictReasonRelayOriginal": {
     "message": "Expéditeur d'origine non vérifié (service de transfert)"
+  },
+  "verdictReasonDkimReplayRisk": {
+    "message": "Objet non signé (risque de rejeu DKIM)"
   },
   "verdictReasonSuspicious": {
     "message": "Lien suspect"

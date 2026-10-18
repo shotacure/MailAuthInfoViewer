@@ -47,6 +47,9 @@
   "dkimLimitedScope": {
     "message": "التوقيع يغطي جزءًا فقط من نص الرسالة"
   },
+  "dkimUnsignedHeaders": {
+    "message": "التوقيع لا يشمل الترويسات الموصى بها"
+  },
   "dmarcWeakSubpolicy": {
     "message": "سياسة النطاقات الفرعية هي none (النطاقات الفرعية غير محمية)"
   },
@@ -229,6 +232,9 @@
   },
   "verdictReasonRelayOriginal": {
     "message": "المرسل الأصلي غير موثَّق (خدمة إعادة التوجيه)"
+  },
+  "verdictReasonDkimReplayRisk": {
+    "message": "الموضوع غير موقَّع (خطر إعادة إرسال DKIM)"
   },
   "verdictReasonSuspicious": {
     "message": "رابط مشبوه"

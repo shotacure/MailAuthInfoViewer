@@ -47,6 +47,9 @@
   "dkimLimitedScope": {
     "message": "A assinatura cobre apenas parte do corpo da mensagem"
   },
+  "dkimUnsignedHeaders": {
+    "message": "A assinatura não cobre os cabeçalhos recomendados"
+  },
   "dmarcWeakSubpolicy": {
     "message": "A política de subdomínios é none (subdomínios desprotegidos)"
   },
@@ -229,6 +232,9 @@
   },
   "verdictReasonRelayOriginal": {
     "message": "Remetente original não verificado (serviço de encaminhamento)"
+  },
+  "verdictReasonDkimReplayRisk": {
+    "message": "Assunto não assinado (risco de replay DKIM)"
   },
   "verdictReasonSuspicious": {
     "message": "Link suspeito"

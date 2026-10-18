@@ -47,6 +47,9 @@
   "dkimLimitedScope": {
     "message": "La firma cubre solo una parte del cuerpo del mensaje"
   },
+  "dkimUnsignedHeaders": {
+    "message": "La firma no cubre los encabezados recomendados"
+  },
   "dmarcWeakSubpolicy": {
     "message": "La política de subdominios es none (subdominios sin protección)"
   },
@@ -229,6 +232,9 @@
   },
   "verdictReasonRelayOriginal": {
     "message": "Remitente original no verificado (servicio de reenvío)"
+  },
+  "verdictReasonDkimReplayRisk": {
+    "message": "Asunto sin firmar (riesgo de repetición DKIM)"
   },
   "verdictReasonSuspicious": {
     "message": "Enlace sospechoso"

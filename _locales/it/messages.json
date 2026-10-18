@@ -47,6 +47,9 @@
   "dkimLimitedScope": {
     "message": "La firma copre solo una parte del corpo del messaggio"
   },
+  "dkimUnsignedHeaders": {
+    "message": "La firma non copre le intestazioni consigliate"
+  },
   "dmarcWeakSubpolicy": {
     "message": "La policy dei sottodomini è none (sottodomini non protetti)"
   },
@@ -229,6 +232,9 @@
   },
   "verdictReasonRelayOriginal": {
     "message": "Mittente originale non verificato (servizio di inoltro)"
+  },
+  "verdictReasonDkimReplayRisk": {
+    "message": "Oggetto non firmato (rischio di replay DKIM)"
   },
   "verdictReasonSuspicious": {
     "message": "Link sospetto"

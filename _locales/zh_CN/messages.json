@@ -47,6 +47,9 @@
   "dkimLimitedScope": {
     "message": "签名仅覆盖部分邮件正文"
   },
+  "dkimUnsignedHeaders": {
+    "message": "签名未覆盖推荐的标头"
+  },
   "dmarcWeakSubpolicy": {
     "message": "子域名策略为 none（子域名不受保护）"
   },
@@ -229,6 +232,9 @@
   },
   "verdictReasonRelayOriginal": {
     "message": "原始发件人未验证（转发服务）"
+  },
+  "verdictReasonDkimReplayRisk": {
+    "message": "主题未签名（DKIM 重放风险）"
   },
   "verdictReasonSuspicious": {
     "message": "可疑链接"
