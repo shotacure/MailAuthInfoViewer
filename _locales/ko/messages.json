@@ -50,6 +50,15 @@
   "dkimUnsignedHeaders": {
     "message": "서명이 권장 헤더를 포함하지 않습니다"
   },
+  "dkimSignedUnverified": {
+    "message": "서명됨 (미검증)"
+  },
+  "dkimSignedUnverifiedDomain": {
+    "message": "서명 도메인 (미검증):"
+  },
+  "dkimSignedUnverifiedNote": {
+    "message": "이 메일에는 DKIM 서명이 있지만 수신 서버가 검증 결과를 기록하지 않아 서명의 유효성을 확인할 수 없습니다"
+  },
   "dmarcWeakSubpolicy": {
     "message": "하위 도메인 정책이 none입니다 (하위 도메인 무방비)"
   },

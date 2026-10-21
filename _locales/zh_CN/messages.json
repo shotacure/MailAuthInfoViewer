@@ -50,6 +50,15 @@
   "dkimUnsignedHeaders": {
     "message": "签名未覆盖推荐的标头"
   },
+  "dkimSignedUnverified": {
+    "message": "已签名（未验证）"
+  },
+  "dkimSignedUnverifiedDomain": {
+    "message": "签名域名（未验证）："
+  },
+  "dkimSignedUnverifiedNote": {
+    "message": "此邮件带有 DKIM 签名，但接收服务器未记录验证结果，因此无法确认签名是否有效"
+  },
   "dmarcWeakSubpolicy": {
     "message": "子域名策略为 none（子域名不受保护）"
   },

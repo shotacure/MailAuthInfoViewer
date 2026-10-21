@@ -50,6 +50,15 @@
   "dkimUnsignedHeaders": {
     "message": "A assinatura não cobre os cabeçalhos recomendados"
   },
+  "dkimSignedUnverified": {
+    "message": "ASSINADO (NÃO VERIFICADO)"
+  },
+  "dkimSignedUnverifiedDomain": {
+    "message": "domínio de assinatura (não verificado):"
+  },
+  "dkimSignedUnverifiedNote": {
+    "message": "Esta mensagem contém uma assinatura DKIM, mas o servidor de recebimento não registrou nenhum resultado de verificação, portanto não se sabe se a assinatura é válida"
+  },
   "dmarcWeakSubpolicy": {
     "message": "A política de subdomínios é none (subdomínios desprotegidos)"
   },

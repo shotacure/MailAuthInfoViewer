@@ -50,6 +50,15 @@
   "dkimUnsignedHeaders": {
     "message": "Подпись не охватывает рекомендуемые заголовки"
   },
+  "dkimSignedUnverified": {
+    "message": "ПОДПИСАНО (НЕ ПРОВЕРЕНО)"
+  },
+  "dkimSignedUnverifiedDomain": {
+    "message": "домен подписи (не проверен):"
+  },
+  "dkimSignedUnverifiedNote": {
+    "message": "Письмо содержит подпись DKIM, но принимающий сервер не записал результат проверки, поэтому действительность подписи неизвестна"
+  },
   "dmarcWeakSubpolicy": {
     "message": "Политика поддоменов — none (поддомены не защищены)"
   },
