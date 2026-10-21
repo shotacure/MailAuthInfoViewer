@@ -2802,10 +2802,12 @@
               if (sig.selector) parts.push(`${escapeHTML(msg("labelSelector"))} ${escapeHTML(sig.selector)}`);
               return parts.join("<br>");
             });
+            // ラベルが pass/none より長く、狭いカードでは authserv-id と並べると
+            // ラベル自体が細切れに折り返すため、ラベルは改行させず authserv-id 側を次行へ回す
             return `
-              <div class="maiv-status-row">
+              <div class="maiv-status-row" style="flex-wrap:wrap;">
                 <span class="maiv-status-icon">⚠️</span>
-                <span class="status-none">${escapeHTML(msg("dkimSignedUnverified"))}</span>
+                <span class="status-none" style="white-space:nowrap;">${escapeHTML(msg("dkimSignedUnverified"))}</span>
                 ${authServLabel}
               </div>
               <div class="maiv-detail-text">${sigLines.join('<div style="border-top:1px dashed var(--maiv-card-title-border); margin:6px 0;"></div>')}</div>
