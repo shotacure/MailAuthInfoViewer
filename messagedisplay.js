@@ -1293,13 +1293,40 @@
       };
       const relayOriginal = parseRelayOriginalAuth();
 
+      // ■ 受信サーバが検証結果を記録していない DKIM 署名
+      // 信頼済み A-R に DKIM の結果が無いのに DKIM-Signature ヘッダがある場合、
+      // 「署名なし」ではなく「署名はあるが受信サーバが検証していない」状態として区別して示す。
+      // 検証結果を Authentication-Results に書かず、SpamAssassin の X-Spam-Status 等にだけ
+      // 記録する受信サーバで生じる。X-Spam-* は送信者が自由に付与でき、付与した MTA も
+      // 特定できないため、認証結果の代わりには用いない。
+      // DKIM-Signature ヘッダ自体も送信者が偽造できるため、署名の存在は安全の根拠にならない。
+      // 判定（DKIM: none）は変えず、DKIM カードの表示を補う情報としてのみ使う。
+      const collectUnverifiedSignatures = () => {
+        if (dkimResult.aggregated !== "none") return [];
+        const list = [];
+        const seen = new Set();
+        for (const sigHeader of (headers["dkim-signature"] || [])) {
+          const dMatch = sigHeader.match(/(?:^|[;\s])d=([^;\s]+)/i);
+          const sMatch = sigHeader.match(/(?:^|[;\s])s=([^;\s]+)/i);
+          const domain = dMatch ? dMatch[1].trim() : "";
+          const selector = sMatch ? sMatch[1].trim() : "";
+          const key = `${domain.toLowerCase()}|${selector.toLowerCase()}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          list.push({ domain, selector });
+        }
+        return list;
+      };
+      const unverifiedSignatures = collectUnverifiedSignatures();
+
       return {
         // 信頼した A-R の authserv-id（Microsoft 365 の場合は補った EOP ホスト名）
         authServId: authHeaders.length > 0
           ? splitOnTopLevelSemicolons(authHeaders[0])[0].trim()
           : lastReceivedBy,
         spf: { status: spfStatus, detail: spfDetail },
-        dkim: { status: dkimResult.aggregated, detail: dkimDetail, signatures: dkimResult.results },
+        // unverifiedSignatures: 受信サーバが検証結果を記録していない署名の {domain, selector}（表示専用）
+        dkim: { status: dkimResult.aggregated, detail: dkimDetail, signatures: dkimResult.results, unverifiedSignatures },
         dmarc: { status: dmarcStatus, detail: dmarcDetail },
         alignment,
         strength,
@@ -2318,6 +2345,8 @@
         /* 認証強度警告: 認証 pass でも送信側の設定変更で解決できる弱さの表示
            （DMARC p=none の赤色ポリシー表示と同じ「改善促し」の位置づけ） */
         .maiv-strength-warn { color: var(--maiv-delay-warning); font-size: 10px; margin-top: 4px; }
+        /* 受信サーバが検証していない DKIM 署名の注記（警告ではなく補足説明） */
+        .maiv-dkim-unverified-note { color: var(--maiv-text-faint); font-size: 10px; margin-top: 4px; }
 
         /* ARC チェーン表示 */
         .maiv-arc-table { width: 100%; border-collapse: collapse; font-size: 11px; }
@@ -2426,6 +2455,12 @@
           ? sigs.map(sig => `${sig.domain || "?"}=${sig.status}${sig.selector ? ` (s=${sig.selector})` : ""}`).join(", ")
           : "-";
         lines.push(`DKIM:  ${authResults.dkim.status.toUpperCase()} (${dkimSummary})`);
+        // 受信サーバが検証結果を記録していない署名（判定には算入しない）
+        const unverifiedSigs = authResults.dkim.unverifiedSignatures || [];
+        if (authResults.dkim.status === "none" && unverifiedSigs.length > 0) {
+          const list = unverifiedSigs.map(sig => `${sig.domain || "?"}${sig.selector ? ` (s=${sig.selector})` : ""}`).join(", ");
+          lines.push(`DKIM signature present, not verified by receiving server: ${list}`);
+        }
 
         const dmarcPolicy = authResults.dmarc.detail.policy || "-";
         lines.push(`DMARC: ${authResults.dmarc.status.toUpperCase()} (policy: ${dmarcPolicy})`);
@@ -2756,6 +2791,29 @@
 
         if (sigs.length === 0 || !sigs.some(s => s.domain)) {
           const st = authResults.dkim.status;
+
+          // DKIM-Signature はあるが受信サーバの検証結果が無い場合は、「署名なし」と区別して
+          // 「署名あり（未検証）」と表示する。色は none と同じ中立表示に留め、判定は変えない。
+          // 署名ドメインは送信者が偽造できる値のため、未検証であることを必ず併記する
+          const unverified = authResults.dkim.unverifiedSignatures || [];
+          if (st === "none" && unverified.length > 0) {
+            const sigLines = unverified.map(sig => {
+              const parts = [`${escapeHTML(msg("dkimSignedUnverifiedDomain"))} ${escapeHTML(sig.domain || "?")}`];
+              if (sig.selector) parts.push(`${escapeHTML(msg("labelSelector"))} ${escapeHTML(sig.selector)}`);
+              return parts.join("<br>");
+            });
+            return `
+              <div class="maiv-status-row">
+                <span class="maiv-status-icon">⚠️</span>
+                <span class="status-none">${escapeHTML(msg("dkimSignedUnverified"))}</span>
+                ${authServLabel}
+              </div>
+              <div class="maiv-detail-text">${sigLines.join('<div style="border-top:1px dashed var(--maiv-card-title-border); margin:6px 0;"></div>')}</div>
+              <div class="maiv-dkim-unverified-note">${escapeHTML(msg("dkimSignedUnverifiedNote"))}</div>
+              ${strengthHTML}
+            `;
+          }
+
           const emptyIcon = (st === "fail" || st === "permerror" || st === "temperror") ? "❌" : "⚠️";
           const emptyCls = (st === "fail" || st === "permerror" || st === "temperror") ? "status-fail" : "status-none";
           return `

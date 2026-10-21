@@ -55,6 +55,15 @@
   "dkimUnsignedHeaders": {
     "message": "Signature does not cover recommended headers"
   },
+  "dkimSignedUnverified": {
+    "message": "SIGNED (UNVERIFIED)"
+  },
+  "dkimSignedUnverifiedDomain": {
+    "message": "signing domain (unverified):"
+  },
+  "dkimSignedUnverifiedNote": {
+    "message": "This message carries a DKIM signature, but the receiving server recorded no verification result, so whether the signature is valid is unknown"
+  },
   "dmarcWeakSubpolicy": {
     "message": "Subdomain policy is none (subdomains unprotected)"
   },

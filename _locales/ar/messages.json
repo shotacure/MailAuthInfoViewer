@@ -50,6 +50,15 @@
   "dkimUnsignedHeaders": {
     "message": "التوقيع لا يشمل الترويسات الموصى بها"
   },
+  "dkimSignedUnverified": {
+    "message": "موقَّع (غير مُتحقَّق منه)"
+  },
+  "dkimSignedUnverifiedDomain": {
+    "message": "نطاق التوقيع (غير مُتحقَّق منه):"
+  },
+  "dkimSignedUnverifiedNote": {
+    "message": "تحمل هذه الرسالة توقيع DKIM، لكن خادم الاستلام لم يسجّل أي نتيجة تحقق، لذا لا يُعرف ما إذا كان التوقيع صالحًا"
+  },
   "dmarcWeakSubpolicy": {
     "message": "سياسة النطاقات الفرعية هي none (النطاقات الفرعية غير محمية)"
   },

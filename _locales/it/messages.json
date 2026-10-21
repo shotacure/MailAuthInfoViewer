@@ -50,6 +50,15 @@
   "dkimUnsignedHeaders": {
     "message": "La firma non copre le intestazioni consigliate"
   },
+  "dkimSignedUnverified": {
+    "message": "FIRMATO (NON VERIFICATO)"
+  },
+  "dkimSignedUnverifiedDomain": {
+    "message": "dominio di firma (non verificato):"
+  },
+  "dkimSignedUnverifiedNote": {
+    "message": "Questo messaggio contiene una firma DKIM, ma il server di ricezione non ha registrato alcun risultato di verifica, quindi non è noto se la firma sia valida"
+  },
   "dmarcWeakSubpolicy": {
     "message": "La policy dei sottodomini è none (sottodomini non protetti)"
   },

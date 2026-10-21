@@ -50,6 +50,15 @@
   "dkimUnsignedHeaders": {
     "message": "La signature ne couvre pas les en-têtes recommandés"
   },
+  "dkimSignedUnverified": {
+    "message": "SIGNÉ (NON VÉRIFIÉ)"
+  },
+  "dkimSignedUnverifiedDomain": {
+    "message": "domaine de signature (non vérifié) :"
+  },
+  "dkimSignedUnverifiedNote": {
+    "message": "Ce message porte une signature DKIM, mais le serveur de réception n'a enregistré aucun résultat de vérification ; la validité de la signature est donc inconnue"
+  },
   "dmarcWeakSubpolicy": {
     "message": "La politique de sous-domaine est none (sous-domaines non protégés)"
   },
