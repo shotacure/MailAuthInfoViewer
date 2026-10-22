@@ -322,6 +322,11 @@
     //   - mailbox.org:
     //       受信境界は mx*.mailbox.org。内部ホップは *.heinlein-hosting.de。
     //       authserv-id はホスト名ではない固定値 "incoming_mbo"。
+    //   - Hostpoint:
+    //       受信境界は mxin<番号>.mail.hostpoint.ch（Exim）。受信後は SpamAssassin による
+    //       スキャンのため同一ホストへ自身で再投入し（from mailnull ... with local_*）、
+    //       *.adm.hostpoint.ch / *.mail.hostpoint.internal の内部ホップへ LMTP で渡す。
+    //       authserv-id は受信ホスト名ではないクラスタ名 "mxin-hosts.mail.hostpoint.ch"。
     // これらは parseAuthResults の detectProviderRoute で境界を特定し、生ヘッダ順序で
     // A-R の付与位置を検証したうえで採用する。各定義:
     //   orgDomains:         プロバイダ自身のホストの組織ドメイン
@@ -335,6 +340,9 @@
     //                       受信時にプロバイダが付与するキュー ID ヘッダの値が受信境界の
     //                       Received の "id" と一致することを要求する（受信時に初めて決まる値で
     //                       送信者は予測できないため、プロバイダが実際に処理したことの証跡になる）
+    //   localReinjection:   MTA が受信済みメールを同一ホストへ自身で再投入するホップ
+    //                       （from <ローカルユーザー名> by <ホスト> with local*、IP なし）を、
+    //                       同一サーバ内の処理として通過させるか
     //   detectInternal:     組織内で完結した配送を判定・注記する対象か
     const PROVIDER_INGRESS_RULES = [
       {
@@ -344,6 +352,7 @@
         providerAuthServId: null,
         arPlacement: "above",
         queueIdHeader: null,
+        localReinjection: false,
         detectInternal: true
       },
       {
@@ -353,6 +362,18 @@
         providerAuthServId: "incoming_mbo",
         arPlacement: "below",
         queueIdHeader: "x-rspamd-queue-id",
+        localReinjection: false,
+        detectInternal: false
+      },
+      {
+        name: "Hostpoint",
+        orgDomains: ["hostpoint.ch", "hostpoint.internal"],
+        ingress: /^mxin\d+\.mail\.hostpoint\.ch$/,
+        providerAuthServId: "mxin-hosts.mail.hostpoint.ch",
+        // A-R はスパムスキャン後の再投入ホップと受信境界の Received の間に積まれる
+        arPlacement: "above",
+        queueIdHeader: null,
+        localReinjection: true,
         detectInternal: false
       }
     ];
@@ -698,7 +719,12 @@
           const fromHost = fromMatch ? fromMatch[1].trim().split(/[\s(]+/)[0] : "";
           return {
             by: byMatch ? normalize(byMatch[1]) : "",
-            fromHost: normalize(fromHost)
+            fromHost: normalize(fromHost),
+            // 同一ホストへの自己再投入（Exim がスパムスキャン後に記録する
+            //   "from mailnull by mxin016.mail.hostpoint.ch with local_accounts_spamscanned"）。
+            // from がドットを含まないローカルユーザー名で、IP の記録が無く、プロトコルが local* のもの
+            localHandoff: !!fromHost && !fromHost.includes(".") &&
+                          !extractIPFromReceived(line) && /\bwith\s+local\w*/i.test(line)
           };
         });
 
@@ -714,6 +740,13 @@
           if (!isProviderHost(hop.by)) return result;
           // 前段の送信元と、このホップの受信ホストが同一サーバでなければ連続性が途切れている
           if (i > 0 && firstLabel(hops[i - 1].fromHost) !== firstLabel(hop.by)) return result;
+          // 自己再投入ホップは、同じサーバが受信済みのメールを自身へ渡し直したもの。
+          // 送信元を自分自身とみなして走査を続け、次段にも同じサーバの Received を求める。
+          // 最上段から連続した走査でしか到達しないため、送信者が下段に積んだヘッダは対象にならない
+          if (rule.localReinjection && hop.localHandoff) {
+            hop.fromHost = hop.by;
+            continue;
+          }
           // 同一サーバが自身から受け取ったホップ（from X by X）は組織内での送信受付の起点。
           // これより下段はクライアントが送信時に含めた任意のヘッダであり信頼できないため、
           // ここで走査を打ち切り、組織内で発生した配送として扱う。
@@ -794,7 +827,12 @@
       // 通常の Authentication-Results のみ authserv-id でフィルタリング
       // ARC-Authentication-Results は暗号学的検証なしでは偽造可能なため、
       // 本判定からは除外し、ARC カード表示（parseArcChain）のみで利用する
-      let trustedRegular = filterByAuthServId(regularAuth, lastReceivedBy);
+      // プロバイダの受信経路が特定できた場合は、authserv-id による照合を行わない。
+      // これらのプロバイダの authserv-id は受信境界のホスト名と異なるため、境界のホスト名を
+      // authserv-id に名乗る A-R はプロバイダが付与したものではなく、送信者が元メールに
+      // 仕込んだ偽物でしかありえない（プロバイダは自身の authserv-id を名乗る A-R しか
+      // 除去しないため、偽物はそのまま届く）。下の位置検証を経た A-R だけを信頼する。
+      let trustedRegular = providerRoute.ingressHost ? [] : filterByAuthServId(regularAuth, lastReceivedBy);
       let authHeaders = trustedRegular;
 
       // ■ プロバイダが付与した A-R の採用
@@ -804,7 +842,7 @@
       // 下段にある A-R（元メールに含まれていたもの）は対象にしない。
       // authserv-id を持たない形式（Microsoft 365）は、既存パーサが先頭セグメントを
       // authserv-id として読み飛ばすため、境界ホスト名を authserv-id として補って渡す。
-      if (trustedRegular.length === 0 && providerRoute.ingressHost && regularAuth.length > 0 &&
+      if (providerRoute.ingressHost && regularAuth.length > 0 &&
           isProviderAR(providerRoute.rule, regularAuth[0]) &&
           isProviderARPlaced(providerRoute.rule, regularAuth[0], providerRoute.ingressIndex)) {
         trustedRegular = [regularAuth[0]];
