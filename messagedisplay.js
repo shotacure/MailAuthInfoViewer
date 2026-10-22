@@ -46,9 +46,14 @@
       }
       const parts = ip.split('.').map(Number);
       if (parts.length !== 4) return false;
+      // 100.64.0.0/10 は RFC 6598 の共有アドレス空間（キャリアグレード NAT 等の内部用）で、
+      // インターネットからは到達できない（例: xspmail の内部 LMTP ホップ "(100.120.25.83)"）。
+      // 169.254.0.0/16 はリンクローカル
       return (parts[0] === 10) ||
              (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
              (parts[0] === 192 && parts[1] === 168) ||
+             (parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127) ||
+             (parts[0] === 169 && parts[1] === 254) ||
              (parts[0] === 127);
     };
 
@@ -567,6 +572,8 @@
       // 最新の Received ヘッダの by ホスト名と Authentication-Results の authserv-id を比較し、
       // 信頼できるヘッダのみを採用する。攻撃者が注入した偽の認証結果を排除するため。
       // ARC-Authentication-Results は独自のチェイン検証機構を持つため、フィルタリング対象外。
+      // 名前の照合だけでは偽物を排除できないため、受信境界（detectBoundary）と生ヘッダ上の
+      // 位置（selectGenericAR）を併せて確かめ、受信サーバが付けたと言える A-R だけを採用する。
 
       // ■ コメント括弧を考慮したセミコロン分割ヘルパー
       // RFC 8601 では Authentication-Results 中の "(...)" はコメントであり、
@@ -603,22 +610,37 @@
         return result;
       };
 
-      const getLastReceivedBy = () => {
+      // ■ 受信境界（境界 MTA）の特定
+      // authserv-id 照合と A-R の位置検証に使う「信頼する受信ホスト」を求める。
+      // 単純に received[0] の by を採るだけでは、受信プロバイダの構成によって
+      // 「最終配送ホップ ≠ 認証（Authentication-Results 付与）ホスト」となり、
+      // 正規の A-R が authserv-id 不一致で破棄されてしまう。代表的な2パターン:
+      //   - Gmail / Google Workspace: 最上段に内部ハンドオフ
+      //       Received: by 2002:<IPv6> with SMTP id ...
+      //     を積む（by が IP リテラルで authserv-id になり得ない）。
+      //   - Fastmail (messagingengine.com): Cyrus LMTP の内部ホスト
+      //       Received: ... by slotpiXXmYY (Cyrus ...) with LMTPA
+      //     が最終配送だが、認証は phl-mx-NN.messagingengine.com が実施し
+      //     A-R を付与する。間に *.internal / localhost の内部ホップが挟まる。
+      // 最上段から下へ、受信側の内部処理と言い切れるホップだけを読み飛ばし、
+      // それ以外の最初のホップを境界とする。読み飛ばすのは次のものに限る:
+      //   - from 句の無いホップ（Gmail の "Received: by 2002:..." 等の内部ハンドオフ）
+      //   - プライベート IP・ループバックからの受信（*.internal / localhost の内部ホップ）
+      //   - IP の記録が無いローカルの受け渡し（"from exim by ... with sa-scanned" のように、
+      //     from がドットも角括弧も含まない単語だけのもの）
+      // 境界の Received は受信側が書いたものであり、それより下は送信者が自由に書ける。
+      // IP の読み取れない外部受信の行を読み飛ばすと、送信者が書いた偽の Received を
+      // 境界と取り違え、送信者が自作した「境界」と A-R の組を信頼してしまう。
+      // そのため境界の候補は「最初の読み飛ばせないホップ」1つに限り、それより下は見ない。
+      // 括弧内 IPv6 も IP として扱う: Exchange 系の内部ホップは "(2001:db8::1)" の形で
+      // 公開 IPv6 を記録するため、そこが境界になって A-R が照合されなくなるが、
+      // 下へ潜って送信者の行を拾うよりは安全側である
+      // （Microsoft 365 等は detectProviderRoute で別途ホスト名ベースに境界を特定する）。
+      // 戻り値:
+      //   host:  境界ホップの by（IP リテラル等で使えない場合は ""）
+      //   index: 境界ホップの received 配列上の位置（全ホップが内部処理なら -1）
+      const detectBoundary = () => {
         const received = headers["received"] || [];
-        if (received.length === 0) return "";
-
-        // authserv-id 照合に使う「信頼する受信ホスト」を求める。
-        // 単純に received[0] の by を採るだけでは、受信プロバイダの構成によって
-        // 「最終配送ホップ ≠ 認証（Authentication-Results 付与）ホスト」となり、
-        // 正規の A-R が authserv-id 不一致で破棄されてしまう。代表的な2パターン:
-        //   - Gmail / Google Workspace: 最上段に内部ハンドオフ
-        //       Received: by 2002:<IPv6> with SMTP id ...
-        //     を積む（by が IP リテラルで authserv-id になり得ない）。
-        //   - Fastmail (messagingengine.com): Cyrus LMTP の内部ホスト
-        //       Received: ... by slotpiXXmYY (Cyrus ...) with LMTPA
-        //     が最終配送だが、認証は phl-mx-NN.messagingengine.com が実施し
-        //     A-R を付与する。間に *.internal / localhost の内部ホップが挟まる。
-        // そこで以下の優先順で境界 MTA（=authserv 発行ホスト）を特定する。
 
         // by 句のホスト名は空白・セミコロンに加え "(" の手前で区切る。
         // RFC 5321 の Received 構文ではホスト名の直後に空白なしでコメントを続けられ、
@@ -627,60 +649,75 @@
         // 受信サーバー自身の正規の Authentication-Results まで信頼対象から外れてしまう。
         const extractBy = (line) => {
           const m = line.match(/\bby\s+([^\s;()]+)/i);
-          return m ? m[1].toLowerCase().replace(/^\[|\]$/g, "") : "";
+          return m ? m[1].toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "") : "";
         };
         const isIpLiteral = (h) => isIPv4Like(h) || isIPv6Like(h);
-        // 公開到達可能な実 FQDN か（ドットを含み、IP リテラルでも内部/予約
-        // ホスト名でもない）。.internal/.local 等や単一ラベル名・localhost を除外する。
-        const isPublicFqdn = (h) =>
-          !!h && h.includes(".") && !isIpLiteral(h) && h !== "localhost" &&
-          !/\.(internal|local|lan|intranet|localdomain|home\.arpa)$/.test(h);
 
-        // 優先1: 外部（公開 IP）から受信した最初のホップ＝境界 MTA。その by を採用。
-        // 内部配送ホップ（private IP / localhost / from 無し）はこの段で自然に飛ぶ。
-        // 単一ラベル名の受信ホストでも、公開 IP から受信していれば正しく採用される。
-        // 括弧内 IPv6 は抽出しない: Exchange 系の内部ホップは "(2001:db8::1)" の形で
-        // 公開 IPv6 を記録するため、これを外部受信とみなすと内部ホップを境界と誤認する。
-        // （Microsoft 365 等は detectProviderRoute で別途ホスト名ベースに境界を特定する）
-        for (const line of received) {
+        for (let i = 0; i < received.length; i++) {
+          const line = received[i];
           const fromMatch = line.match(/\bfrom\s+(.+?)(?=\s+by\s+|;|$)/i);
-          const fromIP = extractIPFromReceived(fromMatch ? fromMatch[1] : "", false);
-          if (fromIP && !isPrivateIP(fromIP)) {
-            const by = extractBy(line);
-            if (by && !isIpLiteral(by)) return by;
-            break; // 境界は見つかったが by が使えない → 後段へ
-          }
-        }
-
-        // 優先2: 公開 IP からの受信ホップが無い場合（自己送信や全内部経路）。
-        // 先頭から最初の実 FQDN の by を採用する。Fastmail の自己送信のように
-        // slotpiXX（単一ラベル）・*.internal・localhost ばかりの経路でも、
-        // 認証ホスト phl-mx-NN.messagingengine.com に正しく当てられる。
-        for (const line of received) {
+          if (!fromMatch) continue;
+          const fromPart = fromMatch[1].trim();
+          const fromIP = extractIPFromReceived(fromPart, true);
+          if (fromIP && isPrivateIP(fromIP)) continue;
+          const fromHost = fromPart.split(/[\s(]+/)[0];
+          // IP の記録が無く、from がドットも角括弧も含まない単語だけのもの（"from exim" /
+          // "from mailnull" 等）は、MTA が自身へ渡し直したローカルの受け渡し。
+          // 外部からの SMTP 受信では MTA が接続元 IP を必ず記録するため、この形は境界になり得ない。
+          // ホスト名だけで IP の無い行（"from mail.example.com by ..."）は、送信者が HELO で
+          // 受信側と同じドメインを名乗れるため内部とはみなさず、境界として扱う
+          if (!fromIP && !fromPart.includes("[") && /^[A-Za-z][A-Za-z0-9_-]*$/.test(fromHost)) continue;
           const by = extractBy(line);
-          if (isPublicFqdn(by)) return by;
+          return { host: by && !isIpLiteral(by) ? by : "", index: i };
         }
-
-        // 優先3: いずれも該当しなければ従来どおり received[0] の by を返す。
-        return extractBy(received[0]);
+        return { host: "", index: -1 };
       };
 
-      const filterByAuthServId = (authResultHeaders, trustedHost) => {
-        if (!trustedHost || authResultHeaders.length === 0) return authResultHeaders;
+      // ■ 汎用経路での A-R の採用（受信プロバイダ固有ルールに該当しない場合）
+      // A-R は誰でもメールに書けるため、authserv-id の名前だけでは受信サーバが付けたものと
+      // 区別できない。受信サーバが除去するのは自身の authserv-id を名乗る A-R だけで、
+      // A-R を付けないサーバや、別の名前を名乗る偽物はそのまま届く。そこで生のヘッダ順序
+      // （rawHeaderOrder）で位置を確かめ、受信サーバが付けたと言える 1 本だけを信頼する。
+      //   名前: authserv-id は境界ホスト名との完全一致のみ（大文字小文字・末尾のドットは無視）。
+      //         親ドメインやサブドメインを許すと "com" や "ne.jp" を名乗るだけの偽物が通る。
+      //   位置: 境界の Received より上から、境界の直下（次の Received の手前）までの範囲で、
+      //         名前の一致する最初の A-R だけを候補にする。元メールに埋もれた A-R は使わない。
+      //   証拠: 境界より上の A-R は受信後に付与されたもので、送信者は書き込めないため信頼する。
+      //         境界の直下は元メール先頭に置かれた偽物とも重なる位置（Gmail 等はここに付与する）
+      //         のため、境界より上に同じ authserv-id の ARC-Authentication-Results がある場合
+      //         （受信サーバが実際に処理した証跡）に限って信頼する。
+      //   内部経路のみ（境界が無い。自己送信等）: 最上段の Received より上にある最初の A-R だけを
+      //         信頼する。最上段より上は最終配送側が書いた位置で、送信者は書き込めない。
+      // 生ヘッダが取得できない、または getFull と Received の本数が一致しない場合は信頼しない。
+      // 戻り値は getFull 側の該当ヘッダ値の配列（0 または 1 本）。
+      const selectGenericAR = (boundary, regularAuth) => {
+        if (!Array.isArray(rawHeaderOrder) || regularAuth.length === 0) return [];
+        const squash = (s) => (s || "").replace(/\s+/g, " ").trim();
+        const normalizeId = (s) => (s || "").toLowerCase().replace(/\.$/, "");
+        const idOf = (v) => normalizeId(splitOnTopLevelSemicolons(v)[0].trim());
+        const receivedRaw = [];
+        rawHeaderOrder.forEach((h, i) => { if (h.name === "received") receivedRaw.push(i); });
+        if (receivedRaw.length === 0 || receivedRaw.length !== (headers["received"] || []).length) return [];
+        const toFullValue = (rawValue) => regularAuth.find(h => squash(h) === squash(rawValue));
+        const isAR = (h) => h.name === "authentication-results";
 
-        const trusted = authResultHeaders.filter(h => {
-          // authserv-id はヘッダの先頭（最初のセミコロンの前）に記載される
-          // コメント括弧内のセミコロンを誤って境界と認識しないようヘルパーを利用する
-          const authServId = splitOnTopLevelSemicolons(h)[0].trim().toLowerCase();
-          // 完全一致、またはサブドメイン関係を許容
-          return authServId === trustedHost ||
-                 authServId.endsWith("." + trustedHost) ||
-                 trustedHost.endsWith("." + authServId);
-        });
-
-        // マッチするものがなければ空配列を返す（判定に使わない）
-        // 不一致時にすべてのA-Rを信頼するのはセキュリティ上の危険
-        return trusted;
+        if (boundary.index < 0) {
+          const k = rawHeaderOrder.findIndex((h, i) => i < receivedRaw[0] && isAR(h));
+          const full = k >= 0 ? toFullValue(rawHeaderOrder[k].value) : undefined;
+          return full ? [full] : [];
+        }
+        if (!boundary.host) return [];
+        const boundaryRaw = receivedRaw[boundary.index];
+        const zoneEnd = boundary.index + 1 < receivedRaw.length ? receivedRaw[boundary.index + 1] : rawHeaderOrder.length;
+        const k = rawHeaderOrder.findIndex((h, i) => i < zoneEnd && isAR(h) && idOf(h.value) === boundary.host);
+        if (k < 0) return [];
+        if (k > boundaryRaw) {
+          const arcAbove = rawHeaderOrder.some((h, i) => i < boundaryRaw && h.name === "arc-authentication-results" &&
+            idOf(h.value.replace(/^\s*i\s*=\s*\d+\s*;\s*/i, "")) === boundary.host);
+          if (!arcAbove) return [];
+        }
+        const full = toFullValue(rawHeaderOrder[k].value);
+        return full ? [full] : [];
       };
 
       // authserv-id を持たない A-R か（先頭セグメントが "method=result" の形をしている）
@@ -821,18 +858,21 @@
       };
 
       const providerRoute = detectProviderRoute();
-      const lastReceivedBy = providerRoute.ingressHost || getLastReceivedBy();
+      const boundary = providerRoute.ingressHost ? null : detectBoundary();
+      const lastReceivedBy = providerRoute.ingressHost || boundary.host;
       const regularAuth = headers["authentication-results"] || [];
 
       // 通常の Authentication-Results のみ authserv-id でフィルタリング
       // ARC-Authentication-Results は暗号学的検証なしでは偽造可能なため、
       // 本判定からは除外し、ARC カード表示（parseArcChain）のみで利用する
+      // （汎用経路で境界より上にある ARC-AR を「受信サーバが処理した証跡」として参照するのみ）。
       // プロバイダの受信経路が特定できた場合は、authserv-id による照合を行わない。
       // これらのプロバイダの authserv-id は受信境界のホスト名と異なるため、境界のホスト名を
       // authserv-id に名乗る A-R はプロバイダが付与したものではなく、送信者が元メールに
       // 仕込んだ偽物でしかありえない（プロバイダは自身の authserv-id を名乗る A-R しか
       // 除去しないため、偽物はそのまま届く）。下の位置検証を経た A-R だけを信頼する。
-      let trustedRegular = providerRoute.ingressHost ? [] : filterByAuthServId(regularAuth, lastReceivedBy);
+      // それ以外は selectGenericAR で、名前の完全一致と生ヘッダ上の位置を確かめた 1 本だけを信頼する。
+      let trustedRegular = providerRoute.ingressHost ? [] : selectGenericAR(boundary, regularAuth);
       let authHeaders = trustedRegular;
 
       // ■ プロバイダが付与した A-R の採用
@@ -1066,10 +1106,21 @@
       // ■ Received-SPF フォールバック
       // Authentication-Results に SPF 結果がない場合（古いMTAなど）、
       // Received-SPF ヘッダから SPF ステータスとドメイン・IPを取得する
+      // Received-SPF も送信者が自由に書けるため、受信側が書いたと言える位置のものだけを使う。
+      // 受信境界の Received より上（内部経路のみの場合は最上段の Received より上）にある
+      // 最初の Received-SPF に限る。生ヘッダが取得できない場合は補完しない（安全側）。
+      const pickReceivedSpf = () => {
+        if (!Array.isArray(rawHeaderOrder)) return "";
+        const receivedRaw = [];
+        rawHeaderOrder.forEach((h, i) => { if (h.name === "received") receivedRaw.push(i); });
+        if (receivedRaw.length === 0 || receivedRaw.length !== (headers["received"] || []).length) return "";
+        const recvIndex = providerRoute.ingressHost ? providerRoute.ingressIndex : Math.max(boundary.index, 0);
+        const k = rawHeaderOrder.findIndex((h, i) => i < receivedRaw[recvIndex] && h.name === "received-spf");
+        return k >= 0 ? rawHeaderOrder[k].value : "";
+      };
       if (spfStatus === "none") {
-        const receivedSpf = headers["received-spf"] || [];
-        if (receivedSpf.length > 0) {
-          const spfLine = receivedSpf[0];
+        const spfLine = pickReceivedSpf();
+        if (spfLine) {
           // ステータス: ヘッダの先頭単語 (例: "pass identity=mailfrom;")
           const statusMatch = spfLine.match(/^\s*(pass|fail|softfail|neutral|temperror|permerror|none)/i);
           if (statusMatch) {
@@ -3566,15 +3617,18 @@
       compactMode = stored.compactMode === true;
     } catch { /* storage未対応環境では通常表示 */ }
 
-    // ■ 生ヘッダ順序の取得（受信プロバイダ固有ルールが該当する場合のみ）
-    //    最上段 Received の受信ホストが PROVIDER_INGRESS_RULES のプロバイダである場合に限り、
-    //    A-R の付与位置を検証するための生ヘッダを background 経由で取得する。
-    //    メッセージ全体の読み込みを伴うため、該当しないメールでは取得しない。
-    //    取得に失敗した場合は null のまま進め、プロバイダ固有の A-R 採用を行わない（安全側）。
+    // ■ 生ヘッダ順序の取得（Authentication-Results / Received-SPF がある場合、または受信プロバイダ固有ルールが該当する場合）
+    //    最上段 Received の受信ホストが PROVIDER_INGRESS_RULES のプロバイダである場合に加え、
+    //    汎用経路でも A-R・Received-SPF の位置を検証するため（selectGenericAR / pickReceivedSpf）、それらを含むメールでは
+    //    生ヘッダを background 経由で取得する。
+    //    メッセージ全体の読み込みを伴うため、どちらも無く固有ルールにも該当しないメールでは取得しない。
+    //    取得に失敗した場合は null のまま進め、A-R を信頼しない（安全側）。
     let rawHeaderOrder = null;
     //    受信ホスト名の切り出しは detectProviderRoute と同じく "(" でも区切り、判定を一致させる。
     const topReceivedBy = ((headers["received"] || [])[0] || "").match(/\bby\s+([^\s;()]+)/i);
-    if (topReceivedBy && findProviderRule(topReceivedBy[1])) {
+    // Received-SPF だけのメールも、補完に使う Received-SPF の位置検証（pickReceivedSpf）に生ヘッダが要る
+    if ((headers["authentication-results"] || []).length > 0 || (headers["received-spf"] || []).length > 0 ||
+        (topReceivedBy && findProviderRule(topReceivedBy[1]))) {
       try {
         const rawResp = await browser.runtime.sendMessage({ command: "getRawHeaders" });
         if (rawResp && typeof rawResp.rawHeaders === "string") {
