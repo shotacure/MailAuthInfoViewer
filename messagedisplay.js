@@ -3617,16 +3617,18 @@
       compactMode = stored.compactMode === true;
     } catch { /* storage未対応環境では通常表示 */ }
 
-    // ■ 生ヘッダ順序の取得（Authentication-Results がある場合、または受信プロバイダ固有ルールが該当する場合）
+    // ■ 生ヘッダ順序の取得（Authentication-Results / Received-SPF がある場合、または受信プロバイダ固有ルールが該当する場合）
     //    最上段 Received の受信ホストが PROVIDER_INGRESS_RULES のプロバイダである場合に加え、
-    //    汎用経路でも A-R の付与位置を検証するため（selectGenericAR）、A-R を含むメールでは
+    //    汎用経路でも A-R・Received-SPF の位置を検証するため（selectGenericAR / pickReceivedSpf）、それらを含むメールでは
     //    生ヘッダを background 経由で取得する。
-    //    メッセージ全体の読み込みを伴うため、A-R が無く固有ルールにも該当しないメールでは取得しない。
+    //    メッセージ全体の読み込みを伴うため、どちらも無く固有ルールにも該当しないメールでは取得しない。
     //    取得に失敗した場合は null のまま進め、A-R を信頼しない（安全側）。
     let rawHeaderOrder = null;
     //    受信ホスト名の切り出しは detectProviderRoute と同じく "(" でも区切り、判定を一致させる。
     const topReceivedBy = ((headers["received"] || [])[0] || "").match(/\bby\s+([^\s;()]+)/i);
-    if ((headers["authentication-results"] || []).length > 0 || (topReceivedBy && findProviderRule(topReceivedBy[1]))) {
+    // Received-SPF だけのメールも、補完に使う Received-SPF の位置検証（pickReceivedSpf）に生ヘッダが要る
+    if ((headers["authentication-results"] || []).length > 0 || (headers["received-spf"] || []).length > 0 ||
+        (topReceivedBy && findProviderRule(topReceivedBy[1]))) {
       try {
         const rawResp = await browser.runtime.sendMessage({ command: "getRawHeaders" });
         if (rawResp && typeof rawResp.rawHeaders === "string") {
