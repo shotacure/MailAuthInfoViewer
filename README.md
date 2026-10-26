@@ -41,6 +41,8 @@ Deceptive link text detected — the displayed URL differs from the actual desti
 
 * **Shadow DOM CSS Isolation:** The dashboard is encapsulated in a closed Shadow DOM, completely preventing HTML email CSS (e.g., `* { font-size: 20px !important; }`) from contaminating the add-on display. The Shadow DOM host itself is placed directly under `<html>` (just before `<body>`) rather than inside the email's body, and its layout properties (display, width, max-width, margin, position, transform, etc.) are pinned with inline `!important`. This keeps the dashboard at full width even when an email constrains its body — for example, malformed HTML that contains a stray `<body style="max-width:480px">` inside a table, whose attributes the HTML parser merges into the real body element — without altering how the email itself is displayed.
     * **Shadow DOM CSS隔離:** ダッシュボードをclosed Shadow DOMでカプセル化し、HTMLメールのCSSがアドオン表示に影響することを完全に防止します。Shadow DOM のホスト要素自体もメールの body の中ではなく `<html>` 直下（`<body>` の直前）に配置し、レイアウトに関わる指定（display・width・max-width・margin・position・transform など）をインラインの `!important` で固定しています。これにより、メールが body の幅を制限している場合——例えばテーブル内に `<body style="max-width:480px">` を含む崩れた HTML で、HTML の構文解析ルールによりその属性が本来の body 要素に合流するケース——でも、メール自体の表示を変えることなくダッシュボードを全幅で表示します。
+* **Per-Tab Message Binding:** Each dashboard analyzes the message displayed in its own tab or window. A message opened in a background tab is never analyzed with the headers of the message in the tab you are looking at, and if the tab cannot be identified, no dashboard is shown rather than one for a different message.
+    * **タブごとのメール対応付け:** 各ダッシュボードは、自分が表示されているタブ・ウィンドウのメールを解析します。背景タブで開いたメールが、いま見ているタブのメールのヘッダで解析されることはありません。タブを特定できない場合は、別のメールの判定を出すのではなく、ダッシュボードを表示しません。
 * **Always-Collapsed Panel:** The dashboard always starts collapsed for every email, keeping the status badge and verdict reason tags visible at a glance without consuming screen space. Click to expand for full details.
     * **常時折りたたみパネル:** ダッシュボードは全メールで折りたたまれた状態で表示され、ステータスバッジと判定理由タグのみが見える省スペース設計です。クリックで詳細を展開できます。
 * **Manual Toggle:** You can expand or collapse the detail view at any time by clicking the header bar.
@@ -270,7 +272,7 @@ Both scripts read the version from `manifest.json`, stage the required files inc
 
 ```
 manifest.json           Extension manifest with i18n support
-background.js           Registers content scripts, handles message API (full message, and raw header block for header-order verification)
+background.js           Registers content scripts, handles message API (full message, and raw header block for header-order verification), always for the message displayed in the requesting tab
 psl_data.js             Public Suffix List data + getOrganizationalDomain()
 options.html + options.js  Trusted link domains management (add/remove/import/export) + compact display mode toggle
 messagedisplay.js       Main logic — 9 core functions:

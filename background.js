@@ -12,13 +12,23 @@ browser.messageDisplayScripts.register({
   console.warn("MailAuthInfoViewer: Failed to register messageDisplayScripts:", e);
 });
 
+// リクエスト元のコンテンツスクリプトが動いているタブで表示中のメールを取得する。
+// getDisplayedMessage() をタブ指定なしで呼ぶと「アクティブなタブ」のメールが返るため、
+// 背景タブで開いたメールに前面タブのメールの判定が表示されてしまう。
+// タブを特定できない場合は別のメールを解析しないよう、エラーとして扱う（安全側）。
+const getSenderDisplayedMessage = (sender) => {
+  const tabId = sender?.tab?.id;
+  if (typeof tabId !== "number") return Promise.reject(new Error("Unknown sender tab."));
+  return browser.messageDisplay.getDisplayedMessage(tabId);
+};
+
 // 注入されたコンテンツスクリプトからの「メッセージ詳細取得」リクエストを待ち受け
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.command === "getMessageDetails") {
     let currentMsg; // デコード済みの基本情報を保持する変数
 
-    // 現在表示されているメールの基本情報（メッセージIDなど）を取得
-    browser.messageDisplay.getDisplayedMessage()
+    // リクエスト元のタブに表示されているメールの基本情報（メッセージIDなど）を取得
+    getSenderDisplayedMessage(sender)
       .then(msg => {
         if (!msg?.id) {
           sendResponse({ error: "No displayed message." });
@@ -43,7 +53,7 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
   // 「Authentication-Results が受信境界の Received より上にあるか」の検証用に
   // 生のヘッダ順序を返す。本文や添付は不要なので最初の空行までに切り詰めて返す。
   if (request.command === "getRawHeaders") {
-    browser.messageDisplay.getDisplayedMessage()
+    getSenderDisplayedMessage(sender)
       .then(msg => {
         if (!msg?.id) throw new Error("No displayed message.");
         return browser.messages.getRaw(msg.id);
