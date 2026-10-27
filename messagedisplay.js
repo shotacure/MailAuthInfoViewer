@@ -677,19 +677,24 @@
       // A-R は誰でもメールに書けるため、authserv-id の名前だけでは受信サーバが付けたものと
       // 区別できない。受信サーバが除去するのは自身の authserv-id を名乗る A-R だけで、
       // A-R を付けないサーバや、別の名前を名乗る偽物はそのまま届く。そこで生のヘッダ順序
-      // （rawHeaderOrder）で位置を確かめ、受信サーバが付けたと言える 1 本だけを信頼する。
+      // （rawHeaderOrder）で位置を確かめ、受信サーバが付けたと言える A-R だけを信頼する。
       //   名前: authserv-id は境界ホスト名との完全一致のみ（大文字小文字・末尾のドットは無視）。
       //         親ドメインやサブドメインを許すと "com" や "ne.jp" を名乗るだけの偽物が通る。
-      //   位置: 境界の Received より上から、境界の直下（次の Received の手前）までの範囲で、
-      //         名前の一致する最初の A-R だけを候補にする。元メールに埋もれた A-R は使わない。
+      //   位置: 境界の Received より上にある、名前の一致する A-R はすべて候補にする。
+      //         受信サーバが 1 回の検証結果を複数の A-R に分けて書くことがあるため
+      //         （Fastmail は x-ptr / bimi / arc / dkim・dmarc・spf 等を別々の A-R にする）、
+      //         1 本に絞ると DKIM や DMARC の結果を取りこぼす。
+      //         境界より上に無い場合は、境界の直下（次の Received の手前）で名前の一致する
+      //         最初の 1 本だけを候補にする。元メールに埋もれた A-R は使わない。
       //   証拠: 境界より上の A-R は受信後に付与されたもので、送信者は書き込めないため信頼する。
       //         境界の直下は元メール先頭に置かれた偽物とも重なる位置（Gmail 等はここに付与する）
       //         のため、境界より上に同じ authserv-id の ARC-Authentication-Results がある場合
-      //         （受信サーバが実際に処理した証跡）に限って信頼する。
+      //         （受信サーバが実際に処理した証跡）に限って信頼する。直下で 2 本目以降を採らないのは、
+      //         受信サーバの A-R のすぐ後ろに送信者の偽物が続いていても区別できないため。
       //   内部経路のみ（境界が無い。自己送信等）: 最上段の Received より上にある最初の A-R だけを
       //         信頼する。最上段より上は最終配送側が書いた位置で、送信者は書き込めない。
       // 生ヘッダが取得できない、または getFull と Received の本数が一致しない場合は信頼しない。
-      // 戻り値は getFull 側の該当ヘッダ値の配列（0 または 1 本）。
+      // 戻り値は getFull 側の該当ヘッダ値の配列（境界より上の場合は複数本になりうる）。
       const selectGenericAR = (boundary, regularAuth) => {
         if (!Array.isArray(rawHeaderOrder) || regularAuth.length === 0) return [];
         const squash = (s) => (s || "").replace(/\s+/g, " ").trim();
@@ -708,14 +713,21 @@
         }
         if (!boundary.host) return [];
         const boundaryRaw = receivedRaw[boundary.index];
+        const isBoundaryAR = (h) => isAR(h) && idOf(h.value) === boundary.host;
+
+        // 境界より上: 名前の一致するものをすべて採用する。
+        // getFull 側に対応するヘッダが見つからないものが 1 本でもあれば、生ヘッダとの対応が
+        // 取れていないため全体を信頼しない（安全側）
+        const above = rawHeaderOrder.filter((h, i) => i < boundaryRaw && isBoundaryAR(h)).map(h => toFullValue(h.value));
+        if (above.length > 0) return above.every(Boolean) ? above : [];
+
+        // 境界の直下: 最初の 1 本だけを、境界より上に同名の ARC-AR がある場合に限って採用する
         const zoneEnd = boundary.index + 1 < receivedRaw.length ? receivedRaw[boundary.index + 1] : rawHeaderOrder.length;
-        const k = rawHeaderOrder.findIndex((h, i) => i < zoneEnd && isAR(h) && idOf(h.value) === boundary.host);
+        const k = rawHeaderOrder.findIndex((h, i) => i > boundaryRaw && i < zoneEnd && isBoundaryAR(h));
         if (k < 0) return [];
-        if (k > boundaryRaw) {
-          const arcAbove = rawHeaderOrder.some((h, i) => i < boundaryRaw && h.name === "arc-authentication-results" &&
-            idOf(h.value.replace(/^\s*i\s*=\s*\d+\s*;\s*/i, "")) === boundary.host);
-          if (!arcAbove) return [];
-        }
+        const arcAbove = rawHeaderOrder.some((h, i) => i < boundaryRaw && h.name === "arc-authentication-results" &&
+          idOf(h.value.replace(/^\s*i\s*=\s*\d+\s*;\s*/i, "")) === boundary.host);
+        if (!arcAbove) return [];
         const full = toFullValue(rawHeaderOrder[k].value);
         return full ? [full] : [];
       };
