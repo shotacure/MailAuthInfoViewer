@@ -332,6 +332,11 @@
     //       スキャンのため同一ホストへ自身で再投入し（from mailnull ... with local_*）、
     //       *.adm.hostpoint.ch / *.mail.hostpoint.internal の内部ホップへ LMTP で渡す。
     //       authserv-id は受信ホスト名ではないクラスタ名 "mxin-hosts.mail.hostpoint.ch"。
+    //   - GMX（gmx.net / gmx.de / gmx.at / gmx.ch 共通の受信 MX）:
+    //       受信境界の Received は by に固定名 mx-ha.gmx.net を記録し、個々のノードはコメント
+    //       （例: "(mxgmx108 [212.227.15.151])"）に書く。内部ホップは続かないが、authserv-id は
+    //       受信ホスト名ではなくドメイン名 "gmx.net" のため、境界ホスト名との照合では一致しない。
+    //       gmx.com 等の国際版ドメインは別の MX を使い、同じ書式かは確認できていないため対象外。
     // これらは parseAuthResults の detectProviderRoute で境界を特定し、生ヘッダ順序で
     // A-R の付与位置を検証したうえで採用する。各定義:
     //   orgDomains:         プロバイダ自身のホストの組織ドメイン
@@ -379,6 +384,18 @@
         arPlacement: "above",
         queueIdHeader: null,
         localReinjection: true,
+        detectInternal: false
+      },
+      {
+        name: "GMX",
+        orgDomains: ["gmx.net"],
+        // mx-ha.gmx.net は DNS 上のホストではなく GMX が Received に書く固定名のため、完全一致で照合する
+        ingress: /^mx-ha\.gmx\.net$/,
+        providerAuthServId: "gmx.net",
+        // A-R は受信境界の Received の直上に積まれる
+        arPlacement: "above",
+        queueIdHeader: null,
+        localReinjection: false,
         detectInternal: false
       }
     ];
@@ -883,7 +900,7 @@
       // authserv-id に名乗る A-R はプロバイダが付与したものではなく、送信者が元メールに
       // 仕込んだ偽物でしかありえない（プロバイダは自身の authserv-id を名乗る A-R しか
       // 除去しないため、偽物はそのまま届く）。下の位置検証を経た A-R だけを信頼する。
-      // それ以外は selectGenericAR で、名前の完全一致と生ヘッダ上の位置を確かめた 1 本だけを信頼する。
+      // それ以外は selectGenericAR で、名前の完全一致と生ヘッダ上の位置を確かめたものだけを信頼する。
       let trustedRegular = providerRoute.ingressHost ? [] : selectGenericAR(boundary, regularAuth);
       let authHeaders = trustedRegular;
 
@@ -1063,6 +1080,13 @@
               // p= (ポリシー) - sp= / pct= との誤マッチ防止
               const policyMatch = m.match(/(?:^|[\s(])p=([a-zA-Z]+)/i);
               if (policyMatch) policy = policyMatch[1].toLowerCase();
+              // p= のコメントが無い場合は RFC 7489 で登録された policy.dmarc プロパティを使う
+              // （GMX 等が "dmarc=pass header.from=... policy.dmarc=none" の形で記録する）。
+              // こちらは sp= / pct= の適用後に評価されたポリシーのため、公開値 p= がある場合はそれを優先する
+              else {
+                const evaluatedMatch = m.match(/\bpolicy\.dmarc=([a-zA-Z]+)/i);
+                if (evaluatedMatch) policy = evaluatedMatch[1].toLowerCase();
+              }
             }
           }
           return { domain, policy, rawSegment };
