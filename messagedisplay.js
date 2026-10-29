@@ -1080,6 +1080,13 @@
               // p= (ポリシー) - sp= / pct= との誤マッチ防止
               const policyMatch = m.match(/(?:^|[\s(])p=([a-zA-Z]+)/i);
               if (policyMatch) policy = policyMatch[1].toLowerCase();
+              // p= のコメントが無い場合は RFC 7489 で登録された policy.dmarc プロパティを使う
+              // （GMX 等が "dmarc=pass header.from=... policy.dmarc=none" の形で記録する）。
+              // こちらは sp= / pct= の適用後に評価されたポリシーのため、公開値 p= がある場合はそれを優先する
+              else {
+                const evaluatedMatch = m.match(/\bpolicy\.dmarc=([a-zA-Z]+)/i);
+                if (evaluatedMatch) policy = evaluatedMatch[1].toLowerCase();
+              }
             }
           }
           return { domain, policy, rawSegment };

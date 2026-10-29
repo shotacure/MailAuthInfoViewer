@@ -241,6 +241,10 @@ The principle is: **only unavoidable situations (e.g., third-party infrastructur
 | `quarantine` | 🟠 オレンジ | 部分的保護 — 不審なメールを隔離 |
 | `none` | 🔴 レッド | 保護なし — 設定変更で解決できる不備 |
 
+The policy is read from the receiving server's `Authentication-Results`: the published `p=` value when the server records it in a comment (for example `(p=REJECT sp=NONE dis=NONE)`), otherwise the `policy.dmarc=` property defined in RFC 7489 (for example GMX writes `dmarc=pass header.from=example.com policy.dmarc=none`). `policy.dmarc` is the policy evaluated after `sp=` and `pct=` are applied, so `p=` takes precedence when both are present.
+
+ポリシーは受信サーバーの `Authentication-Results` から読み取ります。サーバーがコメントに公開値 `p=` を記録していればそれを（例: `(p=REJECT sp=NONE dis=NONE)`）、無ければ RFC 7489 で定義された `policy.dmarc=` プロパティを使います（例: GMX は `dmarc=pass header.from=example.com policy.dmarc=none` と記録します）。`policy.dmarc` は `sp=` や `pct=` を適用した後に評価されたポリシーなので、両方ある場合は `p=` を優先します。
+
 ---
 
 ## 📥 Installation / インストール
