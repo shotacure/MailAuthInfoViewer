@@ -29,9 +29,13 @@ const getSenderDisplayedMessage = (sender) => {
 // 画像のデコード（ピクセル化）は Thunderbird 自身の画像処理（createImageBitmap）で行い、
 // QR コードの解析は Worker（qr_worker.js → lib/jsQR.js）に任せる。
 // 外部サーバ上の画像は取得しない（リモートコンテンツを読み込まない Thunderbird の方針を守るため）。
-// 大きな写真や大量の画像でメール表示が遅れないよう、対象の数と大きさに上限を設ける。
+// 大きな写真や大量の画像でメール表示が遅れないよう、対象の数・大きさ・合計時間に上限を設ける。
+// メールで使われる QR コード画像は数 KB〜数百 KB（実メールの調査で最大 338 KB）であるのに対し、
+// スマートフォンの写真は 1 枚 2 MB を超え、全画素のデコードだけで数百 ms かかるため、1 MB を超える画像は読み取らない。
+// （この上限は messagedisplay.js の QR_MAX_IMAGE_BYTES と同じ値にそろえる）
 const QR_MAX_IMAGES = 10;
-const QR_MAX_BYTES = 5 * 1024 * 1024;
+const QR_MAX_BYTES = 1024 * 1024;
+const QR_TOTAL_BUDGET_MS = 3000; // 1 通あたりの読み取りに使う時間の上限。超えたら残りの画像は読まない
 const QR_MAX_DIMENSION = 1600;  // これより大きい画像は縮小してから読み取る
 const QR_MIN_DIMENSION = 40;    // アイコン程度の小さな画像は QR コードとして読めないため対象外
 const QR_DECODE_TIMEOUT_MS = 1000; // 1 枚あたりの解析の上限。超えたら Worker ごと破棄する
@@ -125,8 +129,10 @@ const scanQrCodes = async (messageId) => {
   const qrCodes = [];
   if (sources.length === 0) return qrCodes;
   const decoder = createQrDecoder();
+  const startedAt = Date.now();
   try {
     for (const src of sources.slice(0, QR_MAX_IMAGES)) {
+      if (Date.now() - startedAt > QR_TOTAL_BUDGET_MS) break;
       try {
         const blob = (src.kind === "data")
           ? dataUriToBlob(src.mimeType, src.base64)
@@ -172,6 +178,9 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
   // getFull のヘッダはヘッダ名ごとにまとめられ、異なるヘッダ間の前後関係が失われるため、
   // 「Authentication-Results が受信境界の Received より上にあるか」の検証用に
   // 生のヘッダ順序を返す。本文や添付は不要なので最初の空行までに切り詰めて返す。
+  // あわせて、各 MIME パートの Content-Type / Content-Disposition のうち name / filename を含む行を
+  // エンコードされたまま返す。Thunderbird が渡すデコード済みの件名・差出人名・添付ファイル名は
+  // 双方向テキストの制御文字（RLO 等）が空白に置き換えられており、偽装の検査には生の値が要るため。
   if (request.command === "getRawHeaders") {
     getSenderDisplayedMessage(sender)
       .then(msg => {
@@ -182,7 +191,12 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
         // Thunderbird のバージョン・オプションにより文字列または File で返る
         const text = (typeof raw === "string") ? raw : await raw.text();
         const end = text.search(/\r?\n\r?\n/);
-        sendResponse({ rawHeaders: end >= 0 ? text.slice(0, end) : text });
+        const partNameHeaders = [];
+        for (const m of text.matchAll(/^content-(?:type|disposition)[ \t]*:[^\r\n]*(?:\r?\n[ \t][^\r\n]*)*/gim)) {
+          if (/name/i.test(m[0])) partNameHeaders.push(m[0]);
+          if (partNameHeaders.length >= 100) break;
+        }
+        sendResponse({ rawHeaders: end >= 0 ? text.slice(0, end) : text, partNameHeaders });
       })
       .catch(e => sendResponse({ error: e.toString() }));
     return true;

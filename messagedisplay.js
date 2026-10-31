@@ -346,6 +346,76 @@
     const revealBidiControls = (text) =>
       (text || "").replace(/[\u202A-\u202E\u2066-\u2069]/g, (ch) => `⟨${BIDI_CONTROL_NAMES[ch.codePointAt(0)]}⟩`);
 
+    // ■ 生ヘッダ値のデコード（双方向制御文字の検査用）
+    // Thunderbird がデコードして渡す件名・差出人名・添付ファイル名は、双方向制御文字が空白に置き換えられている
+    // （Thunderbird 自身の表示では偽装が無効になる）。偽装を試みたこと自体は悪意の強い兆候なので、
+    // 生ヘッダ（getRaw）の値を自前でデコードして検査する。デコード結果は検査と、偽装箇所の提示にだけ使う。
+    const bytesToText = (bytes, charset) => {
+      try { return new TextDecoder(charset || "utf-8").decode(bytes); } catch { return null; }
+    };
+    // 生のメッセージはバイト列をそのまま 1 文字ずつにした形（各文字 0〜255）で届くことがあるため、
+    // その場合は UTF-8 として読み直す（8 ビットのまま書かれた UTF-8 のヘッダに対応する）
+    const binaryToUtf8 = (s) => {
+      if (!/[\x80-\xff]/.test(s) || /[^\x00-\xff]/.test(s)) return s;
+      try {
+        return new TextDecoder("utf-8", { fatal: true }).decode(Uint8Array.from(s, c => c.charCodeAt(0)));
+      } catch { return s; }
+    };
+    // RFC 2047 の encoded-word（=?charset?B?...?= / =?charset?Q?...?=）をデコードする。
+    // 隣り合う encoded-word の間の空白は区切りではないため取り除く（RFC 2047 6.2）。
+    const decodeMimeWords = (value) => {
+      const s = binaryToUtf8(value || "").replace(/(\?=)\s+(?==\?)/g, "$1");
+      return s.replace(/=\?([^?]+)\?([BbQq])\?([^?]*)\?=/g, (whole, charset, enc, text) => {
+        try {
+          const bin = /b/i.test(enc)
+            ? atob(text.replace(/\s+/g, ""))
+            : text.replace(/_/g, " ").replace(/=([0-9A-Fa-f]{2})/g, (m, h) => String.fromCharCode(parseInt(h, 16)));
+          // charset の後ろの言語指定（RFC 2231 の "*ja"）は除く
+          const out = bytesToText(Uint8Array.from(bin, c => c.charCodeAt(0)), charset.replace(/\*.*$/, ""));
+          return out === null ? whole : out;
+        } catch { return whole; }
+      });
+    };
+    // Content-Type / Content-Disposition の行から name / filename パラメータの値を取り出してデコードする。
+    // RFC 2231（name*=charset'lang'%XX、name*0*= のような分割）と、引用符内の RFC 2047 の両方に対応する。
+    const extractMimeFileNames = (headerLine) => {
+      const unfolded = (headerLine || "").replace(/\r?\n[ \t]+/g, " ");
+      const params = new Map(); // パラメータ名 → [{ index, value, extended }]
+      const re = /;\s*((?:file)?name)(\*(\d+))?(\*)?\s*=\s*("(?:[^"\\]|\\.)*"|[^;\s]*)/gi;
+      for (const m of unfolded.matchAll(re)) {
+        const base = m[1].toLowerCase();
+        let value = m[5];
+        if (value.startsWith('"')) value = value.slice(1, -1).replace(/\\(.)/g, "$1");
+        if (!params.has(base)) params.set(base, []);
+        params.get(base).push({ index: m[3] === undefined ? 0 : Number(m[3]), value, extended: !!m[4] });
+      }
+      const names = [];
+      for (const segments of params.values()) {
+        segments.sort((a, b) => a.index - b.index);
+        if (!segments.some(seg => seg.extended)) {
+          names.push(decodeMimeWords(segments.map(seg => seg.value).join("")));
+          continue;
+        }
+        // 拡張形式: 先頭の "charset'lang'" で文字コードを決め、%XX をバイト列に戻してまとめてデコードする
+        let charset = "utf-8";
+        let bin = "";
+        segments.forEach((seg, i) => {
+          let v = seg.value;
+          if (seg.extended) {
+            if (i === 0) {
+              const head = v.match(/^([^']*)'[^']*'(.*)$/);
+              if (head) { charset = head[1] || charset; v = head[2]; }
+            }
+            v = v.replace(/%([0-9A-Fa-f]{2})/g, (m, h) => String.fromCharCode(parseInt(h, 16)));
+          }
+          bin += v;
+        });
+        const out = bytesToText(Uint8Array.from(bin, c => c.charCodeAt(0) & 0xff), charset);
+        if (out !== null) names.push(out);
+      }
+      return names;
+    };
+
     // 表示名・件名・本文・添付ファイル名のうち、並びを変える上書きを含む箇所を返す。
     // 戻り値: ["displayName" | "subject" | "body" | "attachment", ...]（該当なしは空配列）
     const detectBidiOverrideSpoofing = (displayName, subject, bodyContent, attachmentNames) => {
@@ -2160,8 +2230,9 @@
     // エンベロープドメイン不一致: DMARC pass かつアライメント成立時はグリーンを阻害しない
     // senderHomograph:  parseEnvelope が返す送信者ドメインのホモグラフ検査結果
     // replyToHomograph: parseEnvelope が返す Reply-To ドメインのホモグラフ検査結果（該当なしは null）
-    // bidiSpoofLocations: detectBidiOverrideSpoofing が返す、並びを変える上書き（RLO/LRO）の検出箇所
-    const determineSecurityStatus = (authResults, isDomainAligned, envelopeFrom, isDisplayNameSpoofed, linkSafety, senderHomograph, replyToHomograph, bidiSpoofLocations) => {
+    // bidiSpoof: { locations: detectBidiOverrideSpoofing が返す、並びを変える上書き（RLO/LRO）の検出箇所,
+    //              displayName: 制御文字を含んだままの表示名（偽装箇所の提示用） }
+    const determineSecurityStatus = (authResults, isDomainAligned, envelopeFrom, isDisplayNameSpoofed, linkSafety, senderHomograph, replyToHomograph, bidiSpoof) => {
       const isSpfOk = authResults.spf.status === "pass";
       const isDkimOk = authResults.dkim.status === "pass";
       // DMARC は pass のみを合格とする。
@@ -2241,7 +2312,8 @@
       // 自前ドメインで認証を正しく通した迷惑メールが、キーワードフィルタの回避に使う。
       // 正当な文章（右から左に書く言語を含む）では並びを変える上書きは使われないため、
       // リンク偽装と同じくフィッシング判定（最も重いバッジ）に昇格させる。
-      const isBidiSpoofed = (bidiSpoofLocations || []).length > 0;
+      const bidiSpoofLocations = (bidiSpoof && bidiSpoof.locations) || [];
+      const isBidiSpoofed = bidiSpoofLocations.length > 0;
 
       const isSecure = isSpfOk && isDkimOk && isDmarcOk &&
                        domainCheckOk && isDmarcAligned &&
@@ -2322,7 +2394,8 @@
         hasUntrustedLink,
         isSenderHomograph,
         isBidiSpoofed,
-        bidiSpoofLocations: bidiSpoofLocations || [],
+        bidiSpoofLocations,
+        bidiDisplayName: (bidiSpoof && bidiSpoof.displayName) || "",
         verdictReasons,
         badgeClass,
         badgeText,
@@ -2817,10 +2890,11 @@
         lines.push("SENDER IDENTITY");
         lines.push("---------------");
         // 表示名の偽装に使われた双方向制御文字は、貼り付け先で見た目を再現しないよう記号で示す
+        // （Thunderbird の値では制御文字が空白に置き換えられているため、生ヘッダからデコードした表示名を使う）
         const reportBidiLocations = security.bidiSpoofLocations || [];
         if (envelope.headerFromName) {
           const reportName = reportBidiLocations.includes("displayName")
-            ? revealBidiControls(envelope.headerFromName)
+            ? revealBidiControls(security.bidiDisplayName)
             : envelope.headerFromName;
           lines.push(`Display Name:  ${reportName}`);
         }
@@ -3388,9 +3462,10 @@
       }
 
       // 表示名に偽装の上書きがある場合は、制御文字を ⟨RLO⟩ のような記号で見せ、
-      // パネル上で偽装された見た目を再現しない（格納されている実際の並びを示す）
+      // パネル上で偽装された見た目を再現しない（格納されている実際の並びを示す）。
+      // Thunderbird の値では制御文字が空白に置き換えられているため、生ヘッダからデコードした表示名を使う
       const displayNameText = bidiLocations.includes("displayName")
-        ? revealBidiControls(envelope.headerFromName)
+        ? revealBidiControls(security.bidiDisplayName)
         : envelope.headerFromName;
       const displayNameHTML = envelope.headerFromName
         ? `<div class="address-row"><span class="address-label">${escapeHTML(msg("labelDisplayName"))}</span><span class="address-highlight">${escapeHTML(displayNameText)}</span></div>`
@@ -3875,13 +3950,18 @@
     //    外部サーバ上の画像は取得しない（リモートコンテンツを読み込まない Thunderbird の方針を守るため）。
     //    パネルの表示を遅らせないよう、生ヘッダの取得や各解析と並行して進め、判定の直前で結果を待つ。
     //    読み取りに失敗・時間切れの場合は QR コード無しとして扱う。
-    const hasImageParts = allParts.some(p => /^image\//i.test(p.contentType || ""));
+    //    QR コード画像は小さい（実メールの調査で最大 338 KB）ため、1 MB を超える画像（写真等）は読み取らない。
+    //    読み取れる画像が無いメールでは background に依頼しない（大きな写真添付のメールで表示を遅らせない）。
+    //    （この上限は background.js の QR_MAX_BYTES と同じ値にそろえる）
+    const QR_MAX_IMAGE_BYTES = 1024 * 1024;
+    const hasImageParts = allParts.some(p => /^image\/(png|jpe?g|gif|webp|bmp)$/i.test(p.contentType || "") &&
+                                             !(p.size > QR_MAX_IMAGE_BYTES));
     const hasDataImages = allParts.some(p => /^text\/html$/i.test(p.contentType || "") &&
                                              typeof p.body === "string" && /data:image\//i.test(p.body));
     const qrScan = (hasImageParts || hasDataImages)
       ? Promise.race([
           browser.runtime.sendMessage({ command: "scanQrCodes" }),
-          new Promise(resolve => setTimeout(() => resolve(null), 8000))
+          new Promise(resolve => setTimeout(() => resolve(null), 5000))
         ])
           .then(qrResp => (qrResp && Array.isArray(qrResp.qrCodes)) ? qrResp.qrCodes : [])
           .catch(() => [])
@@ -3905,35 +3985,34 @@
       compactMode = stored.compactMode === true;
     } catch { /* storage未対応環境では通常表示 */ }
 
-    // ■ 生ヘッダ順序の取得（Authentication-Results / Received-SPF がある場合、または受信プロバイダ固有ルールが該当する場合）
+    // ■ 生ヘッダ順序の取得
     //    最上段 Received の受信ホストが PROVIDER_INGRESS_RULES のプロバイダである場合に加え、
-    //    汎用経路でも A-R・Received-SPF の位置を検証するため（selectGenericAR / pickReceivedSpf）、それらを含むメールでは
-    //    生ヘッダを background 経由で取得する。
-    //    メッセージ全体の読み込みを伴うため、どちらも無く固有ルールにも該当しないメールでは取得しない。
+    //    汎用経路でも A-R・Received-SPF の位置を検証するため（selectGenericAR / pickReceivedSpf）、
+    //    生ヘッダを background 経由で取得する。Received-SPF だけのメールも、補完に使う Received-SPF の位置検証に要る。
+    //    さらに、件名・差出人名・添付ファイル名の双方向制御文字（RLO 等）の検査にも生の値を使う。
+    //    Thunderbird がデコードして渡す値からは制御文字が空白に置き換えられており、生の値でしか検査できないため、
+    //    メッセージ全体の読み込みを伴うが、A-R 等の有無に関わらずすべてのメールで取得する。
     //    取得に失敗した場合は null のまま進め、A-R を信頼しない（安全側）。
     let rawHeaderOrder = null;
-    //    受信ホスト名の切り出しは detectProviderRoute と同じく "(" でも区切り、判定を一致させる。
-    const topReceivedBy = ((headers["received"] || [])[0] || "").match(/\bby\s+([^\s;()]+)/i);
-    // Received-SPF だけのメールも、補完に使う Received-SPF の位置検証（pickReceivedSpf）に生ヘッダが要る
-    if ((headers["authentication-results"] || []).length > 0 || (headers["received-spf"] || []).length > 0 ||
-        (topReceivedBy && findProviderRule(topReceivedBy[1]))) {
-      try {
-        const rawResp = await browser.runtime.sendMessage({ command: "getRawHeaders" });
-        if (rawResp && typeof rawResp.rawHeaders === "string") {
-          // 折り返し行（先頭が空白）を直前のヘッダに連結し、上から順に {name, value} へ分解する
-          rawHeaderOrder = [];
-          for (const line of rawResp.rawHeaders.split(/\r?\n/)) {
-            if (/^[ \t]/.test(line) && rawHeaderOrder.length > 0) {
-              rawHeaderOrder[rawHeaderOrder.length - 1].value += " " + line.trim();
-              continue;
-            }
-            const idx = line.indexOf(":");
-            if (idx <= 0) continue;
-            rawHeaderOrder.push({ name: line.slice(0, idx).trim().toLowerCase(), value: line.slice(idx + 1).trim() });
+    // 各 MIME パートの Content-Type / Content-Disposition のうち name / filename を含む行（エンコードされたまま）
+    let rawPartNameHeaders = null;
+    try {
+      const rawResp = await browser.runtime.sendMessage({ command: "getRawHeaders" });
+      if (rawResp && Array.isArray(rawResp.partNameHeaders)) rawPartNameHeaders = rawResp.partNameHeaders;
+      if (rawResp && typeof rawResp.rawHeaders === "string") {
+        // 折り返し行（先頭が空白）を直前のヘッダに連結し、上から順に {name, value} へ分解する
+        rawHeaderOrder = [];
+        for (const line of rawResp.rawHeaders.split(/\r?\n/)) {
+          if (/^[ \t]/.test(line) && rawHeaderOrder.length > 0) {
+            rawHeaderOrder[rawHeaderOrder.length - 1].value += " " + line.trim();
+            continue;
           }
+          const idx = line.indexOf(":");
+          if (idx <= 0) continue;
+          rawHeaderOrder.push({ name: line.slice(0, idx).trim().toLowerCase(), value: line.slice(idx + 1).trim() });
         }
-      } catch { /* 取得できない環境ではプロバイダ固有ルールを適用しない */ }
-    }
+      }
+    } catch { /* 取得できない環境ではプロバイダ固有ルールを適用しない */ }
 
     const envelope = parseEnvelope(fullMsg, headers, msgHeader, trustedDomains);
     const authResults = parseAuthResults(headers, envelope, rawHeaderOrder);
@@ -3944,13 +4023,29 @@
     const qrCodes = await qrScan;
 
     // ■ 双方向テキストの上書き（RLO/LRO）による文字列偽装の検査
-    //    表示名・件名は Thunderbird がデコード済みの値を使う（MIME エンコードのままでは制御文字が見えない）
-    const subjectText = msgHeader.subject || headers["subject"]?.[0] || "";
-    const attachmentNames = allParts.map(p => p.name).filter(Boolean);
-    const bidiSpoofLocations = detectBidiOverrideSpoofing(envelope.headerFromName, subjectText, bodyContent, attachmentNames);
+    //    件名・差出人名・添付ファイル名は、生ヘッダから自前でデコードした値で検査する
+    //    （Thunderbird がデコードして渡す値は制御文字が空白に置き換えられているため）。
+    //    生ヘッダを取得できなかった場合だけ、Thunderbird の値で検査する。
+    const rawHeaderValue = (name) => (rawHeaderOrder || []).find(h => h.name === name)?.value;
+    const rawFrom = rawHeaderValue("from");
+    const rawSubject = rawHeaderValue("subject");
+    // 差出人は "表示名 <アドレス>" のうち表示名の部分（アドレスだけの場合は全体）を使う
+    const rawDisplayName = rawFrom !== undefined
+      ? (decodeMimeWords(rawFrom).replace(/<[^<>]*>\s*$/, "").trim().replace(/^"(.*)"$/, "$1") || decodeMimeWords(rawFrom))
+      : null;
+    const bidiDisplayName = rawDisplayName !== null ? rawDisplayName : envelope.headerFromName;
+    const subjectText = rawSubject !== undefined ? decodeMimeWords(rawSubject) : (msgHeader.subject || headers["subject"]?.[0] || "");
+    const attachmentNames = rawPartNameHeaders !== null
+      ? rawPartNameHeaders.flatMap(extractMimeFileNames)
+      : allParts.map(p => p.name).filter(Boolean);
+    const bidiSpoof = {
+      locations: detectBidiOverrideSpoofing(bidiDisplayName, subjectText, bodyContent, attachmentNames),
+      // 偽装の箇所を示すための、制御文字を含んだままの表示名（Thunderbird の値では制御文字が消えている）
+      displayName: bidiDisplayName
+    };
 
     const linkSafety = analyzeLinkSafety(bodyContent, envelope.headerOrgDomain, trustedDomains, qrCodes);
-    const security = determineSecurityStatus(authResults, envelope.isDomainAligned, envelope.envelopeFrom, envelope.isDisplayNameSpoofed, linkSafety, envelope.senderHomograph, envelope.replyToHomograph, bidiSpoofLocations);
+    const security = determineSecurityStatus(authResults, envelope.isDomainAligned, envelope.envelopeFrom, envelope.isDisplayNameSpoofed, linkSafety, envelope.senderHomograph, envelope.replyToHomograph, bidiSpoof);
 
     buildUI(envelope, authResults, routeHops, security, arcChain, linkSafety, trustedDomains, compactMode);
 
