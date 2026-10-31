@@ -24,15 +24,29 @@ rm -rf "$STAGE_DIR"
 
 # --- ステージング（階層維持） ---
 mkdir -p "${STAGE_DIR}/images"
+mkdir -p "${STAGE_DIR}/lib"
 
 cp manifest.json     "$STAGE_DIR/"
 cp background.js     "$STAGE_DIR/"
+cp qr_worker.js      "$STAGE_DIR/"
 cp psl_data.js       "$STAGE_DIR/"
 cp messagedisplay.js "$STAGE_DIR/"
 cp options.html      "$STAGE_DIR/"
 cp options.js        "$STAGE_DIR/"
 cp LICENSE           "$STAGE_DIR/"
 cp images/icon.svg   "${STAGE_DIR}/images/"
+# サードパーティライブラリの情報ファイル
+cp VENDOR.md         "$STAGE_DIR/"
+
+# --- lib ディレクトリ（サードパーティライブラリ。入手方法は lib/README.md） ---
+# qr_worker.js が読み込むため、無いままでは QR コード解析が動かない XPI になる
+if [ ! -f lib/jsQR.js ]; then
+  echo "Error: lib/jsQR.js not found. Place it as described in lib/README.md" >&2
+  exit 1
+fi
+for f in lib/*.js lib/*.txt; do
+  if [ -f "$f" ]; then cp "$f" "${STAGE_DIR}/lib/"; fi
+done
 
 # --- _locales ディレクトリをコピー ---
 cp -r _locales       "${STAGE_DIR}/_locales"

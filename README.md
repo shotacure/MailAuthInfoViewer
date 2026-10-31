@@ -61,22 +61,30 @@ Deceptive link text detected — the displayed URL differs from the actual desti
         * **Reply-To:** 紛らわしい文字を使った、または送信者のドメインに似せた Reply-To のドメインを、送信者情報カードで警告します。返信が攻撃者に誘導されるおそれがあるため、バッジはグリーンにせず、「Reply-To ドメインの偽装」の判定理由タグを付けた警告表示にします。
 * **Display Name Spoofing Detection:** Detects when the display name contains an email address from a different domain than the actual sender — a common phishing trick to mislead recipients.
     * **表示名なりすまし検知:** 表示名に実際の送信元とは異なるドメインのメールアドレスが含まれている場合を検知します。受信者を欺くためのフィッシング手口です。
+* **Text Direction Override (RLO/LRO) Disguise Detection:** The Unicode characters U+202E (RLO) and U+202D (LRO) force the following text to be displayed in a fixed direction, reversing the order of characters that would normally run the other way. Spammers store a keyword backwards (for example "ＣＴＥ") and wrap it in RLO so that it reads correctly on screen ("ＥＴＣ") while keyword-based spam filters see a different string; in attachment names the same trick hides the real extension (`invoice[RLO]fdp.exe` displayed as `invoiceexe.pdf`). Such messages are often sent from the spammer's own domain with SPF/DKIM/DMARC configured correctly, so authentication alone cannot catch them. The add-on checks the display name, subject, body text (after decoding HTML character references) and attachment file names, and when an override actually changes the displayed order the badge becomes 💀 DISGUISED TEXT with a "Text direction override" reason tag. The sender identity card names where it was found, and the display name is shown with the control characters made visible (e.g. `⟨RLO⟩`) so that the panel does not reproduce the disguise.
+    * **Right-to-left languages are not affected:** Arabic, Hebrew and other right-to-left scripts are displayed correctly by the Unicode Bidirectional Algorithm from the characters themselves and do not need overrides. Marks (LRM/RLM/ALM), embeddings (LRE/RLE) and isolates (LRI/RLI/FSI/PDI), which are used to adjust mixed-direction text, are never flagged. An override is flagged only when it reorders at least two characters that would otherwise run the other way — left-to-right letters (Latin, Han, kana, etc.) or digits under RLO, right-to-left letters under LRO — so wrapping right-to-left text in RLO, which changes nothing on screen, is not flagged. Tracking embeddings and isolates correctly matters: an isolate or embedding inside an override cancels it, and a paragraph break ends it. In a survey of 33,803 real messages received from 2024 onward, the only messages with a reordering override were 4 spam messages that had reached the inbox.
+* **双方向テキストの上書き（RLO/LRO）による偽装の検知:** Unicode の U+202E（RLO）と U+202D（LRO）は、後続の文字列を決まった向きで表示させ、本来は逆向きに並ぶ文字の順序を反転させる制御文字です。迷惑メールは、キーワードを逆順（例:「ＣＴＥ」）で格納して RLO で包み、画面上は正しく（「ＥＴＣ」）読ませながら、キーワードで判定する迷惑メールフィルタには別の文字列に見せかけます。添付ファイル名では、同じ手口で本当の拡張子を隠します（`invoice[RLO]fdp.exe` が `invoiceexe.pdf` と表示される）。こうしたメールはスパマー自身のドメインから SPF/DKIM/DMARC を正しく設定して送られることが多く、認証結果だけでは見抜けません。本アドオンは表示名・件名・本文（HTML の文字参照をデコードした後のテキスト）・添付ファイル名を検査し、上書きが実際に表示の並びを変えている場合は、バッジを 💀 文字列の偽装 にして「文字の並びの偽装」の判定理由タグを付けます。送信者情報カードに検出箇所を示し、表示名は制御文字を見える形（例: `⟨RLO⟩`）にして表示し、パネル上で偽装された見た目を再現しません。
+    * **右から左に書く言語には影響しません:** アラビア語・ヘブライ語などは、文字そのものの性質から Unicode 双方向アルゴリズムによって正しく表示されるため、上書きを必要としません。混在文の調整に使われるマーク（LRM/RLM/ALM）・埋め込み（LRE/RLE）・分離（LRI/RLI/FSI/PDI）は検知の対象外です。上書きは、本来は逆向きに並ぶ文字を 2 字以上並べ替えている場合——RLO の下の左から右の文字（ラテン文字・漢字・かな等）や数字、LRO の下の右から左の文字——に限って検知するため、右から左の文字を RLO で包むだけ（表示は何も変わらない）の使い方は検知しません。上書きの内側にある分離・埋め込みはその上書きを打ち消し、段落の区切りで上書きは終わる、という入れ子も正しくたどります。2024 年以降に受信した実メール 33,803 通の調査で、並びを変える上書きを含んでいたのは、受信トレイに届いていた迷惑メール 4 通だけでした。
 * **Domain Verification Badge:** Prominently displays the actual authenticated domain (e.g., `✅ AUTH PASS example.com`) to prevent false trust in fake display names.
     * **ドメイン認証バッジ:** 単なる「認証済」ではなく、実際に認証されたドメイン名を明記し、誤った安心感を与えません。
 * **Verdict Reason Display:** Shows why the badge is not green — e.g., "DMARC policy is p=none", "Phishing indicator detected", "Untrusted link domain" — so administrators know exactly what to fix or trust.
     * **判定理由の表示:** バッジがグリーンでない理由（例：「DMARCポリシーがp=none」「フィッシング指標を検出」「未信頼のリンクドメイン」）を表示し、管理者が何を修正または信頼すべきか明確にします。
 * **Four-Tier Link Safety Analysis:** Scans email body with severity-aware categorization:
     * **critical** — deceptive link text, links to look-alikes of the sender's or a trusted domain, dangerous URI schemes (`javascript:`, `data:`), embedded HTML forms (promoted to phishing badge)
-    * **suspicious** — IP-address links, internationalized-domain (IDN) links — distinguishing those with look-alike characters (homographs) — and URL shorteners (patterns inherently risky regardless of trust)
+    * **suspicious** — IP-address links, internationalized-domain (IDN) links — distinguishing those with look-alike characters (homographs) — URL shorteners, and QR codes pointing to a domain other than the sender's (patterns inherently risky regardless of trust)
     * **untrusted** — all links external, main CTA external (a single domain unknown to the extension, resolvable by trusting the domain)
     * **privacy** — tracking pixels (informational notice, does not affect verdict)
     * **4段階リンク安全性分析:** メール本文を深刻度別にスキャン:
     * **critical** — リンクテキスト偽装、送信者や信頼済みドメインに似せた別ドメインへのリンク、危険なURIスキーム（`javascript:`、`data:`）、HTMLフォーム埋め込み（フィッシングバッジに昇格）
-    * **suspicious** — IPアドレスリンク、国際化ドメイン（IDN）へのリンク（紛らわしい文字を含むホモグラフかどうかを区別して表示）、短縮URL（信頼リストでは解消しない本質的に怪しいパターン）
+    * **suspicious** — IPアドレスリンク、国際化ドメイン（IDN）へのリンク（紛らわしい文字を含むホモグラフかどうかを区別して表示）、短縮URL、送信者と別のドメインを指す QR コード（信頼リストでは解消しない本質的に怪しいパターン）
     * **untrusted** — 全リンク外部、メインCTA外部（ドメインが未知なだけ。信頼リスト追加で解消）
     * **privacy** — トラッキングピクセル（プライバシー上の注意喚起。判定には影響しない）
 * **Link Domain Overview:** Lists all unique link domains found in the email body, color-coded by whether they match the sender's organizational domain, with inline tracker markers for tracking pixel sources.
     * **リンクドメイン一覧:** メール本文に含まれるすべてのリンクドメインを一覧表示し、送信者の組織ドメインとの一致/不一致を色分けします。トラッキングピクセル配信元はインラインマーカーで示します。
+* **URLs Written as Text:** URLs that appear as plain text in the body (not only `<a>` links) are also analyzed, since mail clients make them clickable. Line breaks (`<br>`) and block elements (paragraphs, table cells, list items, etc.) are treated as separators when the text is extracted, so a URL at the end of a line is not joined with the next line. Japanese punctuation and full-width brackets (、。「」『』【】（）！？： etc., excluding the full-width hyphen and period), which can never be part of a domain name, end a URL. A URL followed directly by Japanese text with no space (for example `https://www.example.comにアクセス` or `https://www.example.co.jp」で`) ends where the last label of the host name switches from ASCII to non-ASCII characters: real top-level domains are either entirely ASCII or entirely internationalized, so this never cuts a genuine internationalized domain such as `https://例え.jp/`. Previously such text was read as part of the host name and reported as a link to an internationalized domain (suspicious) — in a survey of 33,805 legitimate-folder messages received from 2024 onward, 30 of the 32 "internationalized domain" findings came from this (the other 2 were a real link the sender wrote as `http://（国研）`, which is still reported), and 10 messages (e.g. railway e-ticket, Apple and Amazon notices) lost the green badge for that reason alone.
+    * **本文中に文字で書かれた URL:** メールソフトは本文中の URL 文字列もクリックできるようにするため、`<a>` のリンクに加えて文字で書かれた URL も解析します。本文テキストを取り出す際は、改行（`<br>`）とブロック要素（段落・表のセル・箇条書きなど）を区切りとして扱い、行末の URL が次の行とつながらないようにしています。ドメイン名に使えない和文の約物や全角の括弧（、。「」『』【】（）！？：など。全角のハイフンとピリオドは除く）は URL の終わりとみなします。URL の直後に空白なしで日本語が続く場合（例: `https://www.example.comにアクセス`、`https://www.example.co.jp」で`）は、ホスト名の最後のラベルが ASCII から非 ASCII の文字に変わる位置で URL を終えます。実在のトップレベルドメインはすべて ASCII か、すべて国際化文字かのどちらかなので、`https://例え.jp/` のような本物の国際化ドメインが切られることはありません。以前はこうした文字までホスト名として読み、国際化ドメインへのリンク（suspicious）と報告していました。2024 年以降に受信した正規フォルダのメール 33,805 通の調査では、「国際化ドメイン」の所見 32 件のうち 30 件がこれが原因で（残る 2 件は送信者が `http://（国研）` と書いた実在のリンクで、引き続き報告します）、10 通（鉄道のきっぷ予約、Apple・Amazon の通知など）がそれだけでグリーンを失っていました。
+* **QR Code Analysis (Quishing Detection):** A QR code is opened on the recipient's phone, bypassing every link check on the PC, and some phishing mail contains no clickable link at all — only a QR image that leads to a payment or login page. Such messages, sent from the spammer's own correctly authenticated domain, used to receive a green badge. The add-on now reads QR codes from images contained in the message — images embedded in the HTML as `data:` URIs, inline (`cid:`) images and image attachments (PNG, JPEG, GIF, WebP, BMP; up to 10 images of at most 5 MB each, large images downscaled before reading) — using the bundled [jsQR](https://github.com/cozmo/jsQR) decoder, which runs in a separate worker with a one-second limit per image so that a crafted image cannot stall the add-on. A QR code that holds a URL is checked like a link (IP address, URL shortener, look-alike domain), and one pointing to an organizational domain other than the sender's is a **suspicious** finding ("QR code points to a domain different from the sender"), which keeps the badge from turning green and is not suppressible by the trust list: the payment-scam QR codes observed in the wild point to a legitimate payment service's person-to-person transfer page, so the destination being legitimate does not make it safe for an unrelated sender to ask you to scan it. QR codes that point to the sender's own domain, or hold content that is not a URL (booking numbers, ticket codes), do not affect the verdict and are listed in the collapsible "QR Codes in Email" list. Remote images on external servers are never fetched, and PDF attachments are not scanned. In a survey of real mail, 7 payment-scam messages with such QR codes lost the green badge; among 33,803 legitimate-folder messages received from 2024 onward, 20 legitimate messages contained QR codes, of which 19 held booking or ticket codes and only 1 (an event registration form on another domain) was affected.
+    * **QR コードの解析（クイッシング検知）:** QR コードは受信者のスマートフォンで開かれるため、PC 側のリンク確認をすべて素通りします。クリックできるリンクを一切含まず、送金ページやログインページへ誘導する QR 画像だけを載せたフィッシングもあります。スパマー自身のドメインで正しく認証されたこうしたメールは、これまでグリーン判定になっていました。本アドオンは、メールに含まれる画像——HTML に `data:` URI で埋め込まれた画像、インライン（`cid:`）画像、画像の添付（PNG・JPEG・GIF・WebP・BMP。最大 10 枚、各 5 MB まで。大きな画像は縮小してから読み取り）——から、同梱の [jsQR](https://github.com/cozmo/jsQR) デコーダで QR コードを読み取ります。デコーダは独立した Worker で動かし、1 枚あたり 1 秒の上限を設けているため、細工された画像でアドオンが止まることはありません。URL を含む QR コードはリンクと同様に検査し（IP アドレス・短縮 URL・似せたドメイン）、送信者と別の組織ドメインを指すものを **suspicious** の所見（「QRコードのリンク先が送信者と異なるドメインです」）とします。この所見はバッジをグリーンにせず、信頼リストでも解消しません。実際に観測された送金詐欺の QR コードは正規の決済サービスの個人間送金ページを指しており、リンク先が正規であっても、無関係な送信者がそれを読み取らせること自体が詐欺の典型だからです。送信者自身のドメインを指す QR コードや、URL 以外の内容（予約番号・チケットのコード）の QR コードは判定に影響させず、折りたたみ式の「メール内のQRコード一覧」に表示します。外部サーバー上の画像は取得せず、PDF 添付も読み取りません。実メールでの調査では、こうした QR コードを含む送金詐欺メール 7 通がグリーンでなくなりました。2024 年以降に受信した正規フォルダのメール 33,803 通では、QR コードを含む正規メールが 20 通あり、そのうち 19 通は予約番号・チケットのコードで、影響を受けたのは 1 通（別ドメインのイベント申込フォーム）だけでした。
 * **Reply-To Mismatch Detection:** Warns when the Reply-To address belongs to a different domain than the sender, a technique used to redirect replies to attackers.
     * **Reply-To不一致検知:** Reply-Toアドレスが送信者と異なるドメインの場合に警告します。返信を攻撃者に誘導するフィッシング手口です。
 * **Trusted Link Domains with Inline Shortcut:** When an untrusted link indicator involves a single external domain, a Trust button appears directly on the finding row for one-click whitelisting. Otherwise, individual Trust buttons appear next to each external domain in the domain list. Whitelisted domains suppress untrusted-link warnings; deceptive link text (displayed URL differing from the actual destination) is always flagged regardless of the trust list, because a mismatch between what is shown and where a link goes is deceptive no matter who owns the destination. Manage trusted domains from the add-on settings page with text-based import/export.
@@ -145,8 +153,8 @@ Deceptive link text detected — the displayed URL differs from the actual desti
     * **コンパクト表示モード:** アドオン設定画面で有効化できる任意設定で、常時表示される情報バーの高さ（コンテナ余白・ヘッダ・バッジ・ドメイン名）を抑え、小さい画面でメール本文の縦スペースを取りすぎないようにします。あくまで見た目だけの調整で、可読性は保たれ、ダークモードにも完全対応し、バッジ・各カード・総合判定は変わりません。既定はオフです。
 * **12-Language Support (i18n):** Available in English, Japanese, French, German, Spanish, Arabic, Korean, Traditional Chinese, Simplified Chinese, Portuguese (Brazil), Russian, and Italian.
     * **12言語対応:** 英語、日本語、フランス語、ドイツ語、スペイン語、アラビア語、韓国語、繁体字中国語、簡体字中国語、ポルトガル語（ブラジル）、ロシア語、イタリア語に対応。
-* **Privacy First:** All processing is performed strictly locally within Thunderbird. No external network requests are made. No data is collected or transmitted.
-    * **プライバシー重視:** すべての解析処理はThunderbird内でローカルに完結します。外部ネットワークへの通信は一切行いません。
+* **Privacy First:** All processing is performed strictly locally within Thunderbird. No external network requests are made. No data is collected or transmitted. QR codes are read only from images already contained in the message; images on external servers are never fetched.
+    * **プライバシー重視:** すべての解析処理はThunderbird内でローカルに完結します。外部ネットワークへの通信は一切行いません。QR コードはメールに含まれている画像からのみ読み取り、外部サーバー上の画像は取得しません。
 
 ---
 
@@ -162,8 +170,9 @@ This add-on is designed for mail administrators and security-conscious users who
 |-------|-----------|------|
 | 💀 **LOOKALIKE DOMAIN** | The sender's own domain imitates another domain with look-alike characters (mixed scripts, another script's Latin-looking letters, look-alike Latin characters, or resemblance to a trusted domain), regardless of authentication results. | 送信者自身のドメインが、紛らわしい文字（文字種の混在、ラテン文字に見える別の文字種の字、紛らわしいラテン文字、信頼済みドメインへの酷似）で別のドメインになりすましている。認証結果に関係なく判定。 |
 | 💀 **LINK MISMATCH** | Deceptive link text (displayed URL differs from actual destination), a link to a look-alike of the sender's or a trusted domain, dangerous URI schemes, or embedded HTML forms detected. Not suppressible by the trust list. | リンク先相違（表示URLと実際のリンク先が不一致）・送信者や信頼済みドメインに似せた別ドメインへのリンク・危険なURIスキーム・HTMLフォーム埋め込みを検出。信頼リストでは抑制されない。 |
+| 💀 **DISGUISED TEXT** | A text direction override (RLO/LRO) reorders the displayed characters in the display name, subject, body or an attachment file name, regardless of authentication results. | 表示名・件名・本文・添付ファイル名で、双方向テキストの上書き（RLO/LRO）が表示の並びを入れ替えている。認証結果に関係なく判定。 |
 | ❌ **AUTH FAILED** | SPF, DKIM, or DMARC explicitly failed | SPF・DKIM・DMARCのいずれかが明示的にfail |
-| ⚠️ **AUTH PASS** | DMARC passed but other issues (alignment, spoofing, suspicious links, untrusted link domains, original sender not verified by a forwarding service, look-alike Reply-To domain, Subject not signed while DMARC relies on DKIM alone) | DMARC passだがアライメント・なりすまし・不審リンク・未信頼リンクドメイン・転送サービス経由の元送信者未検証・Reply-To ドメインの偽装・DKIM のみで DMARC pass なのに Subject が署名対象外等の問題あり |
+| ⚠️ **AUTH PASS** | DMARC passed but other issues (alignment, spoofing, suspicious links including QR codes pointing to another domain, untrusted link domains, original sender not verified by a forwarding service, look-alike Reply-To domain, Subject not signed while DMARC relies on DKIM alone) | DMARC passだがアライメント・なりすまし・不審リンク（別ドメインを指す QR コードを含む）・未信頼リンクドメイン・転送サービス経由の元送信者未検証・Reply-To ドメインの偽装・DKIM のみで DMARC pass なのに Subject が署名対象外等の問題あり |
 | ⚠️ **PARTIAL** | Some auth passed but DMARC not passed | 一部認証passだがDMARC未通過 |
 | ✅ **AUTH PASS** | All checks passed — safe | すべてのチェックに合格 — 安全 |
 
@@ -176,14 +185,14 @@ v1.1.6 ではリンク指標を4段階に分類しています。それぞれ深
 | Level | Examples | Meaning | Resolvable by whitelisting? |
 |-------|----------|---------|-----------------------------|
 | **critical** | Deceptive link text, links to look-alikes of the sender's or a trusted domain, `javascript:`/`data:` URIs, embedded forms | Confirmed phishing indicators (promotes to LINK MISMATCH badge) | No |
-| **suspicious** | IP-address links, IDN links (homographs flagged as such), URL shorteners | Patterns inherently risky regardless of who sent them | No |
+| **suspicious** | IP-address links, IDN links (homographs flagged as such), URL shorteners, QR codes pointing to a domain other than the sender's | Patterns inherently risky regardless of who sent them | No |
 | **untrusted** | All links external, main CTA external | Simply unknown to the extension — recipient hasn't trusted the domain yet | **Yes** (add to trusted domains) |
 | **privacy** | Tracking pixels | Privacy notice only, not a phishing indicator | N/A (informational) |
 
 | レベル | 例 | 意味 | ホワイトリストで解消可能か |
 |--------|----|-------|---------------------------|
 | **critical** | リンクテキスト偽装、送信者や信頼済みドメインに似せた別ドメインへのリンク、`javascript:`/`data:` URI、フォーム埋め込み | 確度の高いフィッシング指標（LINK MISMATCHバッジに昇格） | 不可 |
-| **suspicious** | IPアドレスリンク、IDN リンク（ホモグラフはその旨を明示）、短縮URL | 送信者に関係なく本質的に怪しい書式 | 不可 |
+| **suspicious** | IPアドレスリンク、IDN リンク（ホモグラフはその旨を明示）、短縮URL、送信者と別のドメインを指す QR コード | 送信者に関係なく本質的に怪しい書式 | 不可 |
 | **untrusted** | 全リンク外部、メインCTA外部 | 単にアドオンにとって未知なだけ — ユーザーがまだ信頼表明していない | **可**（信頼済みドメインに追加） |
 | **privacy** | トラッキングピクセル | プライバシー上の注意喚起。フィッシング指標ではない | 該当なし（情報提供） |
 
@@ -194,7 +203,8 @@ v1.1.6 ではリンク指標を4段階に分類しています。それぞれ深
 * No display name spoofing detected
 * The sender's domain does not use look-alike characters and does not resemble a trusted domain (homograph)
 * The Reply-To domain, if any, does not use look-alike characters and does not resemble the sender's domain
-* No critical, suspicious, or untrusted link indicators detected in email body
+* No critical, suspicious, or untrusted link indicators detected in email body (QR codes in images contained in the message are read and checked as links)
+* No text direction override (RLO/LRO) that reorders the displayed characters in the display name, subject, body or attachment file names
 * If a forwarding service recorded the original message's authentication (e.g. addy.io `X-AnonAddy-Authentication-Results`), the original sender's DMARC must be `pass`
 * If DMARC passes only through DKIM alignment (SPF not aligned), an aligned passing DKIM signature must cover `Subject` (otherwise the message could be a DKIM replay with a swapped subject)
 * Note: When DMARC passes but the message is not green for another reason, the badge is ⚠️ AUTH PASS even if the envelope sender is empty (`Return-Path: <>`) or unavailable, because DMARC validates the header From regardless of the envelope sender
@@ -212,7 +222,8 @@ v1.1.6 ではリンク指標を4段階に分類しています。それぞれ深
 * 表示名なりすましが検知されていないこと
 * 送信者のドメインが紛らわしい文字を使っておらず、信頼済みドメインにも酷似していないこと（ホモグラフ）
 * Reply-To がある場合、そのドメインが紛らわしい文字を使っておらず、送信者のドメインにも酷似していないこと
-* メール本文に critical・suspicious・untrusted のいずれのリンク指標も検知されていないこと
+* メール本文に critical・suspicious・untrusted のいずれのリンク指標も検知されていないこと（メールに含まれる画像の QR コードも読み取り、リンクとして検査する）
+* 表示名・件名・本文・添付ファイル名に、表示の並びを入れ替える双方向テキストの上書き（RLO/LRO）がないこと
 * 転送サービスが元メールの認証結果を記録している場合（例: addy.io の `X-AnonAddy-Authentication-Results`）、元送信者の DMARC が `pass` であること
 * DMARC が DKIM アライメントだけで pass している場合（SPF 非アライン）、アラインして pass した DKIM 署名が `Subject` を署名対象に含むこと（含まない場合、件名を差し替えた DKIM リプレイの可能性がある）
 * 注: DMARC が pass していて他の理由でグリーンにならない場合、エンベロープ送信者が空（`Return-Path: <>`）や取得できないときでも ⚠️ AUTH PASS を表示する（DMARC はエンベロープ送信者に関係なくヘッダ From を検証するため）
@@ -259,6 +270,16 @@ GitHubのReleasesからも最新版をダウンロードできます:
 
 ## 🏗️ Building from Source / ソースからのビルド
 
+> Requires [jsQR](https://github.com/cozmo/jsQR) in the `lib/` directory (not included in the repository; see `VENDOR.md` and `lib/README.md`).
+>
+> `lib/` ディレクトリに [jsQR](https://github.com/cozmo/jsQR) が必要です（リポジトリには含めていません。`VENDOR.md` と `lib/README.md` を参照）。
+
+```bash
+npm install
+cp node_modules/jsqr/dist/jsQR.js lib/
+cp node_modules/jsqr/LICENSE lib/jsQR-LICENSE.txt
+```
+
 ### Windows (PowerShell)
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File build.ps1
@@ -270,7 +291,7 @@ chmod +x build.sh
 ./build.sh
 ```
 
-Both scripts read the version from `manifest.json`, stage the required files including `_locales/`, produce a `.xpi` package in `.release/`, and generate a SHA-256 checksum file.
+Both scripts read the version from `manifest.json`, stage the required files including `_locales/`, `lib/` and `VENDOR.md` (stopping with an error if `lib/jsQR.js` is missing), produce a `.xpi` package in `.release/`, and generate a SHA-256 checksum file.
 
 ---
 
@@ -278,7 +299,12 @@ Both scripts read the version from `manifest.json`, stage the required files inc
 
 ```
 manifest.json           Extension manifest with i18n support
-background.js           Registers content scripts, handles message API (full message, and raw header block for header-order verification), always for the message displayed in the requesting tab
+background.js           Registers content scripts, handles message API (full message, raw header block for header-order verification, and QR code reading from `data:` URI images and image parts via messages.getAttachmentFile + createImageBitmap/canvas, decoded in qr_worker.js with a per-image time limit), always for the message displayed in the requesting tab
+qr_worker.js            Worker that runs the QR decoder on pixel data, so that a slow or pathological image can be cut off by terminating the worker without blocking the background page
+VENDOR.md               Third-party library sources, versions and checksums
+lib/
+├─ jsQR.js              QR code decoder (jsQR 1.4.0, Apache-2.0, unmodified; user-provided), loaded only by qr_worker.js when a message has images
+└─ jsQR-LICENSE.txt     License of jsQR (user-provided)
 psl_data.js             Public Suffix List data + getOrganizationalDomain()
 options.html + options.js  Trusted link domains management (add/remove/import/export) + compact display mode toggle
 messagedisplay.js       Main logic — 9 core functions:
@@ -288,8 +314,8 @@ messagedisplay.js       Main logic — 9 core functions:
 ├─ parseRoute()             Delivery route from Received headers with IP classification (including Exchange-style parenthesized IPv6 such as `(2001:db8::1)`) and per-hop TLS/encryption status extraction (TLS version, cipher suite, plaintext-protocol detection)
 ├─ parseArcChain()          ARC chain parsing (RFC 8617)
 ├─ parseMessageBody()       MIME tree traversal to extract HTML/text body content
-├─ analyzeLinkSafety()      Four-tier phishing detection (critical/suspicious/untrusted/privacy): deceptive text (hosts compared in ASCII form), look-alike domains of the sender or trusted domains (skeleton match, links and text URLs), dangerous schemes, forms, IP/IDN/shortener links (aggregated per type; IDN shown as Unicode (ASCII), homographs distinguished), all-external & CTA analysis, tracking pixels, resource domains, trusted domain whitelist, external link domain collection for one-click trust
-├─ determineSecurityStatus()  5-tier verdict (phishing > auth failed > auth pass warning > partial > auth pass) with auth-gated alignment, per-reason tags including "link_untrusted", "relay_original_unverified", "dkim_replay_risk" (Subject unsigned while DMARC relies on DKIM alone), "sender_homograph" (promoted to the LOOKALIKE DOMAIN phishing badge) and "reply_to_homograph", and privacy-level findings excluded from verdict
+├─ analyzeLinkSafety()      Four-tier phishing detection (critical/suspicious/untrusted/privacy): deceptive text (hosts compared in ASCII form), look-alike domains of the sender or trusted domains (skeleton match, links and text URLs), dangerous schemes, forms, IP/IDN/shortener links (aggregated per type; IDN shown as Unicode (ASCII), homographs distinguished), text URLs (extracted with `<br>`/block boundaries as separators, ended at Japanese punctuation and where the host's last label switches from ASCII to non-ASCII), QR code contents (URLs checked like links; another organizational domain is suspicious and not suppressible by the trust list; non-URL contents counted only), all-external & CTA analysis, tracking pixels, resource domains, trusted domain whitelist, external link domain collection for one-click trust
+├─ determineSecurityStatus()  5-tier verdict (phishing > auth failed > auth pass warning > partial > auth pass) with auth-gated alignment, per-reason tags including "link_untrusted", "relay_original_unverified", "dkim_replay_risk" (Subject unsigned while DMARC relies on DKIM alone), "sender_homograph" (promoted to the LOOKALIKE DOMAIN phishing badge), "reply_to_homograph" and "bidi_override" (a reordering RLO/LRO found by detectBidiOverrideSpoofing() in the display name, subject, body or attachment names, promoted to the DISGUISED TEXT phishing badge), and privacy-level findings excluded from verdict
 ├─ generateReportText()     Generates structured plain-text analysis report with all findings for clipboard export
 └─ buildUI()                Shadow DOM isolated, i18n'd, dark-mode-aware rendering with always-collapsed panel, optional compact display mode (reduced info-bar height), collapsible auth cards (full RFC 8601 properties), per-signature DKIM display ("signed (unverified)" when only a `DKIM-Signature` header is present), authentication strength warnings inside DKIM/DMARC cards, TLS status column in delivery route table with visual indicators (🔒⚠️🔓), collapsible link safety with severity-aware styling (critical/suspicious/untrusted/privacy), inline Trust shortcut on untrusted findings when a single external domain is identified, copy-to-clipboard button in header, verdict reason tags
 
@@ -319,5 +345,9 @@ v1.0.8+ bundles a curated Public Suffix List (`psl_data.js`) covering 60+ countr
 ## 📄 License / ライセンス
 
 This project is licensed under the [GNU General Public License v3.0](LICENSE).
+
+The released add-on bundles [jsQR](https://github.com/cozmo/jsQR) 1.4.0 (`lib/jsQR.js`, an unmodified copy of `dist/jsQR.js` from the npm package; source and checksum in `VENDOR.md`), licensed under the Apache License 2.0 (a copy is included as `lib/jsQR-LICENSE.txt`).
+
+配布するアドオンには [jsQR](https://github.com/cozmo/jsQR) 1.4.0（`lib/jsQR.js`。npm パッケージの `dist/jsQR.js` を無改変で同梱。入手元とチェックサムは `VENDOR.md`）を同梱しています。ライセンスは Apache License 2.0 で、その写しを `lib/jsQR-LICENSE.txt` として同梱しています。
 
 Copyright (C) 2025 Shota (SHOWTIME)

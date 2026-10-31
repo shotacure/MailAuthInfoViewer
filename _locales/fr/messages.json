@@ -340,5 +340,35 @@
   },
   "copiedFailed": {
     "message": "Échoué"
+  },
+  "badgeBidiSpoof": {
+    "message": "💀 TEXTE DÉGUISÉ"
+  },
+  "verdictReasonBidiOverride": {
+    "message": "Inversion du sens du texte"
+  },
+  "bidiOverrideWarning": {
+    "message": "🚨 Le texte est déguisé par un caractère de contrôle de direction (RLO/LRO) qui inverse l'ordre affiché"
+  },
+  "bidiLocationDisplayName": {
+    "message": "nom affiché"
+  },
+  "bidiLocationSubject": {
+    "message": "objet"
+  },
+  "bidiLocationBody": {
+    "message": "corps du message"
+  },
+  "bidiLocationAttachment": {
+    "message": "nom de la pièce jointe"
+  },
+  "linkQrExternal": {
+    "message": "Le code QR pointe vers un domaine différent de celui de l'expéditeur"
+  },
+  "qrCodeListTitle": {
+    "message": "Codes QR dans l'e-mail :"
+  },
+  "qrCodeNonUrl": {
+    "message": "Code QR sans URL (code de réservation, billet, etc.)"
   }
 }

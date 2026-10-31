@@ -1,0 +1,9 @@
+{
+  "name": "mail-auth-info-viewer",
+  "description": "Visualize email authentication (SPF/DKIM/DMARC/ARC), sender alignment, delivery route and link safety in Thunderbird.",
+  "private": true,
+  "license": "GPL-3.0",
+  "dependencies": {
+    "jsqr": "1.4.0"
+  }
+}

@@ -340,5 +340,35 @@
   },
   "copiedFailed": {
     "message": "失敗"
+  },
+  "badgeBidiSpoof": {
+    "message": "💀 文字偽裝"
+  },
+  "verdictReasonBidiOverride": {
+    "message": "文字方向覆寫"
+  },
+  "bidiOverrideWarning": {
+    "message": "🚨 文字使用了反轉顯示順序的控制字元（RLO/LRO）進行偽裝"
+  },
+  "bidiLocationDisplayName": {
+    "message": "顯示名稱"
+  },
+  "bidiLocationSubject": {
+    "message": "主旨"
+  },
+  "bidiLocationBody": {
+    "message": "內文"
+  },
+  "bidiLocationAttachment": {
+    "message": "附件檔名"
+  },
+  "linkQrExternal": {
+    "message": "QR 碼的連結目標與寄件者網域不同"
+  },
+  "qrCodeListTitle": {
+    "message": "郵件中的 QR 碼一覽："
+  },
+  "qrCodeNonUrl": {
+    "message": "非 URL 內容的 QR 碼（預約編號、票券等）"
   }
 }
