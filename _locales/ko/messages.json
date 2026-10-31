@@ -340,5 +340,35 @@
   },
   "copiedFailed": {
     "message": "실패"
+  },
+  "badgeBidiSpoof": {
+    "message": "💀 문자열 위장"
+  },
+  "verdictReasonBidiOverride": {
+    "message": "문자 방향 덮어쓰기"
+  },
+  "bidiOverrideWarning": {
+    "message": "🚨 표시 순서를 뒤집는 제어 문자(RLO/LRO)로 문자열이 위장되어 있습니다"
+  },
+  "bidiLocationDisplayName": {
+    "message": "표시 이름"
+  },
+  "bidiLocationSubject": {
+    "message": "제목"
+  },
+  "bidiLocationBody": {
+    "message": "본문"
+  },
+  "bidiLocationAttachment": {
+    "message": "첨부 파일 이름"
+  },
+  "linkQrExternal": {
+    "message": "QR 코드의 링크 대상이 발신자와 다른 도메인입니다"
+  },
+  "qrCodeListTitle": {
+    "message": "메일 내 QR 코드:"
+  },
+  "qrCodeNonUrl": {
+    "message": "URL이 아닌 내용의 QR 코드 (예약 번호·티켓 등)"
   }
 }

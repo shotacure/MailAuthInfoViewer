@@ -340,5 +340,35 @@
   },
   "copiedFailed": {
     "message": "فشل"
+  },
+  "badgeBidiSpoof": {
+    "message": "💀 نص مموّه"
+  },
+  "verdictReasonBidiOverride": {
+    "message": "تجاوز اتجاه النص"
+  },
+  "bidiOverrideWarning": {
+    "message": "🚨 النص مموّه باستخدام حرف تحكم في الاتجاه (RLO/LRO) يعكس ترتيب العرض"
+  },
+  "bidiLocationDisplayName": {
+    "message": "اسم العرض"
+  },
+  "bidiLocationSubject": {
+    "message": "الموضوع"
+  },
+  "bidiLocationBody": {
+    "message": "نص الرسالة"
+  },
+  "bidiLocationAttachment": {
+    "message": "اسم الملف المرفق"
+  },
+  "linkQrExternal": {
+    "message": "رمز QR يشير إلى نطاق مختلف عن نطاق المرسل"
+  },
+  "qrCodeListTitle": {
+    "message": "رموز QR في الرسالة:"
+  },
+  "qrCodeNonUrl": {
+    "message": "رمز QR بمحتوى ليس رابطًا (مثل رمز حجز أو تذكرة)"
   }
 }

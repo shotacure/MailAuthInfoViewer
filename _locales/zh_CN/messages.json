@@ -340,5 +340,35 @@
   },
   "copiedFailed": {
     "message": "失败"
+  },
+  "badgeBidiSpoof": {
+    "message": "💀 文字伪装"
+  },
+  "verdictReasonBidiOverride": {
+    "message": "文字方向覆盖"
+  },
+  "bidiOverrideWarning": {
+    "message": "🚨 文字使用了反转显示顺序的控制字符（RLO/LRO）进行伪装"
+  },
+  "bidiLocationDisplayName": {
+    "message": "显示名称"
+  },
+  "bidiLocationSubject": {
+    "message": "主题"
+  },
+  "bidiLocationBody": {
+    "message": "正文"
+  },
+  "bidiLocationAttachment": {
+    "message": "附件文件名"
+  },
+  "linkQrExternal": {
+    "message": "二维码的链接目标与发件人域名不同"
+  },
+  "qrCodeListTitle": {
+    "message": "邮件中的二维码一览："
+  },
+  "qrCodeNonUrl": {
+    "message": "非 URL 内容的二维码（预约号、票券等）"
   }
 }

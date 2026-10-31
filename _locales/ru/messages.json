@@ -340,5 +340,35 @@
   },
   "copiedFailed": {
     "message": "Ошибка"
+  },
+  "badgeBidiSpoof": {
+    "message": "💀 ЗАМАСКИРОВАННЫЙ ТЕКСТ"
+  },
+  "verdictReasonBidiOverride": {
+    "message": "Переопределение направления текста"
+  },
+  "bidiOverrideWarning": {
+    "message": "🚨 Текст замаскирован управляющим символом направления (RLO/LRO), который переворачивает порядок отображения"
+  },
+  "bidiLocationDisplayName": {
+    "message": "отображаемое имя"
+  },
+  "bidiLocationSubject": {
+    "message": "тема"
+  },
+  "bidiLocationBody": {
+    "message": "текст письма"
+  },
+  "bidiLocationAttachment": {
+    "message": "имя вложения"
+  },
+  "linkQrExternal": {
+    "message": "QR-код ведёт на домен, отличный от домена отправителя"
+  },
+  "qrCodeListTitle": {
+    "message": "QR-коды в письме:"
+  },
+  "qrCodeNonUrl": {
+    "message": "QR-код без URL (например, код брони или билета)"
   }
 }

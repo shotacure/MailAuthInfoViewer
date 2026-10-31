@@ -22,15 +22,30 @@ if (Test-Path $stageDir) { Remove-Item -Recurse -Force $stageDir }
 
 # --- ステージング（階層維持） ---
 New-Item -ItemType Directory -Force (Join-Path $stageDir "images") | Out-Null
+New-Item -ItemType Directory -Force (Join-Path $stageDir "lib") | Out-Null
 
 Copy-Item -Force "manifest.json"     $stageDir
 Copy-Item -Force "background.js"     $stageDir
+Copy-Item -Force "qr_worker.js"      $stageDir
 Copy-Item -Force "psl_data.js"       $stageDir
 Copy-Item -Force "messagedisplay.js" $stageDir
 Copy-Item -Force "options.html"      $stageDir
 Copy-Item -Force "options.js"        $stageDir
 Copy-Item -Force "LICENSE"           $stageDir
 Copy-Item -Force "images/icon.svg"  (Join-Path $stageDir "images")
+# サードパーティライブラリの情報ファイル
+Copy-Item -Force "VENDOR.md"         $stageDir
+
+# --- lib ディレクトリ（サードパーティライブラリ。入手方法は lib/README.md） ---
+# qr_worker.js が読み込むため、無いままでは QR コード解析が動かない XPI になる
+if (-not (Test-Path "lib/jsQR.js")) {
+    Write-Error "lib/jsQR.js がありません。lib/README.md の手順で配置してください"
+    exit 1
+}
+$libFiles = Get-ChildItem "lib/*.js", "lib/*.txt" -ErrorAction SilentlyContinue
+foreach ($f in $libFiles) {
+    Copy-Item -Force $f.FullName (Join-Path $stageDir "lib")
+}
 
 # --- _locales ディレクトリをコピー ---
 Copy-Item -Recurse -Force "_locales" (Join-Path $stageDir "_locales")
