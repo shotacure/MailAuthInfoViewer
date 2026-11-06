@@ -1115,18 +1115,21 @@
             const statusMatch = m.match(/\bdkim\s*=\s*([a-zA-Z0-9]+)/i);
             if (statusMatch) {
               // 各DKIM署名の d= ドメインを抽出。なければ i= から取得
-              const dMatch = m.match(/header\.d=([^;\s()]+)/i);
+              // RFC 8601 の文法では "=" の前後に CFWS（空白・折り返し）を置けるため、
+              // プロパティ値の抽出では "=" の前後の空白を許す。GMX は "smtp.mailfrom=" の直後で
+              // 折り返して値を次の行に書く（展開後は "smtp.mailfrom= user@example.net" になる）。
+              const dMatch = m.match(/header\.d\s*=\s*([^;\s()]+)/i);
               let domain = dMatch ? dMatch[1].replace(/^[@"']|["']$/g, '') : "";
               if (!domain) {
                 // header.i=@domain or header.i=user@domain からドメイン部分を取得
-                const iMatch = m.match(/header\.i=([^;\s()]+)/i);
+                const iMatch = m.match(/header\.i\s*=\s*([^;\s()]+)/i);
                 if (iMatch) {
                   let ival = iMatch[1].replace(/["']/g, '');
                   domain = ival.includes('@') ? ival.split('@').pop() : ival;
                 }
               }
               // DKIM セレクター (header.s=) を抽出: デバッグやDNS確認時に有用
-              const sMatch = m.match(/header\.s=([^;\s()]+)/i);
+              const sMatch = m.match(/header\.s\s*=\s*([^;\s()]+)/i);
               const selector = sMatch ? sMatch[1].replace(/["']/g, '') : "";
               const status = statusMatch[1].toLowerCase();
               if (status === "pass" && domain) passed.push({ domain, selector });
@@ -1174,7 +1177,8 @@
               rawSegment = m.trim();
 
               // smtp.mailfrom
-              const mailfromMatch = m.match(/smtp\.mailfrom=([^;\s()]+)/i);
+              // "=" の直後で折り返す形式（GMX 等）でも値を取れるよう、"=" の前後の空白を許す
+              const mailfromMatch = m.match(/smtp\.mailfrom\s*=\s*([^;\s()]+)/i);
               if (mailfromMatch) {
                 const fromStr = mailfromMatch[1].replace(/^["'<]|["'>]$/g, '');
                 domain = fromStr.includes('@') ? fromStr.split('@')[1] : fromStr;
@@ -1189,8 +1193,8 @@
               // IP
               // "sender IP is x.x.x.x" は Exchange Online のコメント表記
               const ipMatch = m.match(/designates\s+([a-fA-F0-9.:]+)\s+as\s+permitted\s+sender/i) ||
-                              m.match(/client-ip=([a-fA-F0-9.:]+)/i) ||
-                              m.match(/smtp\.remote-ip=([a-fA-F0-9.:]+)/i) ||
+                              m.match(/client-ip\s*=\s*([a-fA-F0-9.:]+)/i) ||
+                              m.match(/smtp\.remote-ip\s*=\s*([a-fA-F0-9.:]+)/i) ||
                               m.match(/sender\s+IP\s+is\s+([a-fA-F0-9.:]+)/i);
               if (ipMatch) ip = ipMatch[1];
 
@@ -1208,7 +1212,7 @@
             for (const m of methods) {
               if (!/\bdkim\s*=/i.test(m)) continue;
 
-              const domainRegex = /header\.(?:d|i)=([^;\s()]+)/ig;
+              const domainRegex = /header\.(?:d|i)\s*=\s*([^;\s()]+)/ig;
               let match;
               while ((match = domainRegex.exec(m)) !== null) {
                 let dkimDomain = match[1].replace(/["']/g, '');
@@ -1232,7 +1236,7 @@
               if (!/\bdmarc\s*=/i.test(m)) continue;
               rawSegment = m.trim();
 
-              const domainMatch = m.match(/header\.from=([^;\s()]+)/i);
+              const domainMatch = m.match(/header\.from\s*=\s*([^;\s()]+)/i);
               if (domainMatch) domain = domainMatch[1].replace(/["']/g, '');
 
               // p= (ポリシー) - sp= / pct= との誤マッチ防止
@@ -1242,7 +1246,7 @@
               // （GMX 等が "dmarc=pass header.from=... policy.dmarc=none" の形で記録する）。
               // こちらは sp= / pct= の適用後に評価されたポリシーのため、公開値 p= がある場合はそれを優先する
               else {
-                const evaluatedMatch = m.match(/\bpolicy\.dmarc=([a-zA-Z]+)/i);
+                const evaluatedMatch = m.match(/\bpolicy\.dmarc\s*=\s*([a-zA-Z]+)/i);
                 if (evaluatedMatch) policy = evaluatedMatch[1].toLowerCase();
               }
             }
@@ -1320,14 +1324,15 @@
           if (statusMatch) {
             spfStatus = statusMatch[1].toLowerCase();
             // ドメイン: envelope-from="user@domain.com" から抽出
-            const envFromMatch = spfLine.match(/envelope-from=["']?([^"';\s]+)/i);
+            // Received-SPF の key-value-pair も "=" の前後に CFWS を置けるため（RFC 7208）、空白を許す
+            const envFromMatch = spfLine.match(/envelope-from\s*=\s*["']?([^"';\s]+)/i);
             let domain = "";
             if (envFromMatch) {
               const fromStr = envFromMatch[1].replace(/["'>]/g, '');
               domain = fromStr.includes('@') ? fromStr.split('@')[1] : fromStr;
             }
             // IP: client-ip=x.x.x.x から抽出
-            const ipMatch = spfLine.match(/client-ip=([a-fA-F0-9.:]+)/i);
+            const ipMatch = spfLine.match(/client-ip\s*=\s*([a-fA-F0-9.:]+)/i);
             const ip = ipMatch ? ipMatch[1] : spfDetail.ip;
             spfDetail = { domain: domain || spfDetail.domain, ip: ip };
           }
@@ -1561,7 +1566,7 @@
         for (const name of RELAY_ORIGINAL_AUTH_HEADERS) {
           const list = headers[name] || [];
           if (list.length === 0) continue;
-          const fromMatch = list[0].match(/header\.from=([^;\s()]+)/i);
+          const fromMatch = list[0].match(/header\.from\s*=\s*([^;\s()]+)/i);
           return {
             present: true,
             header: name,
@@ -3296,7 +3301,9 @@
         // 括弧部分を除去してから key=value を抽出（括弧内の = による誤マッチを防止）
         const cleaned = segment.replace(/\([^)]*\)/g, '');
         // クォート値対応: key="value with = signs" or key=unquoted_value
-        const propRegex = /([a-zA-Z][a-zA-Z0-9._-]*)="([^"]*)"|([a-zA-Z][a-zA-Z0-9._-]*)=([^;\s"]+)/g;
+        // "=" の前後の空白も許す（RFC 8601 の CFWS）。許さないと "smtp.mailfrom= local=x@domain" のように
+        // "=" の直後で折り返された値で、値の local-part 側をキーと取り違える。
+        const propRegex = /([a-zA-Z][a-zA-Z0-9._-]*)\s*=\s*"([^"]*)"|([a-zA-Z][a-zA-Z0-9._-]*)\s*=\s*([^;\s"]+)/g;
         let m;
         while ((m = propRegex.exec(cleaned)) !== null) {
           const key = m[1] || m[3];
@@ -3344,9 +3351,9 @@
           if (disMatch) html += renderPropRow("dis", disMatch[1]);
           if (pctMatch) html += renderPropRow("pct", pctMatch[1]);
         }
-        // 括弧外の key=value（header.from 等）
+        // 括弧外の key=value（header.from 等）。parseSegmentProps と同じく "=" の前後の空白を許す
         const cleaned = seg.replace(/\([^)]*\)/g, '');
-        const propRegex = /([a-zA-Z][a-zA-Z0-9._-]*)="([^"]*)"|([a-zA-Z][a-zA-Z0-9._-]*)=([^;\s"]+)/g;
+        const propRegex = /([a-zA-Z][a-zA-Z0-9._-]*)\s*=\s*"([^"]*)"|([a-zA-Z][a-zA-Z0-9._-]*)\s*=\s*([^;\s"]+)/g;
         let m;
         while ((m = propRegex.exec(cleaned)) !== null) {
           const key = m[1] || m[3];
