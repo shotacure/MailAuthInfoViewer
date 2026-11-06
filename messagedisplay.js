@@ -738,6 +738,25 @@
       };
     };
 
+    // DKIM-Signature をタグ単位に分解する。h= の値は折り返し（FWS）を含みうるため、
+    // 空白をすべて除去してからコロンで分割する。
+    // b= の値（Base64）はセミコロンを含まないため、単純な ';' 分割で問題ない
+    // RFC 6376 §3.2 のタグリストは "=" の前後にも空白・折り返しを置けるため、タグ名は前後の空白を
+    // 除いて読み、値の空白もすべて除去する。ヘッダ全体を正規表現で検索すると、"=" の直後で
+    // 折り返したタグを取りこぼすほか、折り返された b= の値の途中にある "a=" 等にも当たりうるため、
+    // DKIM-Signature と同じタグリスト形式の ARC-Seal（RFC 8617）もこの関数で読む。
+    // 同名のタグが複数ある場合は最初のものを採る。
+    const parseSigTags = (sigHeader) => {
+      const tags = {};
+      for (const part of (sigHeader || "").split(";")) {
+        const eq = part.indexOf("=");
+        if (eq < 0) continue;
+        const name = part.slice(0, eq).trim().toLowerCase();
+        if (name && !(name in tags)) tags[name] = part.slice(eq + 1).replace(/\s+/g, "");
+      }
+      return tags;
+    };
+
     // =========================================================
     // 2. parseAuthResults - メール認証結果の解析 (authserv-id フィルタリング付き)
     // =========================================================
@@ -1378,19 +1397,7 @@
         const getOrgDomain = window.getOrganizationalDomain || ((d) => d);
         const normalizeDomain = (d) => domainToAscii((d || "").replace(/\.$/, "")).toLowerCase();
 
-        // DKIM-Signature をタグ単位に分解する。h= の値は折り返し（FWS）を含みうるため、
-        // 空白をすべて除去してからコロンで分割する。
-        // b= の値（Base64）はセミコロンを含まないため、単純な ';' 分割で問題ない
-        const parseSigTags = (sigHeader) => {
-          const tags = {};
-          for (const part of sigHeader.split(";")) {
-            const eq = part.indexOf("=");
-            if (eq < 0) continue;
-            const name = part.slice(0, eq).trim().toLowerCase();
-            if (name && !(name in tags)) tags[name] = part.slice(eq + 1).replace(/\s+/g, "");
-          }
-          return tags;
-        };
+        // DKIM-Signature のタグは parseSigTags（parseAuthResults の手前で定義）で読む
         const signatures = (headers["dkim-signature"] || []).map(h => {
           const t = parseSigTags(h);
           return {
@@ -1469,19 +1476,18 @@
         const seenWeakAlgo = new Set();
         const seenLimitedScope = new Set();
         for (const sigHeader of dkimSigHeaders) {
-          const dMatch = sigHeader.match(/(?:^|[;\s])d=([^;\s]+)/i);
-          const sigDomain = dMatch ? dMatch[1].trim() : "";
+          // タグは parseSigTags で読む（"=" の直後で折り返した a= / l= でも警告を取りこぼさない）
+          const tags = parseSigTags(sigHeader);
+          const sigDomain = tags.d || "";
 
-          const aMatch = sigHeader.match(/(?:^|[;\s])a=([a-zA-Z0-9-]+)/i);
-          if (aMatch && aMatch[1].toLowerCase() === "rsa-sha1" && !seenWeakAlgo.has(sigDomain)) {
+          if ((tags.a || "").toLowerCase() === "rsa-sha1" && !seenWeakAlgo.has(sigDomain)) {
             seenWeakAlgo.add(sigDomain);
             dkimWarnings.push({ type: "weak_algorithm", domain: sigDomain, value: "rsa-sha1" });
           }
 
-          const lMatch = sigHeader.match(/(?:^|[;\s])l=(\d+)/i);
-          if (lMatch && !seenLimitedScope.has(sigDomain)) {
+          if (/^\d+$/.test(tags.l || "") && !seenLimitedScope.has(sigDomain)) {
             seenLimitedScope.add(sigDomain);
-            dkimWarnings.push({ type: "limited_scope", domain: sigDomain, value: `l=${lMatch[1]}` });
+            dkimWarnings.push({ type: "limited_scope", domain: sigDomain, value: `l=${tags.l}` });
           }
         }
 
@@ -1594,10 +1600,9 @@
         const list = [];
         const seen = new Set();
         for (const sigHeader of (headers["dkim-signature"] || [])) {
-          const dMatch = sigHeader.match(/(?:^|[;\s])d=([^;\s]+)/i);
-          const sMatch = sigHeader.match(/(?:^|[;\s])s=([^;\s]+)/i);
-          const domain = dMatch ? dMatch[1].trim() : "";
-          const selector = sMatch ? sMatch[1].trim() : "";
+          const tags = parseSigTags(sigHeader);
+          const domain = tags.d || "";
+          const selector = tags.s || "";
           const key = `${domain.toLowerCase()}|${selector.toLowerCase()}`;
           if (seen.has(key)) continue;
           seen.add(key);
@@ -1717,35 +1722,39 @@
       // ARC-Seal から各チェーンの情報を抽出
       const chains = new Map();
       for (const seal of arcSeals) {
+        // ARC-Seal は DKIM-Signature と同じタグリスト形式のため parseSigTags で読む
+        // （"=" の前後の空白・折り返しを許し、b= の値の途中への誤マッチも避ける）
+        const tags = parseSigTags(seal);
         // チェーン番号 (i=1, i=2, ...)
-        const iMatch = seal.match(/\bi=(\d+)/);
+        const iMatch = (tags.i || "").match(/^(\d+)$/);
         // チェーン検証状態 (cv=none / cv=pass / cv=fail)
-        const cvMatch = seal.match(/\bcv=(\w+)/i);
+        const cvMatch = (tags.cv || "").match(/^(\w+)$/);
         // 署名ドメイン (d=example.com)
-        const dMatch = seal.match(/\bd=([^\s;]+)/i);
+        const domain = tags.d || "";
 
         if (iMatch) {
           const chainNum = parseInt(iMatch[1], 10);
           chains.set(chainNum, {
             i: chainNum,
             cv: cvMatch ? cvMatch[1].toLowerCase() : "unknown",
-            domain: dMatch ? dMatch[1] : "",
+            domain: domain,
             authSummary: ""
           });
         }
       }
 
       // ARC-Authentication-Results から各チェーンの認証サマリーを抽出
+      // 中身は Authentication-Results と同じ文法（RFC 8601）で、"=" の前後に CFWS を置けるため空白を許す
       for (const aar of arcAuthResults) {
-        const iMatch = aar.match(/\bi=(\d+)/);
+        const iMatch = aar.match(/\bi\s*=\s*(\d+)/);
         if (!iMatch) continue;
         const chainNum = parseInt(iMatch[1], 10);
 
         // SPF/DKIM/DMARC の結果をコンパクトにまとめる
         const summaryParts = [];
-        const spfMatch = aar.match(/\bspf=(\w+)/i);
-        const dkimMatch = aar.match(/\bdkim=(\w+)/i);
-        const dmarcMatch = aar.match(/\bdmarc=(\w+)/i);
+        const spfMatch = aar.match(/\bspf\s*=\s*(\w+)/i);
+        const dkimMatch = aar.match(/\bdkim\s*=\s*(\w+)/i);
+        const dmarcMatch = aar.match(/\bdmarc\s*=\s*(\w+)/i);
         if (spfMatch) summaryParts.push(`spf=${spfMatch[1].toLowerCase()}`);
         if (dkimMatch) summaryParts.push(`dkim=${dkimMatch[1].toLowerCase()}`);
         if (dmarcMatch) summaryParts.push(`dmarc=${dmarcMatch[1].toLowerCase()}`);
