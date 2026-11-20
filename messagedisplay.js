@@ -482,6 +482,9 @@
     //       受信境界は EOP（*.mail.protection.outlook.com）。内部ホップは *.prod.outlook.com /
     //       *.outlook.office365.com。A-R に authserv-id 自体が無い（RFC 8601 非準拠）。
     //         Authentication-Results: spf=pass (sender IP is ...) smtp.mailfrom=...; dkim=pass ...
+    //       現在の EOP は、ホスト名ではない固定の authserv-id "mx.microsoft.com" に版番号を添えて書く
+    //       （ARC-Authentication-Results でも同じ名前を使う）。両方の書式を受け付ける。
+    //         Authentication-Results: mx.microsoft.com 1; spf=pass (sender IP is ...) smtp.mailfrom=...; ...
     //   - mailbox.org:
     //       受信境界は mx*.mailbox.org。内部ホップは *.heinlein-hosting.de。
     //       authserv-id はホスト名ではない固定値 "incoming_mbo"。
@@ -499,7 +502,9 @@
     // A-R の付与位置を検証したうえで採用する。各定義:
     //   orgDomains:         プロバイダ自身のホストの組織ドメイン
     //   ingress:            外部から受け取る受信境界ホスト（by）のパターン
-    //   providerAuthServId: プロバイダが付与する A-R の authserv-id（null は authserv-id 無し）
+    //   providerAuthServId: プロバイダが付与する A-R の authserv-id（null は authserv-id 無し）。
+    //                       書式が複数ある場合は配列で列挙する。authserv-id の後の版番号
+    //                       （RFC 8601 の authres-version。例: "mx.microsoft.com 1" の "1"）は照合に含めない
     //   arPlacement:        プロバイダが A-R を付与する位置
     //                         "above": 受信境界の Received より上（EOP は受信後のヘッダとして積む）
     //                         "below": 受信境界の Received の直下（Postfix + milter 構成では、
@@ -517,7 +522,8 @@
         name: "Microsoft 365",
         orgDomains: ["outlook.com", "office365.com"],
         ingress: /\.mail\.protection\.outlook\.com$/,
-        providerAuthServId: null,
+        // 旧来の authserv-id 無しの書式と、現在の "mx.microsoft.com <版番号>" の書式
+        providerAuthServId: [null, "mx.microsoft.com"],
         arPlacement: "above",
         queueIdHeader: null,
         localReinjection: false,
@@ -757,6 +763,57 @@
       return tags;
     };
 
+    // ■ コメント括弧を考慮したセミコロン分割ヘルパー
+    // RFC 8601 では Authentication-Results 中の "(...)" はコメントであり、
+    // 括弧内に含まれるセミコロンは構文上のセパレータではない。
+    // 例: dkim=pass (2048-bit key; unprotected) header.d=example.com
+    //   このようなコメント付き結果を素朴に ';' で分割すると、
+    //   "dkim=pass (2048-bit key" と " unprotected) header.d=..." に
+    //   分断され、header.d 等の属性が後続セグメントに紛れ込んで
+    //   ドメイン抽出やアライメント評価が誤った結果になる。
+    // そのため括弧の対応をネストで追いつつトップレベルのセミコロンだけで
+    // 分割する専用関数を用いる。
+    // Authentication-Results と同じ文法の ARC-Authentication-Results（parseArcChain）でも使う。
+    const splitOnTopLevelSemicolons = (str) => {
+      if (!str) return [];
+      const result = [];
+      let depth = 0;
+      let current = "";
+      for (let i = 0; i < str.length; i++) {
+        const ch = str[i];
+        if (ch === '(') {
+          depth++;
+          current += ch;
+        } else if (ch === ')') {
+          if (depth > 0) depth--;
+          current += ch;
+        } else if (ch === ';' && depth === 0) {
+          result.push(current);
+          current = "";
+        } else {
+          current += ch;
+        }
+      }
+      // 最後のセグメント（末尾セミコロンがない場合の残り）も含める
+      result.push(current);
+      return result;
+    };
+
+    // ■ 認証方式の結果の読み取り
+    // splitOnTopLevelSemicolons で分けた 1 区切り（RFC 8601 の resinfo）は「方式名 = 結果」で始まり
+    // （方式名の後に "/版番号" が付くこともある）、その後にコメントやプロパティが続く。
+    // 方式名は区切りの先頭でだけ読み、区切りの途中は探さない。途中まで探すと、Gmail が書く
+    //   arc=pass (i=1 spf=pass spfdomain=example.com dkim=pass dkdomain=example.com dmarc=pass fromdomain=example.com)
+    // のように、コメントの中に書かれた ARC の転記内容を SPF・DKIM・DMARC の結果として拾ってしまう。
+    // この転記内容は ARC の i=1 を付けた者の申告で、攻撃者が自分のドメインで ARC 署名を付ければ
+    // 自由に書けるため、ここから読むと dmarc=fail のなりすましが DMARC pass に見えうる。
+    // 区切りの途中を探すと "x-dkim=" のような別の方式名にも一致してしまう問題もある。
+    // 戻り値は小文字の結果（区切りがその方式のものでなければ null）。
+    const methodResultOf = (segment, method) => {
+      const m = (segment || "").match(new RegExp(`^\\s*${method}(?:\\s*/\\s*\\d+)?\\s*=\\s*([a-zA-Z0-9]+)`, "i"));
+      return m ? m[1].toLowerCase() : null;
+    };
+
     // =========================================================
     // 2. parseAuthResults - メール認証結果の解析 (authserv-id フィルタリング付き)
     // =========================================================
@@ -768,41 +825,8 @@
       // ARC-Authentication-Results は独自のチェイン検証機構を持つため、フィルタリング対象外。
       // 名前の照合だけでは偽物を排除できないため、受信境界（detectBoundary）と生ヘッダ上の
       // 位置（selectGenericAR）を併せて確かめ、受信サーバが付けたと言える A-R だけを採用する。
-
-      // ■ コメント括弧を考慮したセミコロン分割ヘルパー
-      // RFC 8601 では Authentication-Results 中の "(...)" はコメントであり、
-      // 括弧内に含まれるセミコロンは構文上のセパレータではない。
-      // 例: dkim=pass (2048-bit key; unprotected) header.d=example.com
-      //   このようなコメント付き結果を素朴に ';' で分割すると、
-      //   "dkim=pass (2048-bit key" と " unprotected) header.d=..." に
-      //   分断され、header.d 等の属性が後続セグメントに紛れ込んで
-      //   ドメイン抽出やアライメント評価が誤った結果になる。
-      // そのため括弧の対応をネストで追いつつトップレベルのセミコロンだけで
-      // 分割する専用関数を用いる。
-      const splitOnTopLevelSemicolons = (str) => {
-        if (!str) return [];
-        const result = [];
-        let depth = 0;
-        let current = "";
-        for (let i = 0; i < str.length; i++) {
-          const ch = str[i];
-          if (ch === '(') {
-            depth++;
-            current += ch;
-          } else if (ch === ')') {
-            if (depth > 0) depth--;
-            current += ch;
-          } else if (ch === ';' && depth === 0) {
-            result.push(current);
-            current = "";
-          } else {
-            current += ch;
-          }
-        }
-        // 最後のセグメント（末尾セミコロンがない場合の残り）も含める
-        result.push(current);
-        return result;
-      };
+      // A-R の分割（splitOnTopLevelSemicolons）と方式ごとの結果の読み取り（methodResultOf）は
+      // parseArcChain と共用するため、parseAuthResults の手前で定義している。
 
       // ■ 受信境界（境界 MTA）の特定
       // authserv-id 照合と A-R の位置検証に使う「信頼する受信ホスト」を求める。
@@ -887,8 +911,73 @@
       //         受信サーバの A-R のすぐ後ろに送信者の偽物が続いていても区別できないため。
       //   内部経路のみ（境界が無い。自己送信等）: 最上段の Received より上にある最初の A-R だけを
       //         信頼する。最上段より上は最終配送側が書いた位置で、送信者は書き込めない。
+      //         最上段より上に A-R が無く、Fastmail の組織内配送の経路（detectFastmailMilterHop）が
+      //         最上段からたどれた場合は、その Authentication Milter の Received の直下（次の Received の
+      //         手前）にある、そのホスト名を名乗る A-R をすべて信頼する。
       // 生ヘッダが取得できない、または getFull と Received の本数が一致しない場合は信頼しない。
       // 戻り値は getFull 側の該当ヘッダ値の配列（境界より上の場合は複数本になりうる）。
+
+      // ■ Fastmail の組織内配送で認証を行ったホップの特定
+      // Fastmail の利用者どうしのメールは、送信から配送まで Fastmail の内部ネットワークだけを通る。
+      // Received はすべてプライベート IP・ループバックからの受信になり、detectBoundary は境界を
+      // 見つけない（内部経路のみ）。それでも受信時の認証は外部からのメールと同じく
+      // <拠点>-mx-<番号>.messagingengine.com の Authentication Milter が行い、次の位置に A-R を書く（上から順）。
+      //   Received: from stl-compute-02.internal (stl-compute-02.internal [10.204.2.62])
+      //             by slotsi01m71 (Cyrus ...) with LMTPA;                 ← 最終配送
+      //   Received: from phl-mx-04 ([10.202.2.203]) by stl-compute-02.internal (LMTPProxy);
+      //   Received: from phl-mx-04.messagingengine.com (localhost [127.0.0.1]) by mailmx.phl.internal (Postfix) ...
+      //   Received: from mailmx.phl.internal (localhost [127.0.0.1])
+      //             by phl-mx-04.messagingengine.com (Authentication Milter) ...;
+      //   Authentication-Results: phl-mx-04.messagingengine.com; ...      ← この Received と次の Received の間
+      //   Received: from mailfhigh.phl.internal (phl-outbound-01.internal [10.202.2.181]) by mailmx.phl.internal ...
+      // 外部からのメールでは、A-R の下の Received が外部からの受信（境界）になるため detectBoundary で足りる。
+      // 内部経路のみの場合は、Authentication Milter の Received を探すだけでは偽物を拾いうる。
+      // Fastmail の利用者が偽の Received と A-R を自分のメールに含めて送れば、それも内部経路として届くためである。
+      // そこで最上段から 1 段ずつたどり、次の条件をすべて満たしたまま到達できた場合に限ってそのホップを特定する。
+      //   - 各段の from がプライベート IP・ループバックからの受信である（Fastmail の内部での受け渡し）
+      //   - 前段の from と次段の by が同じサーバである（先頭ラベルで比較）。最上段は受信側が書くため
+      //     偽造できず、この連続性を保つ限り、送信者が下段に積んだヘッダへ走査が乗り移らない
+      //     （送信者のメールが Fastmail に入った段は from 句が無いか、外部の IP を記録しているため、
+      //       そこで連続性が途切れる）
+      //   - 最後の 3 段が上の並びと一致する。LMTPProxy の段が <拠点>-mx-<番号> から受け取り、
+      //     mailmx の段がその FQDN から受け取り、その FQDN の Authentication Milter の段が mailmx から受け取る。
+      //     mailmx と Authentication Milter は同じサーバ内の受け渡しで by と from の名前が入れ替わるため、
+      //     この 3 段だけは連続性ではなく並びそのものを照合する
+      // 戻り値: { host: Authentication Milter のホスト名, index: その Received の位置 }（無ければ index -1）
+      const detectFastmailMilterHop = () => {
+        const notFound = { host: "", index: -1 };
+        const received = headers["received"] || [];
+        const normalize = (h) => (h || "").toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+        const firstLabel = (h) => (h || "").split(".")[0];
+        const hops = received.map(line => {
+          const byMatch = line.match(/\bby\s+([^\s;()]+)/i);
+          const fromMatch = line.match(/\bfrom\s+(.+?)(?=\s+by\s+|;|$)/i);
+          const fromPart = fromMatch ? fromMatch[1].trim() : "";
+          const fromIP = extractIPFromReceived(fromPart, true);
+          return {
+            by: byMatch ? normalize(byMatch[1]) : "",
+            fromHost: normalize(fromPart.split(/[\s(]+/)[0]),
+            internal: !!fromIP && isPrivateIP(fromIP),
+            milter: /\(Authentication Milter\)/i.test(line)
+          };
+        });
+        const MILTER_HOST = /^[a-z0-9]+-mx-\d+\.messagingengine\.com$/;
+        for (let m = 2; m < hops.length; m++) {
+          const lmtp = hops[m - 2], mailmx = hops[m - 1], milter = hops[m];
+          // 最後の 3 段の並び
+          const isTail = milter.milter && MILTER_HOST.test(milter.by) &&
+            milter.internal && mailmx.internal && lmtp.internal &&
+            milter.fromHost === mailmx.by && firstLabel(mailmx.by) === "mailmx" &&
+            mailmx.fromHost === milter.by && lmtp.fromHost === firstLabel(milter.by);
+          if (isTail) return { host: milter.by, index: m };
+          // 並びに一致しない段は、上から連続した内部の受け渡しでなければならない
+          // （ここで途切れたら、それより下は Fastmail が書いたと言えない）
+          const hop = hops[m - 2], next = hops[m - 1];
+          if (!hop.internal || firstLabel(hop.fromHost) !== firstLabel(next.by)) return notFound;
+        }
+        return notFound;
+      };
+
       const selectGenericAR = (boundary, regularAuth) => {
         if (!Array.isArray(rawHeaderOrder) || regularAuth.length === 0) return [];
         const squash = (s) => (s || "").replace(/\s+/g, " ").trim();
@@ -902,8 +991,19 @@
 
         if (boundary.index < 0) {
           const k = rawHeaderOrder.findIndex((h, i) => i < receivedRaw[0] && isAR(h));
-          const full = k >= 0 ? toFullValue(rawHeaderOrder[k].value) : undefined;
-          return full ? [full] : [];
+          if (k >= 0) {
+            const full = toFullValue(rawHeaderOrder[k].value);
+            return full ? [full] : [];
+          }
+          // Fastmail の組織内配送: Authentication Milter の Received の直下で、そのホスト名を名乗る A-R をすべて採る
+          // （Fastmail は 1 回の検証結果を複数の A-R に分けて書く）。対応の取れないものがあれば全体を信頼しない
+          const milter = detectFastmailMilterHop();
+          if (milter.index < 0) return [];
+          const zoneStart = receivedRaw[milter.index];
+          const zoneEnd = milter.index + 1 < receivedRaw.length ? receivedRaw[milter.index + 1] : rawHeaderOrder.length;
+          const zone = rawHeaderOrder.filter((h, i) => i > zoneStart && i < zoneEnd && isAR(h) && idOf(h.value) === milter.host)
+            .map(h => toFullValue(h.value));
+          return zone.length > 0 && zone.every(Boolean) ? zone : [];
         }
         if (!boundary.host) return [];
         const boundaryRaw = receivedRaw[boundary.index];
@@ -929,10 +1029,14 @@
       // authserv-id を持たない A-R か（先頭セグメントが "method=result" の形をしている）
       const lacksAuthServId = (h) => /^\s*[a-z][a-z0-9-]*\s*=/i.test(splitOnTopLevelSemicolons(h)[0]);
 
+      // A-R の authserv-id（小文字化し、後ろに付く版番号 authres-version を除いたもの）
+      const authServIdOf = (h) => splitOnTopLevelSemicolons(h)[0].trim().toLowerCase().replace(/\s+\d+$/, "");
+
       // プロバイダが付与した形式の A-R か（PROVIDER_INGRESS_RULES の providerAuthServId で判定）
-      const isProviderAR = (rule, h) => rule.providerAuthServId === null
+      // providerAuthServId が配列の場合は、いずれかの書式に当てはまればよい
+      const isProviderAR = (rule, h) => [].concat(rule.providerAuthServId).some(id => id === null
         ? lacksAuthServId(h)
-        : splitOnTopLevelSemicolons(h)[0].trim().toLowerCase() === rule.providerAuthServId;
+        : authServIdOf(h) === id);
 
       // ■ プロバイダ受信経路の判定
       // 「最上段から連続するプロバイダ内部ホップをたどり、外部から受信境界に入ったホップに
@@ -1102,12 +1206,12 @@
       // 任意のヘッダ群を対象に取れるよう汎用化し、信頼済み A-R 以外
       // （authserv-id 不一致で除外したものや ARC-AR）の報告値抽出にも再利用する。
       const statusFromHeaderList = (headerList, type) => {
-        const regex = new RegExp(`\\b${type}\\s*=\\s*([a-zA-Z0-9]+)`, "i");
         for (const h of headerList) {
           const methods = splitOnTopLevelSemicolons(h).slice(1);
           for (const m of methods) {
-            const match = m.match(regex);
-            if (match) return match[1].toLowerCase();
+            // 方式名は区切りの先頭でだけ読む（コメント内の ARC 転記等を拾わないため。methodResultOf 参照）
+            const result = methodResultOf(m, type);
+            if (result) return result;
           }
         }
         return "none";
@@ -1131,8 +1235,9 @@
           // これにより header.d= 等の属性がセグメントから漏れない。
           const methods = splitOnTopLevelSemicolons(h).slice(1);
           for (const m of methods) {
-            const statusMatch = m.match(/\bdkim\s*=\s*([a-zA-Z0-9]+)/i);
-            if (statusMatch) {
+            // DKIM の区切りかどうかは先頭の方式名で判定する（methodResultOf 参照）
+            const status = methodResultOf(m, "dkim");
+            if (status) {
               // 各DKIM署名の d= ドメインを抽出。なければ i= から取得
               // RFC 8601 の文法では "=" の前後に CFWS（空白・折り返し）を置けるため、
               // プロパティ値の抽出では "=" の前後の空白を許す。GMX は "smtp.mailfrom=" の直後で
@@ -1150,7 +1255,6 @@
               // DKIM セレクター (header.s=) を抽出: デバッグやDNS確認時に有用
               const sMatch = m.match(/header\.s\s*=\s*([^;\s()]+)/i);
               const selector = sMatch ? sMatch[1].replace(/["']/g, '') : "";
-              const status = statusMatch[1].toLowerCase();
               if (status === "pass" && domain) passed.push({ domain, selector });
 
               // Authentication-Results と ARC-Authentication-Results に
@@ -1192,7 +1296,7 @@
           for (const h of authHeaders) {
             const methods = splitOnTopLevelSemicolons(h).slice(1);
             for (const m of methods) {
-              if (!/\bspf\s*=/i.test(m)) continue;
+              if (!methodResultOf(m, "spf")) continue;
               rawSegment = m.trim();
 
               // smtp.mailfrom
@@ -1229,7 +1333,7 @@
           for (const h of authHeaders) {
             const methods = splitOnTopLevelSemicolons(h).slice(1);
             for (const m of methods) {
-              if (!/\bdkim\s*=/i.test(m)) continue;
+              if (!methodResultOf(m, "dkim")) continue;
 
               const domainRegex = /header\.(?:d|i)\s*=\s*([^;\s()]+)/ig;
               let match;
@@ -1252,7 +1356,7 @@
           for (const h of authHeaders) {
             const methods = splitOnTopLevelSemicolons(h).slice(1);
             for (const m of methods) {
-              if (!/\bdmarc\s*=/i.test(m)) continue;
+              if (!methodResultOf(m, "dmarc")) continue;
               rawSegment = m.trim();
 
               const domainMatch = m.match(/header\.from\s*=\s*([^;\s()]+)/i);
@@ -1613,9 +1717,10 @@
       const unverifiedSignatures = collectUnverifiedSignatures();
 
       return {
-        // 信頼した A-R の authserv-id（Microsoft 365 の場合は補った EOP ホスト名）
+        // 信頼した A-R の authserv-id（Microsoft 365 の旧書式の場合は補った EOP ホスト名）
+        // 後ろに付く版番号（"mx.microsoft.com 1" の "1"）は authserv-id の一部ではないため表示しない
         authServId: authHeaders.length > 0
-          ? splitOnTopLevelSemicolons(authHeaders[0])[0].trim()
+          ? splitOnTopLevelSemicolons(authHeaders[0])[0].trim().replace(/\s+\d+$/, "")
           : lastReceivedBy,
         spf: { status: spfStatus, detail: spfDetail },
         // unverifiedSignatures: 受信サーバが検証結果を記録していない署名の {domain, selector}（表示専用）
@@ -1628,10 +1733,18 @@
         dkimSubjectUnsigned: dkimCoverage.subjectUncovered,
         reportedUnverified,
         // Microsoft 365 組織内で完結した配送か（注記表示用。判定には影響させない）
-        // 外部から EOP を経由したメールには必ず A-R が付与されるため、A-R が1本でも
-        // 存在する場合は組織内配送とはみなさない（外部メールへの誤った注記を防ぐ）。
+        // 外部から EOP を経由したメールには必ず SPF 等の検証結果を記した A-R が付与されるため、
+        // 結果を記した A-R が1本でも存在する場合は組織内配送とはみなさない（外部メールへの誤った注記を防ぐ）。
+        // 組織内の配送でも Exchange Online は検証を行わなかったことを示す A-R
+        //   Authentication-Results: mx.microsoft.com 1; dkim=none (message not signed) header.d=none;dmarc=none ...
+        // を付けるため、Microsoft 365 の書式で SPF・DKIM・DMARC のいずれにも none 以外の結果が無い A-R だけなら許す。
         m365Internal: !!providerRoute.rule && providerRoute.rule.detectInternal &&
-                      providerRoute.internalOnly && regularAuth.length === 0,
+                      providerRoute.internalOnly &&
+                      regularAuth.every(h => isProviderAR(providerRoute.rule, h) &&
+                        !splitOnTopLevelSemicolons(h).some(seg => ["spf", "dkim", "dmarc"].some(method => {
+                          const result = methodResultOf(seg, method);
+                          return result !== null && result !== "none";
+                        }))),
         relayOriginal
       };
     };
@@ -1751,13 +1864,14 @@
         const chainNum = parseInt(iMatch[1], 10);
 
         // SPF/DKIM/DMARC の結果をコンパクトにまとめる
+        // 各方式の結果は区切りの先頭の方式名で読む（"arc=pass (i=1 spf=pass ...)" のような
+        // コメント内の、前段の ARC の転記内容を拾わないため。methodResultOf 参照）
         const summaryParts = [];
-        const spfMatch = aar.match(/\bspf\s*=\s*(\w+)/i);
-        const dkimMatch = aar.match(/\bdkim\s*=\s*(\w+)/i);
-        const dmarcMatch = aar.match(/\bdmarc\s*=\s*(\w+)/i);
-        if (spfMatch) summaryParts.push(`spf=${spfMatch[1].toLowerCase()}`);
-        if (dkimMatch) summaryParts.push(`dkim=${dkimMatch[1].toLowerCase()}`);
-        if (dmarcMatch) summaryParts.push(`dmarc=${dmarcMatch[1].toLowerCase()}`);
+        const segments = splitOnTopLevelSemicolons(aar);
+        for (const method of ["spf", "dkim", "dmarc"]) {
+          const result = segments.map(s => methodResultOf(s, method)).find(Boolean);
+          if (result) summaryParts.push(`${method}=${result}`);
+        }
 
         if (chains.has(chainNum)) {
           chains.get(chainNum).authSummary = summaryParts.join(" ");
@@ -2381,7 +2495,14 @@
       } else if (isSecure) {
         badgeClass = "secure";
         badgeText = msg("badgeAuthPass");
-      } else if (authResults.spf.status === "fail" || authResults.dkim.status === "fail" || authResults.dmarc.status === "fail") {
+      } else if (authResults.dmarc.status === "fail" ||
+                 ((authResults.spf.status === "fail" || authResults.dkim.status === "fail") && !(isDmarcOk && isDmarcAligned))) {
+        // DMARC が pass しアラインしている場合は、SPF・DKIM の一方の fail だけでは赤にしない。
+        // DMARC はどちらか一方がアラインして pass すれば成立する仕組みで、転送（SPF は転送先の IP で
+        // 評価されるため fail する）や、経路上での本文の書き換え（署名の一部が fail する）では、
+        // 正規のメールでも片方だけが fail する。ドメイン所有者の認証は成立しているため偽装とは言えず、
+        // 下の「SPF/DKIM・DMARC が通っているが他の条件で不合格」の警告付き判定に留める
+        // （fail した方式は判定理由タグに赤で表示される）。
         badgeClass = "danger";
         badgeText = msg("badgeAuthFailed");
       } else if ((isSpfOk || isDkimOk) && isDmarcOk) {
